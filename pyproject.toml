@@ -1,0 +1,31 @@
+[project]
+name = "murmur"
+version = "0.4.0"
+description = "Self-hosted dictation: hotkey, talk, clean text at your cursor. Local ASR, Gemini Flash-Lite cleanup."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+  "numpy>=1.26",
+  "sounddevice>=0.4.7",
+  "sherpa-onnx>=1.12",
+  "httpx[http2]>=0.27",
+  "keyring>=25",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "pytest-asyncio>=0.23", "respx>=0.21"]
+
+[project.scripts]
+murmur = "murmur.cli:main"
+murmurd = "murmur.daemon:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["murmur"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

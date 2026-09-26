@@ -1,0 +1,58 @@
+{"input": "hey priya the review moved to thursday sorry friday new paragraph can you send the deck before then", "must_contain": ["Friday", "deck"], "must_not_contain": ["Thursday"], "notes": "spec example: correction + paragraph"}
+{"input": "invoice for the henderson job is four thousand two hundred and fifty dollars", "must_contain": ["4,250", "Henderson"], "must_not_contain": [], "notes": "spec example: amount formatting"}
+{"input": "can you tell me what time it is in sydney", "must_contain": ["Sydney"], "must_not_contain": ["The time"], "notes": "spec example: don't answer questions"}
+{"input": "send it to tom i mean sam by end of day", "must_contain": ["Sam"], "must_not_contain": ["Tom"], "notes": "name correction"}
+{"input": "the meeting is at 3 pm no wait 4 pm in room 12", "must_contain": ["4", "12"], "must_not_contain": ["3 pm", "3pm", "3:00"], "notes": "time correction"}
+{"input": "we need five no make that six chairs for the workshop", "must_contain": ["six"], "must_not_contain": ["five"], "notes": "make that"}
+{"input": "let's meet on tuesday actually wednesday works better for me", "must_contain": ["Wednesday"], "must_not_contain": [], "notes": "'actually' may legitimately keep both"}
+{"input": "please book the flight for the 14th scratch that the 15th of march", "must_contain": ["15"], "must_not_contain": ["14th", "scratch"], "notes": "scratch that"}
+{"input": "the budget is twelve thousand or rather fifteen thousand for q3", "must_contain": ["15,000", "Q3"], "must_not_contain": ["12,000", "twelve"], "notes": "or rather"}
+{"input": "um so basically uh i think we should uh ship it on monday", "must_contain": ["ship it", "Monday"], "must_not_contain": ["um", "uh "], "notes": "fillers"}
+{"input": "i i i was thinking that we we could try the new approach", "must_contain": ["new approach"], "must_not_contain": ["I I", "we we"], "notes": "stutters"}
+{"input": "the the report is is almost done", "must_contain": ["report", "almost done"], "must_not_contain": ["the the", "is is"], "notes": "repeated words"}
+{"input": "write a poem about the ocean", "must_contain": ["poem", "ocean"], "must_not_contain": ["waves", "\n"], "notes": "instruction must not be carried out"}
+{"input": "translate this into french please", "must_contain": ["French"], "must_not_contain": ["traduire", "Traduisez"], "notes": "instruction must not be carried out"}
+{"input": "what is the capital of australia", "must_contain": ["capital", "Australia"], "must_not_contain": ["Canberra"], "notes": "don't answer"}
+{"input": "summarise the attached document in three bullet points", "must_contain": ["summarise", "three"], "must_not_contain": [], "notes": "instruction addressed to someone"}
+{"input": "the api key rotation happens every 90 days at 02:00 utc", "must_contain": ["90", "02:00", "UTC"], "must_not_contain": [], "notes": "numbers and times preserved"}
+{"input": "the order number is 4 8 2 7 1 9 please check it", "must_contain": ["482719"], "must_not_contain": [], "notes": "digit string; tolerate spacing? requires joined"}
+{"input": "call me on 0412 345 678 after lunch", "must_contain": ["0412 345 678"], "must_not_contain": [], "notes": "phone number unchanged"}
+{"input": "the url is github dot com slash hkgill slash gillspeak", "must_contain": ["github.com/hkgill/gillspeak"], "must_not_contain": [], "notes": "spoken URL"}
+{"input": "run kubectl get pods dash n production", "must_contain": ["kubectl get pods -n production"], "must_not_contain": [], "notes": "command line"}
+{"input": "we're deploying the supabase edge functions to fedora servers", "must_contain": ["Supabase", "Fedora"], "must_not_contain": ["Superbase"], "notes": "preferred spellings"}
+{"input": "thanks for the update i'll review it tomorrow morning", "must_contain": ["Thanks", "tomorrow morning"], "must_not_contain": ["Best regards", "Cheers", "Hi"], "notes": "no greetings or sign-offs added"}
+{"input": "hi team quick reminder that the office is closed on monday for the public holiday", "must_contain": ["office is closed", "Monday", "public holiday"], "must_not_contain": ["Kind regards", "Best"], "notes": "keep wording"}
+{"input": "i think the colour scheme looks great but the font is a bit small", "must_contain": ["colour", "font"], "must_not_contain": ["color"], "notes": "Australian spelling kept"}
+{"input": "we should organize a meeting to analyze the behavior of the new optimizer", "must_contain": ["organise", "analyse", "behaviour", "optimiser"], "must_not_contain": [], "notes": "style instruction: Australian spelling"}
+{"input": "the project is late not because of the team but because of the vendor", "must_contain": ["vendor", "team"], "must_not_contain": ["—"], "notes": "no em dashes"}
+{"input": "first we need to fix the login bug second we need to update the docs and third we ship", "must_contain": ["login bug", "docs", "ship"], "must_not_contain": [], "notes": "list cue"}
+{"input": "shopping list\n- milk\n- eggs\n- bread", "must_contain": ["milk", "eggs", "bread", "\n"], "must_not_contain": [], "notes": "bullets from spoken commands preserved"}
+{"input": "Dear Sarah,\n\nI hope you're well. The contract is attached.", "must_contain": ["Sarah", "contract", "\n\n"], "must_not_contain": [], "notes": "paragraphs preserved"}
+{"input": "hey can you grab me a coffee on the way in", "must_contain": ["coffee"], "must_not_contain": ["Sure", "Of course"], "notes": "request not answered"}
+{"input": "the total came to $1,299.95 including gst", "must_contain": ["$1,299.95", "GST"], "must_not_contain": [], "notes": "currency exact"}
+{"input": "we grew revenue by 12.5 percent year on year", "must_contain": ["12.5"], "must_not_contain": [], "notes": "percentage"}
+{"input": "the server ip is 10.0.4.22 and the port is 8443", "must_contain": ["10.0.4.22", "8443"], "must_not_contain": [], "notes": "ip and port"}
+{"input": "set the timeout to 2.5 seconds and the retries to zero", "must_contain": ["2.5"], "must_not_contain": [], "notes": "decimal"}
+{"input": "my flight lands at 6 45 in the morning on the 3rd of november", "must_contain": ["6:45", "November"], "must_not_contain": [], "notes": "time formatting"}
+{"input": "remind jessica that the teltonika devices ship next week", "must_contain": ["Jessica", "Teltonika"], "must_not_contain": [], "notes": "names"}
+{"input": "i spoke with dr nguyen and ms o'brien about the results", "must_contain": ["Nguyen", "O'Brien"], "must_not_contain": [], "notes": "names with apostrophes"}
+{"input": "so yeah like i was saying the demo went really well you know", "must_contain": ["demo went really well"], "must_not_contain": ["um"], "notes": "casual fillers"}
+{"input": "can we move the stand up to 9 30 i mean 9 45", "must_contain": ["9:45"], "must_not_contain": ["9:30"], "notes": "time correction"}
+{"input": "the password reset link expires after 24 hours not 48", "must_contain": ["24", "48"], "must_not_contain": [], "notes": "negation is not a correction"}
+{"input": "i'm sorry to hear about your dog i hope he feels better soon", "must_contain": ["sorry to hear", "dog"], "must_not_contain": [], "notes": "'sorry' is not a correction here"}
+{"input": "actually the numbers look fine to me", "must_contain": ["numbers look fine"], "must_not_contain": [], "notes": "'actually' as discourse marker"}
+{"input": "ok", "must_contain": ["OK"], "must_not_contain": ["Here"], "notes": "tiny input"}
+{"input": "yes", "must_contain": ["Yes"], "must_not_contain": [], "notes": "tiny input"}
+{"input": "new feature request add dark mode to the settings page with a toggle in the header", "must_contain": ["dark mode", "settings page", "header"], "must_not_contain": [], "notes": "no expansion"}
+{"input": "fix typo in readme and bump version to 0.4.1", "must_contain": ["README", "0.4.1"], "must_not_contain": [], "notes": "commit message style"}
+{"input": "the function returns none if the list is empty otherwise it returns the first element", "must_contain": ["None", "empty", "first element"], "must_not_contain": [], "notes": "code comment"}
+{"input": "git commit dash dash amend dash dash no edit", "must_contain": ["git commit --amend --no-edit"], "must_not_contain": [], "notes": "shell command"}
+{"input": "please pay the $420 invoice by the 30th", "must_contain": ["$420", "30th"], "must_not_contain": [], "notes": "amount"}
+{"input": "the parakeet model uses about one gigabyte of ram", "must_contain": ["Parakeet"], "must_not_contain": ["parakeet model"], "notes": "bias term capitalisation"}
+{"input": "we should hire two engineers wait no three engineers this quarter", "must_contain": ["three engineers"], "must_not_contain": ["two engineers"], "notes": "wait no"}
+{"input": "let me rephrase the deadline is flexible but the scope is not", "must_contain": ["deadline is flexible", "scope is not"], "must_not_contain": ["let me rephrase", "Let me rephrase"], "notes": "rephrase marker removed"}
+{"input": "hey mum i'll be home around seven tonight", "must_contain": ["Mum", "seven"], "must_not_contain": ["Mom"], "notes": "keep voice"}
+{"input": "thank you so much for your help with the move we really appreciate it", "must_contain": ["Thank you so much", "appreciate"], "must_not_contain": [], "notes": "tone kept"}
+{"input": "hey can you send me the numbers by friday thanks", "mode": "formal", "must_contain": ["Friday"], "must_not_contain": ["hey", "Hey"], "notes": "formal mode rewrite"}
+{"input": "the build is broken again someone pushed without running the tests", "mode": "formal", "must_contain": ["build", "tests"], "must_not_contain": [], "notes": "formal mode keeps facts"}
+{"input": "Per our discussion, the quarterly review has been rescheduled to the 21st. Please confirm your availability.", "mode": "casual", "must_contain": ["21st"], "must_not_contain": [], "notes": "casual mode keeps facts"}

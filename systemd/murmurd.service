@@ -1,0 +1,17 @@
+[Unit]
+Description=Murmur dictation daemon
+After=graphical-session.target pipewire.service
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/murmurd
+EnvironmentFile=-%h/.config/murmur/env
+# Socket created by the ydotool drop-in that scripts/setup-fedora.sh installs.
+Environment=YDOTOOL_SOCKET=/run/ydotoold/socket
+Restart=on-failure
+RestartSec=2
+# The spec's Nice=-5 is left out: an unprivileged user unit can't lower its nice
+# level, so systemd would refuse to start it (status=201/NICE).
+
+[Install]
+WantedBy=graphical-session.target
