@@ -11,7 +11,7 @@ Target: Fedora Workstation (GNOME on Wayland). X11 works through xclip/xdotool.
 ## Install
 
 ```bash
-git clone … && cd gillspeak
+git clone https://github.com/hkgill/gillspeak.git && cd gillspeak
 scripts/setup-fedora.sh
 ```
 
@@ -27,18 +27,31 @@ The script:
 
 Manual install: `uv tool install --python 3.12 .`, then `murmur download-models`, copy `systemd/murmurd.service` to `~/.config/systemd/user/` and `systemctl --user enable --now murmurd`.
 
-### Gemini API key
+### Gemini API key (the free tier works)
 
-```bash
-murmur set-key        # reads from stdin, stores in the GNOME keyring (libsecret)
-murmur reload
-```
+Murmur only needs a Gemini API key for the clean-up step; speech recognition is local and free. Without a key it still works, pasting the rules-cleaned transcript.
 
-If no keyring is available, the key goes to `~/.config/murmur/env` (mode 0600), which the service loads with `EnvironmentFile=`.
-Use a **dedicated** key restricted to the Generative Language API, and set a billing budget alert.
-Free-tier prompts may be used by Google to improve its products, and your dictations include private messages, so use the paid tier once past prototyping.
+1. Sign in at [Google AI Studio](https://aistudio.google.com/apikey) with a Google account and click **Create API key**. No credit card is needed for the free tier.
+2. Store it and tell the daemon:
 
-Run `murmur doctor` to list the available Flash-Lite model IDs, then pin one in `llm.model`. Aliases such as `gemini-flash-lite-latest` can change underneath you.
+   ```bash
+   murmur set-key        # paste the key, then Enter; stored in the GNOME keyring (libsecret)
+   murmur reload
+   murmur doctor         # checks the key and lists the Flash-Lite model IDs your key can use
+   ```
+
+   If no keyring is available, the key goes to `~/.config/murmur/env` (mode 0600), which the service loads with `EnvironmentFile=`.
+3. Pin a model in `~/.config/murmur/config.toml`, for example `model = "gemini-3.5-flash-lite"` under `[llm]`. Aliases such as `gemini-flash-lite-latest` can change underneath you.
+
+**Is the free tier enough?** Usually. Google shows your project's exact limits in AI Studio (Projects → rate limits); for Flash-Lite they have been around 30 requests a minute and a few hundred a day. Murmur uses far less than you'd expect:
+
+- short, clean dictations (under 12 words, no "sorry"/"I mean", no lists) never call Gemini;
+- one dictation is one request, with no retries;
+- if you hit a limit (HTTP 429), Murmur pastes the rules-cleaned text, pauses Gemini for 60 s, and shows a notification. Nothing is lost.
+
+`murmur stats` shows how many dictations used the LLM. `murmur eval` sends one request per test case, spaced 4 s apart (`--delay`), and stops after a second 429; use `--limit 10` to spend fewer requests.
+
+**Privacy on the free tier.** Google may use free-tier prompts and responses to improve its products, and humans may review them. Your audio never leaves the laptop, but the transcript text does, and dictations often include private messages. Fine for trying Murmur out; for daily use, enable billing on the project (Flash-Lite costs a fraction of a cent per dictation), or set `llm.provider = "none"` to keep everything local. Either way, use a **dedicated** key restricted to the Generative Language API, and set a budget alert if billing is on.
 
 ## Use
 
@@ -105,3 +118,11 @@ uv venv -p 3.12 && uv pip install -e '.[dev]'
 The tests mock the audio stream, subprocesses and HTTP, so they need neither models nor a desktop session. `MURMUR_TEST_MODELS=~/.local/share/murmur/models pytest tests/test_models_integration.py` also runs the real Silero and Parakeet models.
 
 `murmur/prompts/clean_v1.txt` holds the system prompt. If you change it, add `clean_v2.txt`, bump `PROMPT_VERSION` in `cleaner.py` (history records which version was used), and re-run `murmur eval`.
+
+## Contributing
+
+Issues and pull requests are welcome at <https://github.com/hkgill/gillspeak>. Please run `.venv/bin/pytest` before sending a change; tests must not need models, a microphone, a desktop session or network access (mock them as the existing tests do). Changes to the clean-up prompt should include a `murmur eval` pass rate.
+
+## License
+
+[MIT](LICENSE)
