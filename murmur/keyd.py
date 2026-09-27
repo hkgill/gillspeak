@@ -5,7 +5,7 @@ through evdev. It is the only process that sees raw key events, and it passes on
 nothing but three events, one JSON object per line, to clients of its socket:
 
     {"event": "start"}   both keys held, alone, for hold_ms
-    {"event": "end"}     one of them released after "start": stop and paste
+    {"event": "end"}     both released after "start": stop and paste
     {"event": "cancel"}  another key pressed after "start" (e.g. Ctrl+Alt+T): discard
 
 The socket is owned by one user (mode 0600), so only that user's murmurd can listen.
@@ -76,10 +76,12 @@ class HoldDetector:
             self.down.discard(code)
             if code in self.keys:
                 self.armed_at = None
-                if self.active:
-                    self.active = False
-                    out.append("end")
+                # "end" waits for *both* keys: murmurd pastes right after it, and a
+                # still-held Alt would turn the paste chord into Ctrl+Alt+V.
                 if not self.down & self.keys:
+                    if self.active:
+                        self.active = False
+                        out.append("end")
                     self.poisoned = False
         return out
 

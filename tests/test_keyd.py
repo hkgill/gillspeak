@@ -28,9 +28,10 @@ def test_hold_then_release_starts_and_ends():
     assert run(det, [(0.0, RC, 1), (0.05, RA, 1), (0.2,), (0.36,), (2.0, RA, 0), (2.01, RC, 0)]) == ["start", "end"]
 
 
-def test_either_order_and_releasing_ctrl_first():
+def test_either_order_and_end_waits_for_both_keys():
     det = HoldDetector(hold_s=0.3)
-    assert run(det, [(0.0, RA, 1), (0.0, RC, 1), (0.4,), (1.0, RC, 0), (1.1, RA, 0)]) == ["start", "end"]
+    assert run(det, [(0.0, RA, 1), (0.0, RC, 1), (0.4,), (1.0, RC, 0)]) == ["start"]  # Alt still down
+    assert run(det, [(1.1, RA, 0)]) == ["end"]
 
 
 def test_quick_tap_does_nothing():
@@ -40,7 +41,7 @@ def test_quick_tap_does_nothing():
 
 def test_autorepeat_is_ignored():
     det = HoldDetector(hold_s=0.3)
-    steps = [(0.0, RC, 1), (0.0, RA, 1), (0.4,)] + [(0.5 + i * 0.03, RA, 2) for i in range(20)] + [(1.5, RA, 0)]
+    steps = [(0.0, RC, 1), (0.0, RA, 1), (0.4,)] + [(0.5 + i * 0.03, RA, 2) for i in range(20)] + [(1.5, RA, 0), (1.5, RC, 0)]
     assert run(det, steps) == ["start", "end"]
 
 
@@ -55,7 +56,7 @@ def test_third_key_after_start_cancels_and_stays_quiet_until_released():
     steps = [(0.0, RC, 1), (0.0, RA, 1), (0.4,), (0.6, KEY_T, 1), (0.7, KEY_T, 0), (2.0,), (2.5, RA, 0), (2.5, RC, 0)]
     assert run(det, steps) == ["start", "cancel"]
     # Once both are released, the next hold works again.
-    assert run(det, [(3.0, RC, 1), (3.0, RA, 1), (3.4,), (4.0, RC, 0)]) == ["start", "end"]
+    assert run(det, [(3.0, RC, 1), (3.0, RA, 1), (3.4,), (4.0, RC, 0), (4.0, RA, 0)]) == ["start", "end"]
 
 
 def test_chord_pressed_while_another_key_is_held_does_not_arm():
@@ -74,6 +75,9 @@ def test_deadline_and_reset():
     det.key(RC, 1, 1.0)
     det.key(RA, 1, 1.0)
     assert det.deadline() == 1.3
+    det.key(RA, 0, 1.1)  # let go of one before the hold counts, then press again
+    assert det.deadline() is None
+    det.key(RA, 1, 1.0)
     assert det.tick(1.3) == ["start"]
     assert det.deadline() is None
     assert det.reset() == ["cancel"]  # keyboard unplugged mid-hold
