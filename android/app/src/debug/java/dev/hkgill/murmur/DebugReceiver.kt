@@ -19,7 +19,7 @@ class DebugReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext
         if (intent.getBooleanExtra("download_model", false)) {
-            LocalAsr.download(app) { Log.i(Dictation.TAG, "model download: $it") }
+            LocalAsr.download(app)
         }
         val name = intent.getStringExtra("selftest") ?: return
         if (!isSafeTestFile(name)) {

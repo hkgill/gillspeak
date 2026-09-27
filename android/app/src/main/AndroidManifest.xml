@@ -45,5 +45,14 @@
                 android:name="android.accessibilityservice"
                 android:resource="@xml/bubble_service" />
         </service>
+
+        <!-- DownloadManager's completion broadcast for the on-device model; it comes from the system. -->
+        <receiver
+            android:name=".ModelDownloadReceiver"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.DOWNLOAD_COMPLETE" />
+            </intent-filter>
+        </receiver>
     </application>
 </manifest>

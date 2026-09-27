@@ -1,6 +1,8 @@
 package dev.hkgill.murmur
 
+import android.app.DownloadManager
 import android.content.Context
+import android.net.Uri
 import android.util.Log
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
@@ -8,8 +10,6 @@ import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineTransducerModelConfig
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
@@ -21,8 +21,8 @@ import java.util.concurrent.TimeUnit
  * On-device speech recognition: NVIDIA Parakeet TDT 0.6B v3 (int8) through sherpa-onnx, the same model and
  * settings as the desktop app. Nothing leaves the phone. English plus 24 other European languages.
  *
- * The model (about 640 MB) is downloaded once from the sherpa-onnx project and every file is checked against
- * the SHA256 the desktop app pins. The loaded recognizer takes about 1 GB of memory, so it's released after a
+ * The model (about 640 MB) is downloaded once from the sherpa-onnx project by Android's DownloadManager, and
+ * every file is checked against the SHA256 the desktop app pins before it's used. The loaded recognizer takes about 1 GB of memory, so it's released after a
  * few idle minutes and reloaded on the next dictation.
  */
 object LocalAsr {
@@ -37,22 +37,24 @@ object LocalAsr {
     )
     val TOTAL_BYTES = FILES.sumOf { it.size }
     private const val IDLE_RELEASE_MS = 5 * 60_000L
+    private const val DOWNLOAD_DIR = "model-download"
 
     sealed interface Status {
         data object Missing : Status
-        data class Downloading(val done: Long, val total: Long) : Status
+        data class Downloading(val done: Long, val total: Long, val waitingForWifi: Boolean) : Status
+        data object Installing : Status
         data class Failed(val reason: String) : Status
         data object Ready : Status
     }
 
-    @Volatile var status: Status = Status.Missing
-        private set
-
     private var recognizer: OfflineRecognizer? = null
     private val lock = Any()
-    // Releasing and deleting wait for a running decode, so they happen here, never on the main thread.
+    // Releasing, deleting and installing wait on file or native work, so they happen here, never on the main thread.
     private val background = Executors.newSingleThreadScheduledExecutor()
     private var releaseTask: ScheduledFuture<*>? = null
+    @Volatile private var installing = false
+    private val installWaiters = mutableListOf<() -> Unit>()
+    @Volatile private var failure: String? = null
 
     /** Frees the ~1 GB recognizer after [IDLE_RELEASE_MS] without use (restarts the countdown). */
     private fun scheduleRelease() {
@@ -61,70 +63,155 @@ object LocalAsr {
     }
 
     private fun dir(context: Context) = File(context.filesDir, "models/parakeet-tdt-0.6b-v3-int8")
+    private fun downloads(context: Context) = context.getExternalFilesDir(DOWNLOAD_DIR)
+    private fun dm(context: Context) = context.getSystemService(DownloadManager::class.java)
 
-    /** Ready when every file is present at its expected size (hashes are checked when downloading). */
-    fun refresh(context: Context): Status {
-        if (status is Status.Downloading) return status
-        val d = dir(context)
-        status = if (FILES.all { File(d, it.name).length() == it.size }) Status.Ready else Status.Missing
-        return status
+    /** DownloadManager ids of files still being fetched, by file name. Kept in preferences: downloads outlive us. */
+    private fun pending(context: Context): MutableMap<String, Long> {
+        val prefs = context.getSharedPreferences("model_download", Context.MODE_PRIVATE)
+        return FILES.mapNotNull { f -> prefs.getLong(f.name, -1).takeIf { it >= 0 }?.let { f.name to it } }.toMap().toMutableMap()
     }
 
-    fun isReady(context: Context) = refresh(context) == Status.Ready
+    private fun savePending(context: Context, ids: Map<String, Long>) {
+        context.getSharedPreferences("model_download", Context.MODE_PRIVATE).edit().clear().apply {
+            ids.forEach { (name, id) -> putLong(name, id) }
+        }.apply()
+    }
 
-    /** Downloads the missing files on a background thread; [onProgress] is called on that thread. */
-    fun download(context: Context, onProgress: (Status) -> Unit) {
-        if (status is Status.Downloading) return
-        val d = dir(context).apply { mkdirs() }
-        status = Status.Downloading(0, TOTAL_BYTES)
-        Thread({
+    private fun installed(context: Context, f: ModelFile) = File(dir(context), f.name).length() == f.size
+
+    fun isReady(context: Context) = FILES.all { installed(context, it) }
+
+    /** Where the model stands. When every file has finished downloading, this starts installing them. */
+    fun refresh(context: Context): Status {
+        if (installing) return Status.Installing
+        if (isReady(context)) return Status.Ready
+        failure?.let { return Status.Failed(it) }
+        val ids = pending(context)
+        if (ids.isEmpty()) return Status.Missing
+        var done = FILES.filter { installed(context, it) }.sumOf { it.size }
+        var waitingForWifi = false
+        var finished = 0
+        dm(context).query(DownloadManager.Query().setFilterById(*ids.values.toLongArray())).use { c ->
+            while (c.moveToNext()) {
+                done += c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)).coerceAtLeast(0)
+                val reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
+                when (c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))) {
+                    DownloadManager.STATUS_SUCCESSFUL -> finished++
+                    DownloadManager.STATUS_FAILED -> return fail(context, "the download failed (error $reason)")
+                    DownloadManager.STATUS_PAUSED -> if (reason == DownloadManager.PAUSED_QUEUED_FOR_WIFI) waitingForWifi = true
+                }
+            }
+            // Cancelled from the notification: DownloadManager forgets the download entirely.
+            if (c.count < ids.size) return fail(context, "the download was cancelled")
+        }
+        // Normally the completion broadcast installs finished files; this catches any it missed.
+        if (finished > 0) install(context)
+        return if (finished == ids.size) Status.Installing else Status.Downloading(done, TOTAL_BYTES, waitingForWifi)
+    }
+
+    private fun fail(context: Context, reason: String): Status {
+        cancelDownloads(context)
+        failure = reason
+        return Status.Failed(reason)
+    }
+
+    /**
+     * Hands the missing files to Android's DownloadManager: it keeps going when the app is closed, shows progress
+     * in a notification, resumes after network drops, and waits for Wi-Fi rather than use 640 MB of mobile data.
+     */
+    fun download(context: Context) {
+        failure = null
+        dir(context).mkdirs()
+        val ids = pending(context)
+        for (f in FILES) {
+            if (installed(context, f) || f.name in ids) continue
+            File(downloads(context), f.name).delete() // DownloadManager won't overwrite a leftover
+            val request = DownloadManager.Request(Uri.parse("$BASE/${f.name}"))
+                .setTitle("${Settings.APP_NAME} speech model")
+                .setDescription(f.name)
+                .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
+                .setAllowedOverMetered(false)
+                .setAllowedOverRoaming(false)
+                .setDestinationInExternalFilesDir(context, DOWNLOAD_DIR, f.name)
+            ids[f.name] = dm(context).enqueue(request)
+        }
+        savePending(context, ids)
+        Log.i(Dictation.TAG, "model download queued: ${ids.keys}")
+    }
+
+    fun cancelDownloads(context: Context) {
+        val ids = pending(context)
+        if (ids.isNotEmpty()) dm(context).remove(*ids.values.toLongArray())
+        savePending(context, emptyMap())
+    }
+
+    /** Whether a DownloadManager id is one of ours (for the completion broadcast). */
+    fun owns(context: Context, id: Long) = id in pending(context).values
+
+    private fun succeeded(context: Context, ids: Collection<Long>): Set<Long> {
+        if (ids.isEmpty()) return emptySet()
+        val ok = mutableSetOf<Long>()
+        dm(context).query(DownloadManager.Query().setFilterById(*ids.toLongArray()).setFilterByStatus(DownloadManager.STATUS_SUCCESSFUL)).use { c ->
+            while (c.moveToNext()) ok += c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_ID))
+        }
+        return ok
+    }
+
+    /**
+     * Moves the files DownloadManager has finished into private storage, checking each one's SHA256 on the way;
+     * a mismatch cancels everything. Runs in the background. [onDone] is called when this run (or the one already
+     * in progress) is over, whatever the outcome.
+     */
+    fun install(context: Context, onDone: () -> Unit = {}) {
+        synchronized(installWaiters) {
+            installWaiters += onDone
+            if (installing) return
+            installing = true
+        }
+        background.execute {
             try {
-                var done = 0L
+                val ids = pending(context)
+                val done = succeeded(context, ids.values)
                 for (f in FILES) {
-                    val target = File(d, f.name)
-                    if (target.length() == f.size) {
-                        done += f.size
-                        continue
-                    }
-                    val part = File(d, f.name + ".part").apply { delete() }
-                    val conn = URL("$BASE/${f.name}").openConnection() as HttpURLConnection
-                    conn.connectTimeout = 15_000
-                    conn.readTimeout = 30_000
+                    val id = ids[f.name]?.takeIf { it in done } ?: continue
+                    val src = File(downloads(context), f.name)
+                    val part = File(dir(context), f.name + ".part")
                     val md = MessageDigest.getInstance("SHA-256")
-                    conn.inputStream.use { input ->
+                    src.inputStream().use { input ->
                         part.outputStream().use { out ->
                             val buf = ByteArray(1 shl 16)
-                            var lastReport = 0L
                             while (true) {
                                 val n = input.read(buf)
                                 if (n < 0) break
-                                out.write(buf, 0, n)
                                 md.update(buf, 0, n)
-                                done += n
-                                if (done - lastReport > 2_000_000) {
-                                    if (done / 50_000_000 != lastReport / 50_000_000) Log.i(Dictation.TAG, "model download: ${done / 1_000_000} MB")
-                                    lastReport = done
-                                    status = Status.Downloading(done, TOTAL_BYTES)
-                                    onProgress(status)
-                                }
+                                out.write(buf, 0, n)
                             }
                         }
                     }
-                    val sha = md.digest().joinToString("") { "%02x".format(it) }
-                    if (sha != f.sha256) {
+                    if (md.digest().joinToString("") { "%02x".format(it) } != f.sha256) {
                         part.delete()
-                        error("${f.name} failed its checksum")
+                        fail(context, "${f.name} failed its checksum")
+                        Log.e(Dictation.TAG, "model install: ${f.name} failed its checksum")
+                        return@execute
                     }
-                    part.renameTo(target)
+                    part.renameTo(File(dir(context), f.name))
+                    dm(context).remove(id) // also deletes the downloaded copy
+                    ids.remove(f.name)
+                    savePending(context, ids)
                 }
-                status = Status.Ready
-                Log.i(Dictation.TAG, "model download complete and verified")
+                if (isReady(context)) Log.i(Dictation.TAG, "model download complete and verified")
             } catch (e: Exception) {
-                Log.e(Dictation.TAG, "model download failed", e)
-                status = Status.Failed(e.message ?: e.javaClass.simpleName)
+                Log.e(Dictation.TAG, "model install failed", e)
+                fail(context, e.message ?: e.javaClass.simpleName)
+            } finally {
+                val waiters = synchronized(installWaiters) {
+                    installing = false
+                    installWaiters.toList().also { installWaiters.clear() }
+                }
+                waiters.forEach { it() }
             }
-            onProgress(status)
-        }, "model-download").start()
+        }
     }
 
     /** Deletes the model in the background (it may have to wait for a dictation to finish), then calls [onDone]. */
@@ -134,8 +221,9 @@ object LocalAsr {
                 releaseTask?.cancel(false)
                 recognizer?.release()
                 recognizer = null
+                cancelDownloads(context)
                 dir(context).deleteRecursively()
-                status = Status.Missing
+                failure = null
             }
             onDone()
         }

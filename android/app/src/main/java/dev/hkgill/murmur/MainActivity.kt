@@ -267,24 +267,41 @@ class MainActivity : Activity() {
         modelStatus.visibility = if (local) View.VISIBLE else View.GONE
         modelButton.visibility = if (local) View.VISIBLE else View.GONE
         val mb = LocalAsr.TOTAL_BYTES / 1_000_000
-        when (val s = LocalAsr.refresh(this)) {
+        val status = LocalAsr.refresh(this)
+        when (status) {
             LocalAsr.Status.Ready -> {
                 modelStatus.text = "On-device model ready ✓ (Parakeet, $mb MB)"
                 modelButton.text = "Delete model"
             }
             LocalAsr.Status.Missing -> {
-                modelStatus.text = "Needs a one-time $mb MB download (Wi-Fi recommended)."
+                modelStatus.text = "Needs a one-time $mb MB download over Wi-Fi."
                 modelButton.text = "Download model"
             }
             is LocalAsr.Status.Downloading -> {
-                modelStatus.text = "Downloading… ${s.done * 100 / s.total}% of $mb MB"
+                modelStatus.text = if (status.waitingForWifi) "Waiting for Wi-Fi to download ($mb MB)."
+                else "Downloading… ${status.done * 100 / status.total}% of $mb MB. You can leave the app; it carries on."
+                modelButton.text = "Cancel download"
+            }
+            LocalAsr.Status.Installing -> {
+                modelStatus.text = "Checking and installing the model…"
                 modelButton.text = ""
             }
             is LocalAsr.Status.Failed -> {
-                modelStatus.text = "Download failed: ${s.reason}"
+                modelStatus.text = "Download failed: ${status.reason}"
                 modelButton.text = "Try again"
             }
         }
+        // Keep the progress moving while this screen is open.
+        handler.removeCallbacks(poll)
+        if (local && (status is LocalAsr.Status.Downloading || status == LocalAsr.Status.Installing)) handler.postDelayed(poll, 1000)
+    }
+
+    private val handler = android.os.Handler(android.os.Looper.getMainLooper())
+    private val poll = Runnable { showEngine() }
+
+    override fun onPause() {
+        handler.removeCallbacks(poll)
+        super.onPause()
     }
 
     private fun onModelButton() {
@@ -300,8 +317,9 @@ class MainActivity : Activity() {
                 }
                 return
             }
-            is LocalAsr.Status.Downloading -> Unit
-            else -> LocalAsr.download(applicationContext) { runOnUiThread(::showEngine) }
+            is LocalAsr.Status.Downloading -> LocalAsr.cancelDownloads(applicationContext)
+            LocalAsr.Status.Installing -> Unit
+            else -> LocalAsr.download(applicationContext)
         }
         showEngine()
     }
