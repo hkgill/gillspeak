@@ -99,3 +99,28 @@ def test_wav_roundtrip_and_resample(tmp_path):
     assert len(back) == 16000 and np.max(np.abs(back - audio)) < 1e-3
     write_wav(tmp_path / "b.wav", audio, 8000)
     assert len(read_wav(tmp_path / "b.wav")) == 32000
+
+
+def test_stream_that_fails_to_start_is_closed():
+    """Regression (Codex review #10): if start() failed, the constructed stream was never closed,
+    so every retry leaked another PortAudio stream."""
+    import pytest
+
+    from murmur.audio import RecorderError
+
+    streams = []
+
+    class Broken(FakeStream):
+        def start(self):
+            raise OSError("device unavailable")
+
+    def factory(callback):
+        s = Broken(callback)
+        streams.append(s)
+        return s
+
+    rec = Recorder(stream_factory=factory, keep_open=False)
+    for _ in range(3):
+        with pytest.raises(RecorderError):
+            rec.start()
+    assert len(streams) == 3 and all(s.closed for s in streams)

@@ -2,11 +2,13 @@
 
 GNOME shortcuts can't bind a chord of modifiers only, so this reads the keyboards
 through evdev. It is the only process that sees raw key events, and it passes on
-nothing but three events, one JSON object per line, to clients of its socket:
+nothing but these events, one JSON object per line, to clients of its socket:
 
+    {"event": "down"}    both chord keys are physically held (no other key is reported)
     {"event": "start"}   both keys held, alone, for hold_ms
     {"event": "end"}     both released after "start": stop and paste
     {"event": "cancel"}  another key pressed after "start" (e.g. Ctrl+Alt+T): discard
+    {"event": "up"}      both chord keys released again; safe to send the paste chord
 
 The socket is owned by one user (mode 0600), so only that user's murmurd can listen.
 
@@ -40,7 +42,11 @@ RESCAN_S = 2.0
 
 
 class HoldDetector:
-    """Pure state machine: feed key events, get start/end/cancel.
+    """Pure state machine: feed key events, get down/start/end/cancel/up.
+
+    "down"/"up" bracket the chord being physically held (both keys down, then both
+    released), whatever else happens; murmurd waits for "up" before pasting so its
+    Ctrl+V can't turn into Ctrl+Alt+V. start/end/cancel drive recording.
 
     Arms when both chord keys go down with no other key held. Fires "start" after
     hold_s. Any other key pressed while a chord key is down poisons the hold (and
@@ -55,6 +61,7 @@ class HoldDetector:
         self.armed_at: float | None = None
         self.active = False
         self.poisoned = False
+        self.chord_down = False
 
     def key(self, code: int, value: int, now: float) -> list[str]:
         """value: 1 press, 0 release, 2 autorepeat (ignored)."""
@@ -64,6 +71,9 @@ class HoldDetector:
         if value == 1:
             self.down.add(code)
             if code in self.keys:
+                if self.keys <= self.down and not self.chord_down:
+                    self.chord_down = True
+                    out.append("down")
                 if self.down == self.keys and not self.poisoned:
                     self.armed_at = now
             elif self.down & self.keys:
@@ -83,6 +93,9 @@ class HoldDetector:
                         self.active = False
                         out.append("end")
                     self.poisoned = False
+                    if self.chord_down:
+                        self.chord_down = False
+                        out.append("up")
         return out
 
     def tick(self, now: float) -> list[str]:
@@ -97,7 +110,7 @@ class HoldDetector:
 
     def reset(self) -> list[str]:
         """Device lost: forget held keys; end an active hold so murmurd doesn't record forever."""
-        out = ["cancel"] if self.active else []
+        out = (["cancel"] if self.active else []) + (["up"] if self.chord_down else [])
         self.__init__(tuple(self.keys), self.hold_s)
         return out
 

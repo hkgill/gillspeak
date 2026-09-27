@@ -26,7 +26,7 @@ def system_prompt(version: str = PROMPT_VERSION) -> str:
 
 
 class CleanerError(Exception):
-    """kind: timeout | offline | rate_limited | auth | blocked | error"""
+    """kind: timeout | offline | rate_limited | auth | blocked | truncated | error"""
 
     def __init__(self, kind: str, message: str = "", status: int | None = None):
         super().__init__(message or kind)
@@ -89,7 +89,9 @@ def parse_gemini_response(data: dict[str, Any], original: str) -> tuple[str, int
         raise CleanerError("blocked" if reason else "error", f"no candidates (blockReason={reason})")
     cand = candidates[0]
     finish = cand.get("finishReason")
-    if finish not in ("STOP", "MAX_TOKENS"):
+    if finish == "MAX_TOKENS":  # cut off: pasting it would silently drop the end of the dictation
+        raise CleanerError("truncated", "output hit maxOutputTokens")
+    if finish != "STOP":
         raise CleanerError("blocked" if finish in ("SAFETY", "RECITATION", "PROHIBITED_CONTENT", "BLOCKLIST", "SPII") else "error", f"finishReason={finish}")
     parts = (cand.get("content") or {}).get("parts") or []
     text = "".join(p.get("text", "") for p in parts if not p.get("thought"))
@@ -195,11 +197,16 @@ class ProxyCleaner(_HttpCleaner):
             headers={"Authorization": f"Bearer {self._token}"},
             json={"text": text, "mode": mode, "client": self._device, "prompt_ver": PROMPT_VERSION},
         )
-        data = resp.json()
-        if data.get("status") != "ok":
-            raise CleanerError("error", f"proxy status {data.get('status')}")
-        usage = data.get("usage") or {}
-        return CleanResult(strip_echo(data.get("text", ""), text), usage.get("in"), usage.get("out"), int((time.monotonic() - t0) * 1000))
+        try:
+            data = resp.json()
+        except ValueError as e:
+            raise CleanerError("error", "proxy returned invalid JSON") from e
+        if not isinstance(data, dict) or data.get("status") != "ok":
+            raise CleanerError("error", f"proxy status {data.get('status') if isinstance(data, dict) else type(data).__name__}")
+        out, usage = data.get("text", ""), data.get("usage") or {}
+        if not isinstance(out, str) or not isinstance(usage, dict):
+            raise CleanerError("error", "proxy response has the wrong shape")
+        return CleanResult(strip_echo(out, text), usage.get("in"), usage.get("out"), int((time.monotonic() - t0) * 1000))
 
     async def warm(self) -> None:
         self._last_used = time.monotonic()

@@ -63,7 +63,7 @@ Murmur only needs a Gemini API key for the clean-up step; speech recognition is 
    murmur doctor         # checks the key and lists the Flash-Lite model IDs your key can use
    ```
 
-   If no keyring is available, the key goes to `~/.config/murmur/env` (mode 0600), which the service loads with `EnvironmentFile=`.
+   If no keyring is available, the key goes to `~/.config/murmur/env` (mode 0600). murmurd reads it on every `murmur reload`, so a rotated key takes effect without a restart.
 3. The default model is `gemini-3.5-flash-lite` (56/58 = 96.6% on the eval set with the `clean_v2` prompt, ~1 s median). If `murmur doctor` says your key can't use it, pick another ID from its list and set `model` under `[llm]` in `~/.config/murmur/config.toml`. Prefer versioned IDs: aliases such as `gemini-flash-lite-latest` can change underneath you.
 
 **Is the free tier enough?** Usually. Google shows your project's exact limits in AI Studio (Projects → rate limits); for Flash-Lite they have been around 30 requests a minute and a few hundred a day. Murmur uses far less than you'd expect:
@@ -95,7 +95,7 @@ Murmur only needs a Gemini API key for the clean-up step; speech recognition is 
 
 Spoken commands: "new line", "new paragraph", "bullet point", "question mark", and "full stop"/"period" at the end of an utterance. Turn any of them off with `rules.disabled_commands`.
 
-**Hold-to-talk** comes from `murmur-keyd`, a small root service (`scripts/install-keyd.sh`, also run by the setup script). GNOME shortcuts can't bind modifier keys on their own, so it reads the keyboards directly, and it is the only process that does. It sends murmurd just three events over a socket only you can open: start (both keys held alone for 0.3 s), end (released) and cancel (a third key joined, as in Ctrl+Alt+T, so the recording is discarded). A quick tap does nothing. Root runs a root-owned copy in `/usr/local/libexec`, not your tool install. Turn it off with `hotkey.hold_to_talk = false`; remove it with `scripts/install-keyd.sh --uninstall`.
+**Hold-to-talk** comes from `murmur-keyd`, a small root service (`scripts/install-keyd.sh`, also run by the setup script). GNOME shortcuts can't bind modifier keys on their own, so it reads the keyboards directly, and it is the only process that does. It sends murmurd only events about that chord, over a socket only you can open: start (both keys held alone for 0.3 s), end (released), cancel (a third key joined, as in Ctrl+Alt+T, so the recording is discarded), and down/up (the chord is physically held/released: a paste waits for "up", so it never lands as Ctrl+Alt+V). No other key is ever reported. A quick tap does nothing. Root runs a root-owned copy in `/usr/local/libexec`, not your tool install. Turn it off with `hotkey.hold_to_talk = false` and `murmur reload`; remove it with `scripts/install-keyd.sh --uninstall`.
 
 **Terminals** paste with Ctrl+Shift+V. Either add Ctrl+V as a paste shortcut in Ptyxis/GNOME Terminal (recommended), or bind another shortcut to `murmur toggle --chord ctrl+shift+v`.
 

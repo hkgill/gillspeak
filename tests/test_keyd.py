@@ -20,7 +20,7 @@ def run(det, steps):
         else:
             t, code, value = step
             out += det.key(code, value, t)
-    return out
+    return [e for e in out if e not in ("down", "up")]  # chord-state events have their own tests below
 
 
 def test_hold_then_release_starts_and_ends():
@@ -80,7 +80,7 @@ def test_deadline_and_reset():
     det.key(RA, 1, 1.0)
     assert det.tick(1.3) == ["start"]
     assert det.deadline() is None
-    assert det.reset() == ["cancel"]  # keyboard unplugged mid-hold
+    assert det.reset() == ["cancel", "up"]  # keyboard unplugged mid-hold
     assert det.down == set() and not det.active
 
 
@@ -270,11 +270,11 @@ def test_hold_is_broadcast_end_to_end(server):
             buf += c.recv(4096)
         except BlockingIOError:
             pass
-    assert b'{"event": "start"}\n' in buf
+    assert b'{"event": "down"}\n{"event": "start"}\n' in buf
     os.write(w, _event(RA, 0) + _event(RC, 0))
     c.setblocking(True)
-    _pump(server, lambda: not server.detector.active)
-    assert c.recv(4096) == b'{"event": "end"}\n'
+    _pump(server, lambda: not server.detector.chord_down)
+    assert c.recv(4096) == b'{"event": "end"}\n{"event": "up"}\n'
 
 
 def test_unplugged_keyboard_cancels_hold_and_does_not_spin(server):
@@ -284,10 +284,10 @@ def test_unplugged_keyboard_cancels_hold_and_does_not_spin(server):
     c = _client(server)
     os.write(w, _event(RC, 1) + _event(RA, 1))
     _pump(server, lambda: server.detector.active)
-    assert c.recv(4096) == b'{"event": "start"}\n'
+    assert c.recv(4096) == b'{"event": "down"}\n{"event": "start"}\n'
     os.close(w)  # writer gone: the FIFO now reads EOF, as a vanished device would
     _pump(server, lambda: not server.devices)
-    assert c.recv(4096) == b'{"event": "cancel"}\n'
+    assert c.recv(4096) == b'{"event": "cancel"}\n{"event": "up"}\n'
     assert not server.detector.active and not server.detector.down
 
 
@@ -314,3 +314,40 @@ def test_keyd_is_standalone():
 
     src = Path(keyd.__file__).read_text()
     assert "from ." not in src and "import murmur" not in src and "from murmur" not in src
+
+
+# -- chord down/up (0.5.1) -------------------------------------------------------------
+
+
+def run_all(det, steps):
+    """Like run(), but keep the down/up chord-state events."""
+    out = []
+    for step in steps:
+        out += det.tick(step[0]) if len(step) == 1 else det.key(step[1], step[2], step[0])
+    return out
+
+
+def test_chord_down_and_up_bracket_every_hold():
+    """Regression (Codex review #5): murmurd had no way to know the chord was still physically held
+    after an auto-stop or cancel, so it could paste while Ctrl+Alt were down."""
+    det = HoldDetector(hold_s=0.3)
+    got = run_all(det, [(0.0, RC, 1), (0.0, RA, 1), (0.4,), (1.0, RC, 0), (1.1, RA, 0)])
+    assert got == ["down", "start", "end", "up"]
+
+
+def test_up_waits_for_both_keys_even_after_cancel():
+    det = HoldDetector(hold_s=0.3)
+    got = run_all(det, [(0.0, RC, 1), (0.0, RA, 1), (0.4,), (0.5, KEY_T, 1), (0.6, KEY_T, 0), (0.7, RC, 0)])
+    assert got == ["down", "start", "cancel"]  # Right Alt still held
+    assert run_all(det, [(0.8, RA, 0)]) == ["up"]
+
+
+def test_quick_tap_reports_down_up_only():
+    det = HoldDetector(hold_s=0.3)
+    assert run_all(det, [(0.0, RC, 1), (0.0, RA, 1), (0.1, RA, 0), (0.1, RC, 0)]) == ["down", "up"]
+
+
+def test_reset_releases_the_chord():
+    det = HoldDetector(hold_s=0.3)
+    run_all(det, [(0.0, RC, 1), (0.0, RA, 1), (0.4,)])
+    assert det.reset() == ["cancel", "up"]

@@ -38,7 +38,7 @@ def test_run_eval_against_mock(tmp_path, monkeypatch, capsys):
     assert evaluate.run_eval(str(f)) == 1  # 1/2 < 95%
     out = capsys.readouterr().out
     assert "Pass rate 1/2" in out
-    assert "validator rejected: missing_number:420" in out
+    assert "validator rejected: missing_number" in out
 
 
 def _mock_gemini(responses):

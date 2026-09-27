@@ -112,9 +112,13 @@ async def test_empty_candidates(cfg):
 
 
 @respx.mock
-async def test_max_tokens_is_accepted(cfg):
-    respx.post(URL).mock(return_value=httpx.Response(200, json=ok_response("Partial text", finish="MAX_TOKENS")))
-    assert (await clean(cfg)).text == "Partial text"
+async def test_max_tokens_is_a_failure_not_partial_text(cfg):
+    """Regression (Codex review #1): output cut off at maxOutputTokens was accepted, and could pass
+    the validator's 40% length check while missing the end of the dictation."""
+    respx.post(URL).mock(return_value=httpx.Response(200, json=ok_response("The meeting is", finish="MAX_TOKENS")))
+    with pytest.raises(CleanerError) as e:
+        await clean(cfg)
+    assert e.value.kind == "truncated"
 
 
 @respx.mock
@@ -164,3 +168,21 @@ def test_never_used_cleaner_needs_warm_right_after_boot(cfg, monkeypatch):
 
     monkeypatch.setattr(cleaner_mod.time, "monotonic", lambda: 42.0)  # 42 s after boot
     assert GeminiCleaner(cfg, "k").needs_warm()
+
+
+@respx.mock
+@pytest.mark.parametrize("body", [b"<html>502 Bad Gateway</html>", b"[1, 2]", b'{"status": "ok", "text": 42}'])
+async def test_proxy_malformed_response_is_a_cleaner_error(cfg, body):
+    """Regression (Codex review #3): invalid JSON or a wrong shape from the proxy escaped as ValueError/
+    AttributeError, which the daemon didn't catch, so the whole dictation was lost."""
+    from murmur.cleaner import ProxyCleaner
+
+    cfg.llm.proxy_url = "https://proxy.example/v1/clean"
+    respx.post(cfg.llm.proxy_url).mock(return_value=httpx.Response(200, content=body))
+    cleaner = ProxyCleaner(cfg, "tok")
+    try:
+        with pytest.raises(CleanerError) as e:
+            await cleaner.clean("hello there", mode="default", instructions="", bias_terms=[])
+        assert e.value.kind == "error"
+    finally:
+        await cleaner.aclose()

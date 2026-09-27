@@ -340,3 +340,162 @@ async def test_dictated_text_stays_out_of_info_logs(make_daemon, caplog):
     info = " ".join(r.getMessage() for r in caplog.records if r.levelno >= logging.INFO)
     assert "LLM output rejected" in info
     assert "Supabase" not in info and "meeting" not in info
+
+
+# -- Codex review (0.5.1) regressions ---------------------------------------------------
+
+
+async def test_unexpected_cleaner_exception_still_pastes_rules_text(make_daemon):
+    """Regression (Codex review #3): any non-CleanerError from clean-up skipped insertion, history
+    and last_text: the dictation vanished."""
+    d = make_daemon(cleaner=FakeCleaner(error=ValueError("proxy sent garbage")))
+    row = await dictate(d)
+    assert d.injector.inserted and d.injector.inserted[0][0].startswith("So the meeting")
+    assert row["llm_status"] == "error:ValueError" and row["final_text"]
+    assert d.last_text == d.injector.inserted[0][0]
+
+
+async def test_inserts_are_serialized(make_daemon):
+    """Regression (Codex review #4): paste-last during a finishing dictation interleaved
+    copy -> settle -> paste, pasting the wrong text and corrupting clipboard restore."""
+    active, peak, order = 0, 0, []
+
+    class SlowInjector(FakeInjector):
+        async def insert(self, text, chord=None):
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            order.append(("copy", text))
+            await asyncio.sleep(0.02)
+            order.append(("paste", text))
+            active -= 1
+
+    d = make_daemon(injector=SlowInjector())
+    d.last_text = "A"
+    await asyncio.gather(d._insert("B", None), d.paste_last())
+    assert peak == 1
+    assert order in ([("copy", "B"), ("paste", "B"), ("copy", "A"), ("paste", "A")],
+                     [("copy", "A"), ("paste", "A"), ("copy", "B"), ("paste", "B")])
+
+
+async def test_paste_waits_until_the_chord_is_released(make_daemon):
+    """Regression (Codex review #5): a dictation finishing while Right Ctrl + Right Alt were held
+    (recording the next one, or after an auto-stop) pasted as Ctrl+Alt+V, i.e. nothing."""
+    d = make_daemon()
+    await d.handle({"cmd": "toggle"})
+    await d.handle({"cmd": "toggle"})
+    job = d.queue.get_nowait()
+    await d.on_hold("down")  # user starts holding for the next dictation
+    task = asyncio.create_task(d.process(job))
+    await asyncio.sleep(0.05)
+    assert not task.done() and d.injector.inserted == []
+    await d.on_hold("up")
+    await asyncio.wait_for(task, 1)
+    assert len(d.injector.inserted) == 1
+
+
+async def test_auto_stop_during_hold_waits_for_release(make_daemon):
+    d = make_daemon()
+    await d.on_hold("down")
+    await d.on_hold("start")
+    d._auto_stop()  # audio.max_seconds reached while the keys are still held
+    assert d.state == "processing" and d.chord_down
+    task = asyncio.create_task(d.process(d.queue.get_nowait()))
+    await asyncio.sleep(0.05)
+    assert d.injector.inserted == []
+    await d.on_hold("end")  # release: keyd sends end (ignored, already stopped) then up
+    await d.on_hold("up")
+    await asyncio.wait_for(task, 1)
+    assert d.injector.inserted
+
+
+async def test_helper_disconnect_releases_waiting_paste(make_daemon):
+    d = make_daemon()
+    await d.on_hold("down")
+    d._chord_released_by_disconnect()
+    assert not d.chord_down
+
+
+def _write_config(**sections):
+    from murmur import config
+
+    config.ensure_defaults()
+    text = config.DEFAULT_CONFIG_TOML
+    for old, new in sections.items():
+        text = text.replace(old, new)
+    paths.config_file().write_text(text)
+
+
+async def test_reload_can_turn_hold_to_talk_off_and_on(make_daemon, tmp_path):
+    """Regression (Codex review #6): the keyd listener was only set up at startup, so
+    hold_to_talk = false + `murmur reload` reported success but holds kept recording."""
+    d = make_daemon()
+    d.cfg.hotkey.keyd_socket = str(tmp_path / "keyd.sock")
+    d.sync_hotkey()
+    assert d._keyd is not None and not d._keyd.done()
+    _write_config(**{"hold_to_talk = true": "hold_to_talk = false"})
+    assert (await d.handle({"cmd": "reload"}))["ok"]
+    await asyncio.sleep(0)
+    assert d._keyd is None
+    await d.on_hold("start")
+    assert d.state == "idle"  # ignored while disabled
+    _write_config(**{'keyd_socket = "/run/murmur-keyd/socket"': f'keyd_socket = "{tmp_path / "other.sock"}"'})
+    assert (await d.handle({"cmd": "reload"}))["ok"]
+    assert d._keyd is not None and d._keyd_socket == str(tmp_path / "other.sock")
+    d._keyd.cancel()
+
+
+async def test_reload_applies_retention_immediately(make_daemon):
+    """Regression (Codex review #7): lowering keep_days only affected future writes; existing
+    text stayed until a later dictation or restart triggered a purge."""
+    from datetime import UTC, datetime, timedelta
+
+    from murmur.history import Record
+
+    d = make_daemon()
+    old = (datetime.now(UTC) - timedelta(days=2)).isoformat(timespec="seconds")
+    d.history.save(Record(created_at=old, raw_text="private", final_text="private", total_ms=1))
+    _write_config(**{"keep_days = 30": "keep_days = 1"})
+    assert (await d.handle({"cmd": "reload"}))["ok"]
+    assert d.history.recent(1)[0]["raw_text"] is None
+
+
+async def test_idle_daemon_purges_on_a_timer(make_daemon, monkeypatch):
+    """Regression (Codex review #7): purging only ran at startup or after a dictation, so an idle
+    daemon kept expired text indefinitely."""
+    from datetime import UTC, datetime, timedelta
+
+    from murmur.history import Record
+
+    monkeypatch.setattr("murmur.daemon.PURGE_INTERVAL_S", 0.01)
+    d = make_daemon()
+    old = (datetime.now(UTC) - timedelta(days=40)).isoformat(timespec="seconds")
+    d.history.save(Record(created_at=old, raw_text="private", final_text="private", total_ms=1))
+    task = asyncio.create_task(d.purge_loop())
+    try:
+        for _ in range(100):
+            if d.history.recent(1)[0]["raw_text"] is None:
+                break
+            await asyncio.sleep(0.01)
+        assert d.history.recent(1)[0]["raw_text"] is None
+    finally:
+        task.cancel()
+
+
+def test_service_does_not_import_the_env_file():
+    """Regression (Codex review #9): EnvironmentFile= froze the fallback API key into the daemon's
+    environment, which then beat the rotated value in ~/.config/murmur/env on `murmur reload`."""
+    from pathlib import Path
+
+    unit = (Path(__file__).parent.parent / "systemd" / "murmurd.service").read_text()
+    assert "EnvironmentFile" not in unit
+
+
+def test_rotated_env_file_key_is_read_fresh(monkeypatch):
+    from murmur import secrets
+
+    monkeypatch.setattr(secrets, "_keyring_get", lambda user: None)
+    secrets.write_env_file("GEMINI_API_KEY", "old")
+    assert secrets.get_api_key() == "old"
+    secrets.write_env_file("GEMINI_API_KEY", "new")
+    assert secrets.get_api_key() == "new"

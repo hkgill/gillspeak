@@ -1,6 +1,6 @@
 [project]
 name = "murmur"
-version = "0.5.0"
+version = "0.5.1"
 description = "Self-hosted dictation: hotkey, talk, clean text at your cursor. Local ASR, Gemini Flash-Lite cleanup."
 readme = "README.md"
 license = "MIT"

@@ -10,8 +10,32 @@ PREAMBLE_RE = re.compile(r"^(?:sure|here(?:'|’| i)s|okay|certainly|the (?:clea
 NUMBER_RE = re.compile(r"\d[\d,.:/-]*")
 
 
+# A run of numbers separated by single spaces, spoken digit by digit or as a time: "4 8 2", "6 45".
+GROUP_RE = re.compile(r"\d[\d,.:/-]*(?: \d[\d,.:/-]*)*")
+
+
 def _numbers(text: str) -> set[str]:
     return {m.group(0).rstrip(",.:/-").replace(",", "") for m in NUMBER_RE.finditer(text)}
+
+
+def _digits(s: str) -> str:
+    return re.sub(r"\D", "", s)
+
+
+def _missing_numbers(inp: str, out: str) -> bool:
+    """True if a number from the input is gone or changed. Each number must appear as a whole token,
+    or a spaced group may come back joined/reformatted as a whole ("4 8 2" -> "482", "6 45" -> "6:45").
+    Never a substring match: "250" must not be found inside "1250"."""
+    out_tokens = _numbers(out)
+    out_joined = {_digits(m.group(0)) for m in GROUP_RE.finditer(out)} | {_digits(t) for t in out_tokens}
+    for m in GROUP_RE.finditer(inp):
+        group = m.group(0)
+        if all(n in out_tokens for n in _numbers(group)):
+            continue
+        if _digits(group) in out_joined:
+            continue
+        return True
+    return False
 
 
 def check(
@@ -35,16 +59,11 @@ def check(
         return False, f"too_long:{ratio:.2f}"
     if PREAMBLE_RE.search(out_s) and not PREAMBLE_RE.search(inp.strip()):
         return False, "preamble"
-    if not CORRECTION_RE.search(inp):
-        out_numbers = _numbers(out_s)
-        # Also accept numbers the model joined or reformatted: "4 8 2" -> "482", "6 45" -> "6:45".
-        out_digits = re.sub(r"[\s,:]", "", out_s)
-        missing = sorted(n for n in _numbers(inp) if n not in out_numbers and n not in out_digits)
-        if missing:
-            return False, f"missing_number:{missing[0]}"
+    if not CORRECTION_RE.search(inp) and _missing_numbers(inp, out_s):
+        return False, "missing_number"  # reasons are logged and stored: never include dictated values
     if check_bias and bias_terms:
         low_in, low_out = inp.lower(), out_s.lower()
         for term in bias_terms:
             if term.lower() in low_in and term.lower() not in low_out:
-                return False, f"missing_term:{term}"
+                return False, "missing_term"
     return True, ""

@@ -101,6 +101,11 @@ class History:
                 f"UPDATE dictations SET {sets} WHERE created_at < ? AND (raw_text IS NOT NULL OR rules_text IS NOT NULL OR final_text IS NOT NULL)",
                 (cutoff,),
             )
+            # 0.5.0 stored dictated values in reasons ("rejected:missing_number:0412..."); keep only the code.
+            for code in ("missing_number", "missing_term"):
+                self._db.execute(
+                    "UPDATE dictations SET llm_status = ? WHERE llm_status LIKE ?", (f"rejected:{code}", f"rejected:{code}:%")
+                )
             self._db.commit()
             return cur.rowcount
 

@@ -2,6 +2,22 @@
 
 All notable changes to Murmur. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - 2026-09-27
+
+Fixes from an independent review (Codex, `gpt-6-astra`, high effort). Every fix has a regression test that fails on 0.5.0.
+
+### Fixed
+- **Pastes could vanish during hold-to-talk.** A dictation finishing while Right Ctrl + Right Alt were held (recording the next one, or after the 5-minute auto-stop) pasted as Ctrl+Alt+V. `murmur-keyd` now also reports when the chord is physically down/up, and murmurd holds pastes until it's released. **Re-run `scripts/install-keyd.sh`** (`murmur doctor` reminds you).
+- **Truncated clean-up was pasted as if complete.** Gemini output that hit its token limit (`MAX_TOKENS`) is now treated as a failure, and the full rules-cleaned transcript is pasted instead.
+- **The number check accepted changed values.** "250" counted as present in "1250"; numbers must now match as whole tokens (spaced digits and times like "6 45" → "6:45" are still accepted).
+- **Dictated numbers were stored in history metadata and logs** (`rejected:missing_number:0412…`), surviving `keep_days = 0`. Reasons are now value-free codes, and existing rows are scrubbed on the next purge.
+- **History retention only ran at startup or after a dictation.** It now runs hourly, and immediately on `murmur reload`.
+- **`hold_to_talk = false` + `murmur reload` didn't turn hold-to-talk off** (nor did changing `keyd_socket`). Reload now starts, stops or re-points the listener.
+- **A rotated API key in `~/.config/murmur/env` was ignored until restart**: the service imported the file into its environment at startup. The unit no longer does (murmurd reads the file itself); re-run the setup script, or delete the `EnvironmentFile=` line from `~/.config/systemd/user/murmurd.service`.
+- **Overlapping pastes** (`murmur paste-last` while a dictation finished) could paste the wrong text and corrupt clipboard restore. Pastes are now serialized.
+- **An unexpected error in clean-up lost the whole dictation**; it now falls back to the rules text like every other failure. Malformed proxy responses are reported as clean-up errors.
+- **A microphone that failed to start leaked its audio stream** on every retry.
+
 ## [0.5.0] - 2026-09-27
 
 ### Added
@@ -32,5 +48,6 @@ All notable changes to Murmur. The format follows [Keep a Changelog](https://kee
 ### Added
 - First release: `murmurd` daemon with warm Parakeet-TDT 0.6B v3 ASR (sherpa-onnx), Silero VAD trimming, rules clean-up, LLM gate, Gemini Flash-Lite clean-up with validator and rules fallback, Wayland/X11 injection with clipboard restore, SQLite history, `murmur` CLI, SHA256-pinned model downloads, Fedora setup script.
 
+[0.5.1]: https://github.com/hkgill/gillspeak/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/hkgill/gillspeak/compare/17bd954...v0.5.0
 [0.4.0]: https://github.com/hkgill/gillspeak/commit/17bd954

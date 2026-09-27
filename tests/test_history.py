@@ -58,3 +58,13 @@ def test_stats():
     assert st.p50_llm_ms == 1000 and st.p50_nollm_ms == 500
     assert abs(st.cost_window - 0.14) < 1e-9
     assert abs(st.cost_month_est - 0.14 * 3) < 0.01  # 10 days of data -> x3
+
+
+def test_old_rejection_reasons_are_scrubbed(tmp_path):
+    """Regression (Codex review #2): databases written by 0.5.0 hold dictated numbers in llm_status."""
+    h = History(tmp_path / "h.db", keep_days=0)
+    h.save(Record(llm_status="rejected:missing_number:0412345678", total_ms=1))
+    h.save(Record(llm_status="rejected:missing_term:Supabase", total_ms=1))
+    h.save(Record(llm_status="rejected:too_short:0.20", total_ms=1))
+    h.purge()
+    assert [r["llm_status"] for r in h.recent(3)] == ["rejected:too_short:0.20", "rejected:missing_term", "rejected:missing_number"]

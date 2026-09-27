@@ -33,6 +33,8 @@ log = logging.getLogger("murmurd")
 MAX_INFLIGHT = 2
 RATE_LIMIT_BACKOFF_S = 60.0
 KEYD_RETRY_S = 5.0
+PURGE_INTERVAL_S = 3600.0  # history retention runs on a timer, not only when dictating
+CHORD_WAIT_EXTRA_S = 30.0  # longest we hold a paste for the chord release, beyond audio.max_seconds
 DEBUG_AUDIO_KEEP_DAYS = 7
 
 
@@ -79,6 +81,11 @@ class Daemon:
         self.inflight = 0
         self.opts = JobOptions()
         self.holding = False  # the current recording was started by a murmur-keyd hold
+        self.chord_down = False  # Right Ctrl + Right Alt physically held (keyd "down" .. "up")
+        self._chord_up = asyncio.Event()
+        self._chord_up.set()
+        self._insert_lock = asyncio.Lock()  # one copy -> paste -> restore at a time
+        self._keyd_socket: str | None = None
         self.backoff_until = 0.0
         self.last_text: str | None = None
         self.ready = asyncio.Event()
@@ -88,7 +95,6 @@ class Daemon:
         self._worker: asyncio.Task[None] | None = None
         self._keyd: asyncio.Task[None] | None = None
         self._tasks: set[asyncio.Task[Any]] = set()
-        self._last_purge = time.monotonic()
 
     # -- lifecycle -------------------------------------------------------------
     def _spawn(self, coro: Any) -> asyncio.Task[Any]:
@@ -271,10 +277,46 @@ class Daemon:
             return self._resp(True, "cancelled")
         return self._resp(True, "nothing to cancel")
 
+    async def purge_loop(self) -> None:
+        while True:
+            await asyncio.sleep(PURGE_INTERVAL_S)
+            if self.history is not None:
+                await asyncio.to_thread(self.history.purge)
+
     # -- hold-to-talk (murmur-keyd) ---------------------------------------------
+    def _set_chord(self, down: bool) -> None:
+        self.chord_down = down
+        if down:
+            self._chord_up.clear()
+        else:
+            self._chord_up.set()
+
+    def _chord_released_by_disconnect(self) -> None:
+        """No helper means no reliable key state; don't hold pastes forever."""
+        self._set_chord(False)
+
+    def sync_hotkey(self) -> None:
+        """Start, stop or re-point the murmur-keyd listener to match cfg.hotkey (startup and reload)."""
+        want = self.cfg.hotkey.keyd_socket if self.cfg.hotkey.hold_to_talk else None
+        if self._keyd is not None and (want is None or want != self._keyd_socket):
+            self._keyd.cancel()
+            self._keyd, self._keyd_socket = None, None
+            self._chord_released_by_disconnect()
+            if self.holding:
+                self._spawn(self.cancel())
+        if want is not None and self._keyd is None:
+            self._keyd_socket = want
+            self._keyd = asyncio.create_task(self.keyd_listener(want))
+
     async def on_hold(self, event: str) -> None:
-        """start: begin recording unless one is already running (e.g. from Ctrl+Space).
-        end: stop and paste. cancel: another key joined the chord, so discard."""
+        """down/up: chord physically held/released (pastes wait for up). start: begin recording
+        unless one is already running (e.g. from Ctrl+Space). end: stop and paste.
+        cancel: another key joined the chord, so discard."""
+        if event in ("down", "up"):
+            self._set_chord(event == "down")
+            return
+        if not self.cfg.hotkey.hold_to_talk:
+            return
         recording = self.recorder is not None and self.recorder.is_recording
         log.info("hold %s (recording=%s, holding=%s)", event, recording, self.holding)
         if event == "start" and not recording:
@@ -312,6 +354,7 @@ class Daemon:
                 pass
             finally:
                 writer.close()
+            self._chord_released_by_disconnect()
             if self.holding:  # helper went away mid-hold: don't leave the mic recording
                 await self.cancel()
             log.info("murmur-keyd disconnected; retrying")
@@ -344,6 +387,8 @@ class Daemon:
         self.notifier.sounds = cfg.sounds.enabled
         if self.history is not None:
             self.history.keep_days = cfg.history.keep_days
+            await asyncio.to_thread(self.history.purge)  # a shorter retention applies now, not at the next purge
+        self.sync_hotkey()
         if self.cleaner is not None:
             await self.cleaner.aclose()
             self.cleaner = None
@@ -424,9 +469,6 @@ class Daemon:
         self.last_text = final
         if self.history is not None:
             await asyncio.to_thread(self.history.save, rec)
-            if time.monotonic() - self._last_purge > 86400:
-                self._last_purge = time.monotonic()
-                await asyncio.to_thread(self.history.purge)
         log.info("dictation: %d words, llm=%s (%s), %d ms, %s", rec.words, status, reason, rec.total_ms, inject_status)
         if inject_status == "pasted":
             if notice:
@@ -455,6 +497,10 @@ class Daemon:
             if e.kind == "auth":
                 self._spawn(self.notifier.error("Gemini rejected the request", "Bad API key or model ID? Run `murmur doctor`"))
             return text, e.kind, None
+        except Exception as e:  # never lose the dictation to a clean-up bug: fall back to the rules text
+            rec.llm_ms = int((time.monotonic() - t0) * 1000)
+            log.exception("LLM clean-up failed unexpectedly")
+            return text, f"error:{type(e).__name__}", None
         rec.llm_ms = res.llm_ms or int((time.monotonic() - t0) * 1000)
         rec.input_tokens, rec.output_tokens = res.input_tokens, res.output_tokens
         ok, why = validate.check(
@@ -468,6 +514,21 @@ class Daemon:
 
     async def _insert(self, text: str, chord: str | None) -> str:
         """Every transcript ends up pasted or, failing that, on the clipboard."""
+        async with self._insert_lock:
+            await self._wait_for_chord_release()
+            return await self._insert_now(text, chord)
+
+    async def _wait_for_chord_release(self) -> None:
+        """A synthetic Ctrl+V sent while Right Ctrl + Right Alt are held arrives as Ctrl+Alt+V."""
+        if self._chord_up.is_set():
+            return
+        log.info("waiting for Right Ctrl + Right Alt to be released before pasting")
+        try:
+            await asyncio.wait_for(self._chord_up.wait(), self.cfg.audio.max_seconds + CHORD_WAIT_EXTRA_S)
+        except TimeoutError:
+            log.warning("chord still reported held; pasting anyway")
+
+    async def _insert_now(self, text: str, chord: str | None) -> str:
         try:
             await self.injector.insert(text, chord)
             return "pasted"
@@ -512,9 +573,10 @@ async def amain() -> None:
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
     await daemon.load()
-    if cfg.hotkey.hold_to_talk:
-        daemon._keyd = asyncio.create_task(daemon.keyd_listener(cfg.hotkey.keyd_socket))
+    daemon.sync_hotkey()
+    purge = asyncio.create_task(daemon.purge_loop())
     await stop.wait()
+    purge.cancel()
     log.info("shutting down")
     await daemon.close()
     try:

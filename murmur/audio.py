@@ -89,11 +89,18 @@ class Recorder:
             return
         try:
             stream = self._make_stream()
-            stream.start()
         except RecorderError:
             raise
         except Exception as e:
             raise RecorderError(f"cannot open microphone: {e}") from e
+        try:
+            stream.start()
+        except Exception as e:
+            try:
+                stream.close()  # otherwise every retry leaks a PortAudio stream
+            except Exception:
+                pass
+            raise RecorderError(f"cannot start microphone: {e}") from e
         self._stream = stream
         self._last_cb = time.monotonic()
 
