@@ -1,6 +1,6 @@
 import numpy as np
 
-from murmur.vad import EnergyVad, plan_chunks, split_long, trim, trim_to_segments
+from gillspeak.vad import EnergyVad, plan_chunks, split_long, trim, trim_to_segments
 
 SR = 16000
 

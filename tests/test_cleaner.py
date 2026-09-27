@@ -5,8 +5,8 @@ import httpx
 import pytest
 import respx
 
-from murmur.cleaner import GEMINI_BASE, CleanerError, GeminiCleaner, estimate_tokens, strip_echo
-from murmur.config import Config
+from gillspeak.cleaner import GEMINI_BASE, CleanerError, GeminiCleaner, estimate_tokens, strip_echo
+from gillspeak.config import Config
 
 URL = f"{GEMINI_BASE}/models/gemini-3.5-flash-lite:generateContent"
 
@@ -164,7 +164,7 @@ async def test_warm_uses_metadata_call(cfg):
 def test_never_used_cleaner_needs_warm_right_after_boot(cfg, monkeypatch):
     """Regression: _last_used started at 0.0, and monotonic time is seconds since boot, so within
     five minutes of boot a never-connected cleaner claimed it was warm (seen on fresh CI runners)."""
-    import murmur.cleaner as cleaner_mod
+    import gillspeak.cleaner as cleaner_mod
 
     monkeypatch.setattr(cleaner_mod.time, "monotonic", lambda: 42.0)  # 42 s after boot
     assert GeminiCleaner(cfg, "k").needs_warm()
@@ -175,7 +175,7 @@ def test_never_used_cleaner_needs_warm_right_after_boot(cfg, monkeypatch):
 async def test_proxy_malformed_response_is_a_cleaner_error(cfg, body):
     """Regression (Codex review #3): invalid JSON or a wrong shape from the proxy escaped as ValueError/
     AttributeError, which the daemon didn't catch, so the whole dictation was lost."""
-    from murmur.cleaner import ProxyCleaner
+    from gillspeak.cleaner import ProxyCleaner
 
     cfg.llm.proxy_url = "https://proxy.example/v1/clean"
     respx.post(cfg.llm.proxy_url).mock(return_value=httpx.Response(200, content=body))

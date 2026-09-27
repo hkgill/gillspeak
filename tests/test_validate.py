@@ -1,6 +1,6 @@
 import pytest
 
-from murmur.validate import check
+from gillspeak.validate import check
 
 IN = "The invoice for the Henderson job is $4,250 and due on 12/10 at 3:30."
 

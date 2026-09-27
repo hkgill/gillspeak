@@ -2,9 +2,9 @@ import asyncio
 
 import pytest
 
-from murmur import inject
-from murmur.config import InjectConfig
-from murmur.inject import CHORD_KEYS, InjectError, WaylandInjector, X11Injector, is_typeable
+from gillspeak import inject
+from gillspeak.config import InjectConfig
+from gillspeak.inject import CHORD_KEYS, InjectError, WaylandInjector, X11Injector, is_typeable
 
 
 class FakeRun:

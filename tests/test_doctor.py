@@ -1,4 +1,4 @@
-"""`murmur doctor` checks, with every external tool, device and network call faked."""
+"""`gillspeak doctor` checks, with every external tool, device and network call faked."""
 
 import os
 import socket
@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from murmur import doctor
+from gillspeak import doctor
 
 
 def lines(capsys):
@@ -64,26 +64,26 @@ def test_keyd_not_running_is_a_warning_not_a_failure(tmp_path, capsys):
     doctor.check_keyd(r, str(tmp_path / "missing.sock"))
     assert r.failures == 0
     out = capsys.readouterr().out
-    assert "⚠️  hold-to-talk (murmur-keyd): not reachable" in out and "install-keyd.sh" in out
+    assert "⚠️  hold-to-talk (gillspeak-keyd): not reachable" in out and "install-keyd.sh" in out
 
 
 def test_keyd_matching_copy(listening, tmp_path, capsys):
-    installed = tmp_path / "murmur-keyd"
+    installed = tmp_path / "gillspeak-keyd"
     installed.write_bytes(Path(doctor.__file__).with_name("keyd.py").read_bytes())
     r = doctor.Report()
     doctor.check_keyd(r, str(listening), installed)
     out = capsys.readouterr().out
-    assert "✅ hold-to-talk (murmur-keyd): listening" in out and "✅ murmur-keyd version: matches" in out
+    assert "✅ hold-to-talk (gillspeak-keyd): listening" in out and "✅ gillspeak-keyd version: matches" in out
 
 
 def test_keyd_stale_copy_is_flagged(listening, tmp_path, capsys):
     """Regression: an old root copy kept running after keyd.py was fixed, and nothing said so."""
-    installed = tmp_path / "murmur-keyd"
-    installed.write_text("# an older murmur-keyd\n")
+    installed = tmp_path / "gillspeak-keyd"
+    installed.write_text("# an older gillspeak-keyd\n")
     r = doctor.Report()
     doctor.check_keyd(r, str(listening), installed)
     out = capsys.readouterr().out
-    assert "⚠️  murmur-keyd version" in out and "differs" in out and "install-keyd.sh" in out
+    assert "⚠️  gillspeak-keyd version" in out and "differs" in out and "install-keyd.sh" in out
 
 
 def test_keyd_unreadable_copy(listening, tmp_path, capsys):
@@ -134,7 +134,7 @@ def test_missing_input_dir_is_silent(tmp_path, capsys):
 
 
 def test_run_doctor_offline(monkeypatch, capsys, tmp_path):
-    from murmur import paths
+    from gillspeak import paths
 
     paths.config_dir().mkdir(parents=True)
     paths.config_file().write_text(f'[asr]\nmodel_dir = "{tmp_path / "models"}"\n')
@@ -145,13 +145,13 @@ def test_run_doctor_offline(monkeypatch, capsys, tmp_path):
     out = capsys.readouterr().out
     assert rc == 1  # tools and models missing
     assert "❌ xclip installed" in out and "sudo dnf install xclip" in out
-    assert "⚠️  murmurd running: not running" in out
-    assert "❌ model parakeet-tdt-0.6b-v3-int8" in out and "murmur download-models" in out
+    assert "⚠️  gillspeakd running: not running" in out
+    assert "❌ model parakeet-tdt-0.6b-v3-int8" in out and "gillspeak download-models" in out
     assert "problem(s) found" in out
 
 
 def test_run_doctor_bad_config(monkeypatch, capsys):
-    from murmur import paths
+    from gillspeak import paths
 
     paths.config_dir().mkdir(parents=True)
     paths.config_file().write_text("[llm]\nprovider = 'carrier-pigeon'\n")

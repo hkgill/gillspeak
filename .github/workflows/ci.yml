@@ -58,4 +58,25 @@ jobs:
       - name: Build wheel
         run: |
           uv build --wheel
-          python3 -m zipfile -l dist/*.whl | grep -E 'murmur/(evals/llm_eval.jsonl|keyd.py|assets/sounds/start.wav)'
+          python3 -m zipfile -l dist/*.whl | grep -E 'gillspeak/(evals/llm_eval.jsonl|keyd.py|assets/sounds/start.wav)'
+
+  android:
+    # Unit tests (rules/validator port, prompt sync) and a debug APK. No API key: nothing calls Gemini.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test and build
+        run: ./gradlew --no-daemon testDebugUnitTest assembleDebug
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: android-test-reports
+          path: android/app/build/reports/tests/

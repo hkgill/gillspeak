@@ -4,8 +4,8 @@ import asyncio
 
 import pytest
 
-from murmur import notify
-from murmur.notify import Notifier, sound_path
+from gillspeak import notify
+from gillspeak.notify import Notifier, sound_path
 
 
 class FakeProc:

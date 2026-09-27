@@ -2,7 +2,7 @@ import threading
 
 import numpy as np
 
-from murmur.audio import BLOCK_SIZE, Recorder, read_wav, write_wav
+from gillspeak.audio import BLOCK_SIZE, Recorder, read_wav, write_wav
 
 
 class FakeStream:
@@ -106,7 +106,7 @@ def test_stream_that_fails_to_start_is_closed():
     so every retry leaked another PortAudio stream."""
     import pytest
 
-    from murmur.audio import RecorderError
+    from gillspeak.audio import RecorderError
 
     streams = []
 

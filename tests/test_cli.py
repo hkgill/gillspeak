@@ -3,11 +3,11 @@ import sys
 
 import pytest
 
-from murmur import cli
+from gillspeak import cli
 
 
 def test_cli_import_is_light():
-    code = "import sys, murmur.cli; bad = [m for m in ('numpy', 'sherpa_onnx', 'httpx', 'sounddevice') if m in sys.modules]; print(bad)"
+    code = "import sys, gillspeak.cli; bad = [m for m in ('numpy', 'sherpa_onnx', 'httpx', 'sounddevice') if m in sys.modules]; print(bad)"
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout.strip()
     assert out == "[]"
 
@@ -16,7 +16,7 @@ def test_not_running_exit_code(capsys):
     with pytest.raises(SystemExit) as e:
         cli.main(["toggle"])
     assert e.value.code == 2
-    assert "murmurd is not running — systemctl --user start murmurd" in capsys.readouterr().err
+    assert "gillspeakd is not running — systemctl --user start gillspeakd" in capsys.readouterr().err
 
 
 def test_parser():
@@ -32,7 +32,7 @@ import json  # noqa: E402
 import socket  # noqa: E402
 import threading  # noqa: E402
 
-from murmur import paths  # noqa: E402
+from gillspeak import paths  # noqa: E402
 
 
 @pytest.fixture
@@ -119,7 +119,7 @@ def test_eval_default_set_ships_inside_the_package():
     """Regression: the default eval set pointed into the source tree, so installed copies couldn't find it."""
     from pathlib import Path
 
-    from murmur import evaluate
+    from gillspeak import evaluate
 
     assert evaluate.DEFAULT_SET.is_file()
     assert Path(evaluate.__file__).parent in evaluate.DEFAULT_SET.parents

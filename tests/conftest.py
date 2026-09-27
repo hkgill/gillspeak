@@ -7,5 +7,5 @@ def isolated_xdg(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path / "config"))
     monkeypatch.setenv("XDG_DATA_HOME", str(tmp_path / "data"))
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
-    monkeypatch.setenv("MURMUR_SOCKET", str(tmp_path / "murmur.sock"))
+    monkeypatch.setenv("GILLSPEAK_SOCKET", str(tmp_path / "gillspeak.sock"))
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)

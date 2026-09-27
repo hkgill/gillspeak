@@ -1,4 +1,4 @@
-"""Runs the real Silero VAD + Parakeet models. Opt-in: MURMUR_TEST_MODELS=<model_dir> pytest."""
+"""Runs the real Silero VAD + Parakeet models. Opt-in: GILLSPEAK_TEST_MODELS=<model_dir> pytest."""
 
 import os
 from pathlib import Path
@@ -6,8 +6,8 @@ from pathlib import Path
 import numpy as np
 import pytest
 
-MODEL_DIR = os.environ.get("MURMUR_TEST_MODELS")
-pytestmark = pytest.mark.skipif(not MODEL_DIR, reason="set MURMUR_TEST_MODELS to a directory with downloaded models")
+MODEL_DIR = os.environ.get("GILLSPEAK_TEST_MODELS")
+pytestmark = pytest.mark.skipif(not MODEL_DIR, reason="set GILLSPEAK_TEST_MODELS to a directory with downloaded models")
 
 
 @pytest.fixture(scope="module")
@@ -17,22 +17,22 @@ def model_dir():
 
 @pytest.fixture(scope="module")
 def en_wav(model_dir):
-    from murmur.audio import read_wav
+    from gillspeak.audio import read_wav
 
     return read_wav(model_dir / "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8" / "test_wavs" / "en.wav")
 
 
 def test_checksums(model_dir):
-    from murmur.models import MODELS, load_manifest, verify
+    from gillspeak.models import MODELS, load_manifest, verify
 
     if not load_manifest(model_dir):
-        pytest.skip("models not installed via `murmur download-models`")
+        pytest.skip("models not installed via `gillspeak download-models`")
     for name in ("parakeet-tdt-0.6b-v3-int8", "silero-vad"):
         assert verify(MODELS[name], model_dir) == (True, "ok")
 
 
 def test_silero_trim(model_dir, en_wav):
-    from murmur.vad import SileroVad, trim
+    from gillspeak.vad import SileroVad, trim
 
     vad = SileroVad(model_dir / "silero_vad.onnx")
     padded = np.concatenate([np.zeros(16000 * 2, np.float32), en_wav, np.zeros(16000 * 2, np.float32)])
@@ -46,7 +46,7 @@ def test_silero_trim(model_dir, en_wav):
 
 @pytest.mark.parametrize("hotwords", [None, ["Supabase", "Teltonika"]])
 def test_parakeet(model_dir, en_wav, hotwords):
-    from murmur.asr import make_transcriber
+    from gillspeak.asr import make_transcriber
 
     t = make_transcriber("parakeet-tdt-0.6b-v3-int8", model_dir, 4, hotwords)
     assert getattr(t, "hotwords_active", False) is bool(hotwords)
@@ -59,11 +59,11 @@ def test_parakeet(model_dir, en_wav, hotwords):
 
 async def test_daemon_end_to_end(model_dir, en_wav, tmp_path):
     """Real VAD + Parakeet + rules through the daemon; recorder and injector faked."""
-    from murmur.asr import make_transcriber
-    from murmur.config import Config, Dictionary
-    from murmur.daemon import Daemon
-    from murmur.history import History
-    from murmur.vad import SileroVad
+    from gillspeak.asr import make_transcriber
+    from gillspeak.config import Config, Dictionary
+    from gillspeak.daemon import Daemon
+    from gillspeak.history import History
+    from gillspeak.vad import SileroVad
     from tests.test_ipc import FakeInjector, FakeNotifier, FakeRecorder
 
     cfg = Config()

@@ -1,9 +1,9 @@
 import httpx
 import respx
 
-from murmur import evaluate
-from murmur.cleaner import GEMINI_BASE
-from murmur.evaluate import DEFAULT_SET, load_cases, score
+from gillspeak import evaluate
+from gillspeak.cleaner import GEMINI_BASE
+from gillspeak.evaluate import DEFAULT_SET, load_cases, score
 
 
 def test_eval_set_is_valid():
@@ -22,7 +22,7 @@ def test_score():
 @respx.mock
 def test_run_eval_against_mock(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("GEMINI_API_KEY", "k")
-    monkeypatch.setattr("murmur.secrets._keyring_get", lambda user: None)
+    monkeypatch.setattr("gillspeak.secrets._keyring_get", lambda user: None)
     f = tmp_path / "set.jsonl"
     f.write_text(
         '{"input": "the meeting is thursday sorry friday", "must_contain": ["Friday"], "must_not_contain": ["Thursday"]}\n'
@@ -35,7 +35,7 @@ def test_run_eval_against_mock(tmp_path, monkeypatch, capsys):
             200, json={"candidates": [{"content": {"parts": [{"text": next(answers)}]}, "finishReason": "STOP"}]}
         )
     )
-    assert evaluate.run_eval(str(f)) == 1  # 1/2 < 95%
+    assert evaluate.run_eval(str(f), provider="gemini") == 1  # 1/2 < 95%
     out = capsys.readouterr().out
     assert "Pass rate 1/2" in out
     assert "validator rejected: missing_number" in out
@@ -56,7 +56,7 @@ def _mock_gemini(responses):
 
 def _eval_env(tmp_path, monkeypatch, n):
     monkeypatch.setenv("GEMINI_API_KEY", "k")
-    monkeypatch.setattr("murmur.secrets._keyring_get", lambda user: None)
+    monkeypatch.setattr("gillspeak.secrets._keyring_get", lambda user: None)
     monkeypatch.setattr(evaluate, "RATE_LIMIT_WAIT_S", 0.0)
     f = tmp_path / "set.jsonl"
     f.write_text("".join('{"input": "the meeting is on friday", "must_contain": ["Friday"]}\n' for _ in range(n)))
@@ -67,7 +67,7 @@ def _eval_env(tmp_path, monkeypatch, n):
 def test_run_eval_retries_once_after_rate_limit(tmp_path, monkeypatch, capsys):
     f = _eval_env(tmp_path, monkeypatch, 2)
     route = _mock_gemini([429, "The meeting is on Friday.", "The meeting is on Friday."])
-    assert evaluate.run_eval(f) == 0
+    assert evaluate.run_eval(f, provider="gemini") == 0
     out = capsys.readouterr().out
     assert "rate limited; waiting" in out and "Pass rate 2/2" in out
     assert route.call_count == 3
@@ -77,7 +77,7 @@ def test_run_eval_retries_once_after_rate_limit(tmp_path, monkeypatch, capsys):
 def test_run_eval_stops_when_still_rate_limited(tmp_path, monkeypatch, capsys):
     f = _eval_env(tmp_path, monkeypatch, 3)
     route = _mock_gemini(["The meeting is on Friday.", 429, 429])
-    assert evaluate.run_eval(f) == 1
+    assert evaluate.run_eval(f, provider="gemini") == 1
     out = capsys.readouterr().out
     assert "stopping" in out and "Pass rate 1/1" in out and "stopped early after 1/3" in out
     assert route.call_count == 3  # nothing sent after the second 429
@@ -102,7 +102,7 @@ def test_every_case_is_passable():
 
 
 def test_shipped_prompt_exists_and_is_current():
-    from murmur.cleaner import PROMPT_VERSION, system_prompt
+    from gillspeak.cleaner import PROMPT_VERSION, system_prompt
 
     assert PROMPT_VERSION == "clean_v2"
     text = system_prompt()

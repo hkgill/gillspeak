@@ -1,9 +1,9 @@
-"""murmur-keyd: hold detection, keyboard detection, and murmurd's handling of hold events."""
+"""gillspeak-keyd: hold detection, keyboard detection, and gillspeakd's handling of hold events."""
 
 import asyncio
 import json
 
-from murmur.keyd import KEY_A, KEY_RIGHTALT, KEY_RIGHTCTRL, HoldDetector, _bit, is_keyboard
+from gillspeak.keyd import KEY_A, KEY_RIGHTALT, KEY_RIGHTCTRL, HoldDetector, _bit, is_keyboard
 
 from .test_ipc import make_daemon  # noqa: F401  (fixture)
 
@@ -110,7 +110,7 @@ def test_is_keyboard(tmp_path):
     assert not is_keyboard("event99", tmp_path)
 
 
-# -- murmurd side ----------------------------------------------------------------
+# -- gillspeakd side ----------------------------------------------------------------
 
 
 async def test_on_hold_records_then_pastes(make_daemon):  # noqa: F811
@@ -147,7 +147,7 @@ async def test_stray_end_is_ignored(make_daemon):  # noqa: F811
 
 
 async def test_listener_follows_socket_and_cancels_if_helper_dies(make_daemon, tmp_path, monkeypatch):  # noqa: F811
-    monkeypatch.setattr("murmur.daemon.KEYD_RETRY_S", 0.01)
+    monkeypatch.setattr("gillspeak.daemon.KEYD_RETRY_S", 0.01)
     d = make_daemon()
     sock = tmp_path / "keyd.sock"
     conns = []
@@ -190,7 +190,7 @@ import time  # noqa: E402
 
 import pytest  # noqa: E402
 
-from murmur import keyd  # noqa: E402
+from gillspeak import keyd  # noqa: E402
 
 
 @pytest.fixture
@@ -309,11 +309,11 @@ def test_stale_socket_file_is_replaced(tmp_path):
 
 
 def test_keyd_is_standalone():
-    """It runs as root from a copy in /usr/local/libexec, so it must not import the murmur package."""
+    """It runs as root from a copy in /usr/local/libexec, so it must not import the gillspeak package."""
     from pathlib import Path
 
     src = Path(keyd.__file__).read_text()
-    assert "from ." not in src and "import murmur" not in src and "from murmur" not in src
+    assert "from ." not in src and "import gillspeak" not in src and "from gillspeak" not in src
 
 
 # -- chord down/up (0.5.1) -------------------------------------------------------------
@@ -328,7 +328,7 @@ def run_all(det, steps):
 
 
 def test_chord_down_and_up_bracket_every_hold():
-    """Regression (Codex review #5): murmurd had no way to know the chord was still physically held
+    """Regression (Codex review #5): gillspeakd had no way to know the chord was still physically held
     after an auto-stop or cancel, so it could paste while Ctrl+Alt were down."""
     det = HoldDetector(hold_s=0.3)
     got = run_all(det, [(0.0, RC, 1), (0.0, RA, 1), (0.4,), (1.0, RC, 0), (1.1, RA, 0)])
