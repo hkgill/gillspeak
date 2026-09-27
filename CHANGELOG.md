@@ -22,6 +22,7 @@ All notable changes to Murmur. The format follows [Keep a Changelog](https://kee
 ### Fixed
 - Hold-to-talk pasted nothing when one key was released before the other (the paste arrived as Ctrl+Alt+V).
 - `murmur-keyd` could spin at 100% CPU if a device read returned end-of-file.
+- The Gemini connection wasn't pre-warmed during the first five minutes after boot (a never-used cleaner looked recently used), so the first dictation paid for the TLS handshake.
 - Notification sounds could be garbage-collected before they finished playing.
 - Empty transcripts and hold events are now logged instead of disappearing silently.
 - Three eval cases could not be passed by a correct answer (case-sensitive "milk"/"summarise" at the start of a line; "Parakeet model" forbidden case-insensitively). `must_contain` entries may now list alternatives.
