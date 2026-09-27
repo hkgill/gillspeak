@@ -134,7 +134,7 @@ def cmd_bench(a: argparse.Namespace) -> int:
 def cmd_eval(a: argparse.Namespace) -> int:
     from .evaluate import run_eval
 
-    return run_eval(a.file, limit=a.limit, delay=a.delay, verbose=a.verbose)
+    return run_eval(a.file, limit=a.limit, delay=a.delay, verbose=a.verbose, provider=a.provider)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -186,6 +186,7 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument("--limit", type=int, help="run only the first N cases")
     e.add_argument("--delay", type=float, default=4.0, help="seconds between requests (default 4, ~15/min for free-tier keys)")
     e.add_argument("-v", "--verbose", action="store_true")
+    e.add_argument("--provider", choices=["gemini", "proxy"], help="evaluate this provider for this run only (llm.provider is none by default)")
     e.set_defaults(func=cmd_eval)
     return p
 

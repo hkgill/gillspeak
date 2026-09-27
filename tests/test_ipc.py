@@ -93,13 +93,20 @@ class FakeNotifier:
         return record
 
 
+def cloud_config() -> Config:
+    """These tests exercise the opt-in cloud clean-up path; the shipped default is local only."""
+    cfg = Config()
+    cfg.llm.provider = "gemini"
+    return cfg
+
+
 @pytest.fixture
 def make_daemon(tmp_path):
     created = []
 
     def factory(raw=LONG_RAW, cleaner=None, injector=None, cfg=None, dictionary=None):
         d = Daemon(
-            cfg or Config(),
+            cfg or cloud_config(),
             dictionary or Dictionary(replace={"super base": "Supabase"}, bias=["Supabase"]),
             recorder=FakeRecorder(),
             transcriber=FakeTranscriber(raw),
@@ -499,3 +506,13 @@ def test_rotated_env_file_key_is_read_fresh(monkeypatch):
     assert secrets.get_api_key() == "old"
     secrets.write_env_file("GEMINI_API_KEY", "new")
     assert secrets.get_api_key() == "new"
+
+
+async def test_default_config_is_local_only(make_daemon):
+    """The shipped default never calls the cloud clean-up, even for a long dictation the gate would send."""
+    assert Config().llm.provider == "none"
+    d = make_daemon(cfg=Config())  # LONG_RAW: long enough, and with a correction
+    row = await dictate(d)
+    assert d.cleaner.calls == []
+    assert row["llm_status"] == "skipped" and row["gate_reason"] == "provider_none"
+    assert d.injector.inserted[0][0].startswith("So the meeting with Supabase folks")  # the rules text

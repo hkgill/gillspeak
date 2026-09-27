@@ -137,7 +137,7 @@ def run_doctor(skip_llm: bool = False, skip_mic: bool = False) -> int:
     if cfg.llm.provider == "gemini" and not skip_llm:
         _check_gemini(r, cfg)
     elif cfg.llm.provider == "none":
-        r.line(OK, "LLM", "disabled (provider = none)")
+        r.line(OK, "LLM clean-up", "off: local only, nothing leaves this computer (llm.provider = none)")
 
     print()
     print("All good." if r.failures == 0 else f"{r.failures} problem(s) found.")

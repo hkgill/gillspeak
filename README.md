@@ -5,13 +5,13 @@
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 ![Fedora GNOME](https://img.shields.io/badge/platform-Fedora%20GNOME%20Wayland-294172.svg)
 
-Hold a key, talk, and clean text lands at your cursor in any app.
+Hold a key, talk, and clean text lands at your cursor in any app. **Local only: nothing leaves your computer.**
 
-- **Local speech-to-text**: NVIDIA Parakeet-TDT 0.6B v3 (int8) through sherpa-onnx, on the CPU. Audio never leaves the laptop.
-- **Smart clean-up**: only the *text* goes to Gemini Flash-Lite, which applies self-corrections ("Thursday, sorry Friday"), strips fillers and fixes punctuation. Short, clean utterances skip the LLM completely.
-- **Never loses words**: if the LLM is slow, offline or returns something odd, the rules-cleaned transcript is pasted instead.
-
+- **Private by default**: speech recognition (NVIDIA Parakeet-TDT 0.6B v3, int8, through sherpa-onnx) and clean-up both run on your CPU. No account, no API key, no network needed.
+- **Clean text**: rules remove fillers and stutters, apply spoken commands ("new line", "bullet point", "question mark") and your dictionary. Short, clean dictations come out ready to send.
 - **Hold-to-talk**: hold Right Ctrl + Right Alt, speak, let go. Or tap Ctrl+Space to start and stop.
+- **Optional cloud polish**: if you choose to, Gemini Flash-Lite can also handle self-corrections ("Thursday, sorry Friday") and number formatting. It's off unless you turn it on, and even then only transcript *text* is sent, never audio. See [Optional: cloud clean-up with Gemini](#optional-cloud-clean-up-with-gemini).
+- **Never loses words**: if the optional cloud step is slow, offline or returns something odd, the rules-cleaned text is pasted instead.
 
 ## Supported platforms
 
@@ -22,7 +22,7 @@ Hold a key, talk, and clean text lands at your cursor in any app.
 | KDE, Sway, Hyprland (Wayland) | ⚠️ Untested. Bind `gillspeak toggle` in your desktop's settings; hold-to-talk doesn't depend on the desktop |
 | X11 sessions | ⚠️ Code path exists (`xclip`, `xdotool`) but is only tested with fakes |
 | Debian / Ubuntu | ⚠️ Untested. May need `ydotool` 1.x; older 0.1.x releases use a different command syntax |
-| Android 11+ | 🧪 Experimental voice keyboard in [`android/`](android/README.md); uses Gemini for speech recognition, so audio leaves the phone |
+| Android 11+ | 🧪 Experimental companion app in [`android/`](android/README.md): a floating dictation bubble over any keyboard, local only by default |
 | macOS, Windows | ❌ Not supported |
 
 Needs Python 3.12+, a microphone, and about 1 GB of RAM for the speech model. Reports from other setups are welcome: open an issue with your `gillspeak doctor` output.
@@ -43,7 +43,9 @@ The script:
 5. installs `gillspeak-keyd`, the hold-to-talk helper (root service; see below);
 6. installs and starts the `gillspeakd` systemd user service;
 7. adds GNOME shortcuts, warning you if something already uses Ctrl+Space (IBus often does);
-8. asks for your Gemini API key and runs `gillspeak doctor`.
+8. offers the optional Gemini clean-up (off unless you say yes) and runs `gillspeak doctor`.
+
+Upgrading from Murmur (the old name)? Run the script again: it removes the old service, command and shortcuts, and gillspeak moves your config, dictionary, history, models and stored key over on first run.
 
 Manual install: `uv tool install --python 3.12 .`, then `gillspeak download-models`, copy `systemd/gillspeakd.service` to `~/.config/systemd/user/` and `systemctl --user enable --now gillspeakd`. For hold-to-talk, run `scripts/install-keyd.sh`.
 
@@ -51,9 +53,9 @@ Manual install: `uv tool install --python 3.12 .`, then `gillspeak download-mode
 
 **Uninstall:** `scripts/uninstall.sh` removes the services, shortcuts and command but keeps your config, history and models; add `--purge` to remove those and the stored API key too.
 
-### Gemini API key (the free tier works)
+### Optional: cloud clean-up with Gemini
 
-gillspeak only needs a Gemini API key for the clean-up step; speech recognition is local and free. Without a key it still works, pasting the rules-cleaned transcript.
+gillspeak works fully offline and needs no key. If you want AI polish on longer or corrected dictations (self-corrections, "$4,250", grammar), you can opt in to Gemini Flash-Lite: gillspeak then sends the transcript **text** (never audio) of those dictations to Google. Set `provider = "gemini"` under `[llm]` in `~/.config/gillspeak/config.toml` (the setup script can do it for you) and store a key. The free tier works.
 
 1. Sign in at [Google AI Studio](https://aistudio.google.com/apikey) with a Google account and click **Create API key**. No credit card is needed for the free tier.
 2. Store it and tell the daemon:
@@ -73,9 +75,9 @@ gillspeak only needs a Gemini API key for the clean-up step; speech recognition 
 - one dictation is one request, with no retries;
 - if you hit a limit (HTTP 429), gillspeak pastes the rules-cleaned text, pauses Gemini for 60 s, and shows a notification. Nothing is lost.
 
-`gillspeak stats` shows how many dictations used the LLM. `gillspeak eval` sends one request per test case, spaced 4 s apart (`--delay`), and stops after a second 429; use `--limit 10` to spend fewer requests.
+`gillspeak stats` shows how many dictations used the LLM. `gillspeak eval --provider gemini` scores the clean-up on the bundled eval set; it sends one request per test case, spaced 4 s apart (`--delay`), and stops after a second 429; use `--limit 10` to spend fewer requests.
 
-**Privacy on the free tier.** Google may use free-tier prompts and responses to improve its products, and humans may review them. Your audio never leaves the laptop, but the transcript text does, and dictations often include private messages. Fine for trying gillspeak out; for daily use, enable billing on the project (Flash-Lite costs a fraction of a cent per dictation), or set `llm.provider = "none"` to keep everything local. Either way, use a **dedicated** key restricted to the Generative Language API, and set a budget alert if billing is on.
+**Privacy on the free tier.** Google may use free-tier prompts and responses to improve its products, and humans may review them. Your audio never leaves the laptop, but the transcript text does, and dictations often include private messages. For daily use with private messages, enable billing on the project (Flash-Lite costs a fraction of a cent per dictation), or keep the default `llm.provider = "none"`, where nothing leaves your computer. Either way, use a **dedicated** key restricted to the Generative Language API, and set a budget alert if billing is on.
 
 ## Use
 
@@ -121,13 +123,15 @@ Changes to `[audio]`, `[asr]` or the bias terms need `systemctl --user restart g
 ```
 gillspeak toggle ──JSON over $XDG_RUNTIME_DIR/gillspeak.sock──► gillspeakd
   Recorder (300 ms pre-roll) → Silero VAD trim → Parakeet (warm) → rules
-  → gate → Gemini Flash-Lite (2.5 s budget, no retries) → validator
+  → [optional, off by default: gate → Gemini Flash-Lite (2.5 s budget) → validator]
   → wl-copy + ydotool Ctrl+V → SQLite history
 ```
 
+Everything on the default path runs on your computer. The bracketed step only runs if you set `llm.provider = "gemini"`.
+
 - **CLI** (`gillspeak/cli.py`) imports only the standard library, so a hotkey reaches the daemon in well under 100 ms.
 - **Rules** (`rules.py`) remove fillers and stutters, apply spoken commands and the dictionary, and fix spacing.
-- **Gate** (`gate.py`) calls the LLM only for ≥ 12 words, corrections ("sorry", "I mean", "scratch that"…), lists, non-default modes, or `llm.always`.
+- **Gate** (`gate.py`), when cloud clean-up is on, calls the LLM only for ≥ 12 words, corrections ("sorry", "I mean", "scratch that"…), lists, non-default modes, or `llm.always`.
 - **Validator** (`validate.py`) rejects empty output, output that is too short or too long, preambles ("Sure, here's…"), and output where a number from the input has gone missing.
 - **Injector** (`inject.py`) passes text to `wl-copy` through stdin (never argv), sends the paste chord with ydotool keycodes, then puts your previous clipboard back, unless you copied something else in the meantime. If ydotool is down, the text stays on the clipboard and a notification tells you to press Ctrl+V.
 - **History** (`~/.local/share/gillspeak/history.db`) keeps text for `history.keep_days` (0 = metrics only). Audio is never written to disk unless `debug.save_audio = true`.

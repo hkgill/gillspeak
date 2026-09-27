@@ -25,7 +25,7 @@ class Settings(context: Context) {
 
     /** Which speech engine this phone uses: [ENGINE_GEMINI], [ENGINE_GROQ] or [ENGINE_LOCAL]. */
     var engine: String
-        get() = prefs.getString("engine", ENGINE_GEMINI) ?: ENGINE_GEMINI
+        get() = prefs.getString("engine", ENGINE_LOCAL) ?: ENGINE_LOCAL // local only unless the user opts in
         set(v) = prefs.edit().putString("engine", v).apply()
 
     var model: String

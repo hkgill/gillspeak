@@ -4,5 +4,5 @@
     <string name="app_name">gillspeak</string>
     <string name="keyboard_label">gillspeak keyboard</string>
     <string name="bubble_label">gillspeak bubble</string>
-    <string name="bubble_description">Shows a floating mic over your keyboard whenever you type in a text field, and types your dictation into that field. gillspeak reads only the focused text field, skips password fields, and sends nothing but your recorded audio (to Gemini, for transcription).</string>
+    <string name="bubble_description">Shows a floating mic over your keyboard whenever you type in a text field, and types your dictation into that field. gillspeak reads only the focused text field and skips password fields. With the default Local only engine, nothing leaves your phone; your recorded audio is sent out only if you choose a cloud engine (Gemini or Groq).</string>
 </resources>

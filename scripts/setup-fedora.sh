@@ -99,11 +99,16 @@ if [[ $SHORTCUTS == 1 ]] && command -v gsettings >/dev/null; then
   echo "Shortcuts: Ctrl+Space toggle, Ctrl+Alt+Space raw, Ctrl+Shift+Space formal, Ctrl+Alt+Esc cancel"
 fi
 
-say "Gemini API key"
-echo "Use a dedicated key restricted to the Generative Language API, with a billing budget alert."
-read -r -p "Store (or replace) the Gemini API key now? [y/N] " yn
+say "Optional: cloud clean-up with Gemini (off by default)"
+echo "gillspeak is local only: speech recognition and clean-up rules run on this computer and nothing"
+echo "leaves it. Optionally, Gemini can polish longer or corrected dictations; that sends the transcript"
+echo "text (never audio) to Google. Use a dedicated key restricted to the Generative Language API."
+read -r -p "Turn on Gemini clean-up and store a key now? [y/N] " yn
 if [[ "${yn,,}" == y* ]]; then
-  gillspeak set-key && gillspeak reload || true
+  if gillspeak set-key; then
+    sed -i 's/^provider = "none"/provider = "gemini"/' "$HOME/.config/gillspeak/config.toml"
+    gillspeak reload || true
+  fi
 fi
 
 say "Checks"

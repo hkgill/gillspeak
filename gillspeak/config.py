@@ -46,8 +46,11 @@ disabled_commands = []      # e.g. ["period", "bullet point"]
 [gate]
 min_words = 12
 
+# Optional AI clean-up in the cloud. Off by default: with "none", nothing leaves this computer (speech
+# recognition is always local; the rules still remove fillers and apply spoken commands and the dictionary).
+# "gemini" sends the transcript *text* (never audio) of longer or corrected dictations to Google.
 [llm]
-provider = "gemini"                       # gemini | proxy | none
+provider = "none"                         # none | gemini | proxy
 model = "gemini-3.5-flash-lite"           # pinned; `gillspeak doctor` lists the IDs your key can use
 timeout_s = 2.5
 connect_timeout_s = 1.0
@@ -143,7 +146,7 @@ class GateConfig:
 
 @dataclass
 class LlmConfig:
-    provider: str = "gemini"
+    provider: str = "none"  # local only unless the user opts in to cloud clean-up
     model: str = "gemini-3.5-flash-lite"
     timeout_s: float = 2.5
     connect_timeout_s: float = 1.0

@@ -5,8 +5,8 @@ Dictation for Android: hold the mic, talk, let go, and clean text lands in the f
 - **Floating bubble** (recommended): keep your usual keyboard; a small "G" appears over it whenever you type. Hold it to talk, or tap to start and tap again to finish. While recording it stretches into a red pill with a live waveform and timer. Drag it anywhere, including onto the keyboard; size and shape (square or a wide bar) are set in the app. It uses an accessibility service to see when a keyboard and a text field are on screen and to type into that field; it skips password fields.
 - **gillspeak keyboard**: a full-screen mic keyboard, for when you'd rather switch keyboards.
 
-- One Gemini request transcribes the audio *and* cleans it with the desktop `clean_v2` prompt. Unlike the desktop app, **audio leaves the device**; there is no on-device speech recognition yet.
-- The desktop rules (`rules.py`) and validator (`validate.py`) are ported to Kotlin. If Gemini's cleaned text fails validation, the rules-cleaned transcript is inserted instead.
+- **Local only by default: nothing leaves your phone.** Speech recognition is Parakeet TDT 0.6B v3 on the phone (the desktop model, through sherpa-onnx), followed by the desktop clean-up rules. The ~640 MB model is downloaded once by Android's DownloadManager (Wi-Fi only, resumable) and each file is SHA256-checked. English and 24 other European languages.
+- **Optional cloud engines**, chosen in the app: **Gemini** (sends the audio to Google; one request transcribes and cleans with the desktop `clean_v2` prompt; handles Punjabi and mixed languages) and **Groq** (sends the audio to Groq's Whisper, then a text-only clean-up when the gate says it's worth it). The desktop rules, gate and validator are ported to Kotlin; if a cleaned text fails validation, the rules-cleaned transcript is inserted instead.
 - Keyboard: ⌨ goes back to your previous keyboard, ↶ removes the last dictation, and a failed request keeps the audio: tap the status line to retry.
 - The app screen holds setup, the API key, model, dictionary and the last 30 dictations (kept only on the phone).
 

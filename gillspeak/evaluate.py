@@ -109,12 +109,18 @@ async def _run_cases(
     return results, stopped
 
 
-def run_eval(file: str | None = None, *, limit: int | None = None, delay: float = 0.0, verbose: bool = False) -> int:
+def run_eval(
+    file: str | None = None, *, limit: int | None = None, delay: float = 0.0, verbose: bool = False, provider: str | None = None
+) -> int:
+    """Scores the cloud clean-up. [provider] overrides llm.provider for this run only (it's "none" by default)."""
     from .config import load
 
     cfg = load()
+    if provider:
+        cfg.llm.provider = provider
     if cfg.llm.provider == "none":
-        print("llm.provider = none; nothing to evaluate")
+        print("Cloud clean-up is off (llm.provider = none), so there is nothing to evaluate.")
+        print("To score Gemini clean-up without turning it on: gillspeak eval --provider gemini")
         return 1
     path = Path(file) if file else DEFAULT_SET
     if not path.exists():

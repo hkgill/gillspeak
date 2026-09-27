@@ -73,7 +73,7 @@ class MainActivity : Activity() {
             setPadding(dp(16), dp(24), dp(16), dp(32))
         }
         column.addView(text(Settings.APP_NAME, 34f, c.text, bold = true))
-        column.addView(text("Talk, and clean text lands where you're typing.", 16f, c.dim).apply { setPadding(0, dp(4), 0, dp(20)) })
+        column.addView(text("Talk, and clean text lands where you're typing. Local only: nothing leaves your phone.", 16f, c.dim).apply { setPadding(0, dp(4), 0, dp(20)) })
 
         micRow = setupRow("Microphone") { requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1) }
         bubbleRow = setupRow("Floating bubble") { startActivity(Intent(ACTION_ACCESSIBILITY_SETTINGS)) }
@@ -87,9 +87,9 @@ class MainActivity : Activity() {
         column.addView(card("Try it", field("Tap here, then use the bubble", lines = 3)))
 
         engineRows = listOf(
-            engineRow(Settings.ENGINE_GEMINI, "Gemini", "Your audio is sent to Google. Handles Punjabi and mixed languages. About 2–3 s."),
-            engineRow(Settings.ENGINE_GROQ, "Groq", "Your audio is sent to Groq (Whisper); text clean-up only when needed. Needs a free Groq key."),
-            engineRow(Settings.ENGINE_LOCAL, "Local only", "Nothing leaves your phone. English and 24 European languages. Rules clean-up, no AI polish."),
+            engineRow(Settings.ENGINE_LOCAL, "Local only (default)", "Nothing leaves your phone. Instant, works offline. English and 24 European languages."),
+            engineRow(Settings.ENGINE_GEMINI, "Gemini (optional, cloud)", "Sends your audio to Google. Adds AI polish and handles Punjabi and mixed languages. Needs a Gemini key."),
+            engineRow(Settings.ENGINE_GROQ, "Groq (optional, cloud)", "Sends your audio to Groq, and some text for clean-up. Needs a free Groq key."),
         )
         modelStatus = text("", 14f, c.dim).apply { setPadding(0, dp(10), 0, dp(4)) }
         modelButton = text("", 15f, c.accent, bold = true).apply {
@@ -171,8 +171,8 @@ class MainActivity : Activity() {
         column.addView(text(
             "The bubble uses Android's accessibility service only to see when a keyboard and a text field are on " +
                 "screen and to type your dictation into that field. It skips password fields and reads nothing else. " +
-                "With Gemini or Groq your recorded audio is sent to that service; with Local only nothing leaves the phone. " +
-                "Dictations are kept only on this phone.",
+                "With Local only (the default) nothing leaves your phone. If you choose Gemini or Groq, your recorded audio " +
+                "is sent to that service. Dictations are kept only on this phone.",
             13f, c.dim,
         ).apply { setPadding(dp(4), dp(8), dp(4), 0) })
 
