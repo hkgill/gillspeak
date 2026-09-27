@@ -6,14 +6,43 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 ![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
 ![Fedora GNOME](https://img.shields.io/badge/platform-Fedora%20GNOME%20Wayland-294172.svg)
+![Android 11+](https://img.shields.io/badge/android-11%2B%20(experimental)-14A394.svg)
+![Local AI](https://img.shields.io/badge/AI-100%25%20on--device-14A394.svg)
 
-Hold a key, talk, and clean text lands at your cursor in any app. **Local only: nothing leaves your computer.**
+**Talk, and clean text lands at your cursor in any app, on your Linux desktop or your Android phone.**
 
-- **Private by default**: speech recognition (NVIDIA Parakeet-TDT 0.6B v3, int8, through sherpa-onnx) and clean-up both run on your CPU. No account, no API key, no network needed.
-- **Clean text**: rules remove fillers and stutters, apply spoken commands ("new line", "bullet point", "question mark") and your dictionary. Short, clean dictations come out ready to send.
-- **Hold-to-talk**: hold Right Ctrl + Right Alt, speak, let go. Or tap Ctrl+Space to start and stop.
-- **Optional cloud polish**: if you choose to, Gemini Flash-Lite can also handle self-corrections ("Thursday, sorry Friday") and number formatting. It's off unless you turn it on, and even then only transcript *text* is sent, never audio. See [Optional: cloud clean-up with Gemini](#optional-cloud-clean-up-with-gemini).
-- **Never loses words**: if the optional cloud step is slow, offline or returns something odd, the rules-cleaned text is pasted instead.
+> 🔒 **Nothing leaves your device.** The speech AI runs on your own computer or phone. There's no account, no API key and no server, and it works with Wi-Fi off. Your voice is never uploaded, stored or used for training, because it never goes anywhere.
+
+<p align="center"><img src="docs/assets/local-flow.png" width="820" alt="You talk, the local AI speech model transcribes it, rules clean it up, and the text lands at your cursor, all inside your phone or computer. No account, no network, nothing leaves your device."></p>
+
+## ✨ Features
+
+- 🔒 **Private by default**: speech recognition and clean-up both run on your device. No account, no API key, no network needed.
+- 🧠 **Local AI**: NVIDIA's Parakeet speech model runs on your CPU (no GPU needed). It handles English and 24 other European languages. See [Local AI](#-local-ai-what-runs-on-your-device).
+- ✍️ **Clean text**: rules remove fillers and stutters, apply spoken commands ("new line", "bullet point", "question mark") and your dictionary. Short, clean dictations come out ready to send.
+- ⌨️ **Hold-to-talk**: hold Right Ctrl + Right Alt, speak, let go. Or tap Ctrl+Space to start and stop.
+- 📱 **Android too**: a floating bubble over any keyboard, running the same model on the phone. See [On Android](#-on-android).
+- ☁️ **Optional cloud polish**: if you choose to, Gemini Flash-Lite can also handle self-corrections ("Thursday, sorry Friday") and number formatting. It's off unless you turn it on, and even then only transcript *text* is sent, never audio. See [Optional: cloud clean-up with Gemini](#optional-cloud-clean-up-with-gemini).
+- 🛟 **Never loses words**: if the optional cloud step is slow, offline or returns something odd, the rules-cleaned text is pasted instead.
+
+## 🧠 Local AI: what runs on your device
+
+| Step | What runs | Where |
+|---|---|---|
+| Hear | Silero VAD (voice activity detection) trims silence | Your CPU (desktop) |
+| Transcribe | NVIDIA **Parakeet-TDT 0.6B v3** (int8), through sherpa-onnx | Your CPU (desktop) or phone |
+| Clean up | Rules: fillers, stutters, spoken commands, your dictionary | Your CPU or phone |
+| Type | Text goes in at your cursor | Your desktop or phone |
+
+The models are downloaded once, about 640 MB, and each file is SHA256-checked. After that, dictation works fully offline. Your dictation history and dictionary stay in local files on your device.
+
+## 📱 On Android
+
+<p align="center"><img src="docs/assets/android-screens.png" width="880" alt="The gillspeak Android app: the settings screen showing local only by default, the floating bubble over Gboard, the bubble recording as a pill with a live waveform, and the gillspeak voice keyboard"></p>
+
+The experimental Android app runs the same Parakeet model **on the phone**, so nothing leaves it there either. A small speech-bubble **g** floats over whatever keyboard you already use. Hold it and talk, and clean text lands in the field. Cloud engines (Gemini, Groq) are there only if you pick them, and the app labels them "Sends audio". Build and install steps are in [`android/README.md`](android/README.md).
+
+<p align="center"><img src="docs/assets/bubble-states.png" width="560" alt="The bubble's states: idle, listening, transcribing, retry"></p>
 
 ## Supported platforms
 
@@ -26,8 +55,6 @@ Hold a key, talk, and clean text lands at your cursor in any app. **Local only: 
 | Debian / Ubuntu | ⚠️ Untested. May need `ydotool` 1.x; older 0.1.x releases use a different command syntax |
 | Android 11+ | 🧪 Experimental companion app in [`android/`](android/README.md): a floating dictation bubble over any keyboard, local only by default |
 | macOS, Windows | ❌ Not supported |
-
-<p align="center"><img src="docs/assets/bubble-states.png" width="600" alt="the Android bubble's states: idle, listening, transcribing, retry"></p>
 
 Needs Python 3.12+, a microphone, and about 1 GB of RAM for the speech model. Reports from other setups are welcome: open an issue with your `gillspeak doctor` output.
 
