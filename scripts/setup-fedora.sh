@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Murmur setup for Fedora Workstation (GNOME). Safe to re-run.
+# gillspeak setup for Fedora Workstation (GNOME). Safe to re-run.
 # Usage: scripts/setup-fedora.sh [--no-shortcuts] [--no-models]
 set -euo pipefail
 
@@ -25,7 +25,7 @@ say "ydotool daemon (needs /dev/uinput; socket owned by $USER)"
 UNIT="$(rpm -ql ydotool | grep -E '/systemd/system/.*\.service$' | head -n1 || true)"
 UNIT_NAME="$(basename "${UNIT:-ydotool.service}")"
 sudo mkdir -p "/etc/systemd/system/${UNIT_NAME}.d"
-sudo tee "/etc/systemd/system/${UNIT_NAME}.d/murmur.conf" >/dev/null <<CONF
+sudo tee "/etc/systemd/system/${UNIT_NAME}.d/gillspeak.conf" >/dev/null <<CONF
 [Service]
 RuntimeDirectory=ydotoold
 RuntimeDirectoryMode=0755
@@ -42,29 +42,32 @@ else
   echo "WARNING: ydotool test failed; see 'systemctl status $UNIT_NAME'" >&2
 fi
 
-say "Install murmur (uv tool)"
+say "Old Murmur install (renamed gillspeak in 0.6.0; your settings and history move over)"
+"$REPO/scripts/remove-legacy-murmur.sh"
+
+say "Install gillspeak (uv tool)"
 uv tool install --force --python 3.12 "$REPO"
 export PATH="$HOME/.local/bin:$PATH"
 
 if [[ $MODELS == 1 ]]; then
   say "Download models"
-  murmur download-models
+  gillspeak download-models
 fi
 
-say "Hold-to-talk helper (murmur-keyd, Right Ctrl + Right Alt)"
+say "Hold-to-talk helper (gillspeak-keyd, Right Ctrl + Right Alt)"
 "$REPO/scripts/install-keyd.sh" || echo "WARNING: hold-to-talk unavailable; Ctrl+Space still works" >&2
 
 say "systemd user service"
 mkdir -p "$HOME/.config/systemd/user"
-cp "$REPO/systemd/murmurd.service" "$HOME/.config/systemd/user/murmurd.service"
+cp "$REPO/systemd/gillspeakd.service" "$HOME/.config/systemd/user/gillspeakd.service"
 systemctl --user daemon-reload
-systemctl --user enable --now murmurd
-systemctl --user restart murmurd
+systemctl --user enable --now gillspeakd
+systemctl --user restart gillspeakd
 
 if [[ $SHORTCUTS == 1 ]] && command -v gsettings >/dev/null; then
   say "GNOME shortcuts"
-  if gsettings list-recursively 2>/dev/null | grep -iE "<(Primary|Control)>space" | grep -v murmur; then
-    echo "WARNING: the bindings above already use Ctrl+Space; change them or edit the murmur shortcuts." >&2
+  if gsettings list-recursively 2>/dev/null | grep -iE "<(Primary|Control)>space" | grep -v gillspeak; then
+    echo "WARNING: the bindings above already use Ctrl+Space; change them or edit the gillspeak shortcuts." >&2
   fi
   if gsettings get org.freedesktop.ibus.general.hotkey triggers 2>/dev/null | grep -qi "<control>space"; then
     echo "WARNING: IBus uses Ctrl+Space to switch input methods." >&2
@@ -72,7 +75,7 @@ if [[ $SHORTCUTS == 1 ]] && command -v gsettings >/dev/null; then
   fi
   BASE=/org/gnome/settings-daemon/plugins/media-keys/custom-keybindings
   SCHEMA=org.gnome.settings-daemon.plugins.media-keys.custom-keybinding
-  MURMUR="$HOME/.local/bin/murmur"
+  GILLSPEAK="$HOME/.local/bin/gillspeak"
   add_binding() {  # id name command binding
     local path="$BASE/$1/"
     gsettings set "$SCHEMA:$path" name "$2"
@@ -89,10 +92,10 @@ if [[ $SHORTCUTS == 1 ]] && command -v gsettings >/dev/null; then
       gsettings set org.gnome.settings-daemon.plugins.media-keys custom-keybindings "$current"
     fi
   }
-  add_binding murmur0 "Murmur toggle" "$MURMUR toggle" "<Control>space"
-  add_binding murmur1 "Murmur toggle (raw)" "$MURMUR toggle --raw" "<Control><Alt>space"
-  add_binding murmur2 "Murmur toggle (formal)" "$MURMUR toggle --mode formal" "<Control><Shift>space"
-  add_binding murmur3 "Murmur cancel" "$MURMUR cancel" "<Control><Alt>Escape"
+  add_binding gillspeak0 "gillspeak toggle" "$GILLSPEAK toggle" "<Control>space"
+  add_binding gillspeak1 "gillspeak toggle (raw)" "$GILLSPEAK toggle --raw" "<Control><Alt>space"
+  add_binding gillspeak2 "gillspeak toggle (formal)" "$GILLSPEAK toggle --mode formal" "<Control><Shift>space"
+  add_binding gillspeak3 "gillspeak cancel" "$GILLSPEAK cancel" "<Control><Alt>Escape"
   echo "Shortcuts: Ctrl+Space toggle, Ctrl+Alt+Space raw, Ctrl+Shift+Space formal, Ctrl+Alt+Esc cancel"
 fi
 
@@ -100,14 +103,14 @@ say "Gemini API key"
 echo "Use a dedicated key restricted to the Generative Language API, with a billing budget alert."
 read -r -p "Store (or replace) the Gemini API key now? [y/N] " yn
 if [[ "${yn,,}" == y* ]]; then
-  murmur set-key && murmur reload || true
+  gillspeak set-key && gillspeak reload || true
 fi
 
 say "Checks"
-murmur doctor || true
+gillspeak doctor || true
 cat <<'TIP'
 
 Tip: terminals paste with Ctrl+Shift+V. Either add Ctrl+V as a paste shortcut in your
 terminal's preferences (recommended), or bind a second shortcut to
-`murmur toggle --chord ctrl+shift+v`.
+`gillspeak toggle --chord ctrl+shift+v`.
 TIP

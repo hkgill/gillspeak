@@ -21,7 +21,7 @@
         </activity>
 
         <service
-            android:name=".MurmurIme"
+            android:name=".GillspeakIme"
             android:exported="true"
             android:label="@string/keyboard_label"
             android:permission="android.permission.BIND_INPUT_METHOD">

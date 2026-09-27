@@ -58,7 +58,7 @@ jobs:
       - name: Build wheel
         run: |
           uv build --wheel
-          python3 -m zipfile -l dist/*.whl | grep -E 'murmur/(evals/llm_eval.jsonl|keyd.py|assets/sounds/start.wav)'
+          python3 -m zipfile -l dist/*.whl | grep -E 'gillspeak/(evals/llm_eval.jsonl|keyd.py|assets/sounds/start.wav)'
 
   android:
     # Unit tests (rules/validator port, prompt sync) and a debug APK. No API key: nothing calls Gemini.

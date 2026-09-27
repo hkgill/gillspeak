@@ -6,4 +6,4 @@
     android:canRetrieveWindowContent="true"
     android:description="@string/bubble_description"
     android:notificationTimeout="100"
-    android:settingsActivity="dev.hkgill.murmur.MainActivity" />
+    android:settingsActivity="dev.hkgill.gillspeak.MainActivity" />

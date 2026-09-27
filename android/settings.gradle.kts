@@ -12,5 +12,5 @@ dependencyResolutionManagement {
         mavenCentral()
     }
 }
-rootProject.name = "murmur-android"
+rootProject.name = "gillspeak-android"
 include(":app")

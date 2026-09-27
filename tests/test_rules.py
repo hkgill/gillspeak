@@ -1,7 +1,7 @@
 import pytest
 
-from murmur.config import Dictionary, RulesConfig
-from murmur.rules import (
+from gillspeak.config import Dictionary, RulesConfig
+from gillspeak.rules import (
     RulesEngine,
     apply_dictionary,
     apply_spoken_commands,

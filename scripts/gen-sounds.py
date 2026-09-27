@@ -1,4 +1,4 @@
-"""Regenerate murmur/assets/sounds/*.wav (short, quiet sine blips)."""
+"""Regenerate gillspeak/assets/sounds/*.wav (short, quiet sine blips)."""
 
 import math
 import struct
@@ -6,7 +6,7 @@ import wave
 from pathlib import Path
 
 RATE = 22050
-OUT = Path(__file__).resolve().parent.parent / "murmur" / "assets" / "sounds"
+OUT = Path(__file__).resolve().parent.parent / "gillspeak" / "assets" / "sounds"
 
 
 def tone(freqs: list[tuple[float, float]], volume: float = 0.25) -> bytes:

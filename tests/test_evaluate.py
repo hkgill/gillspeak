@@ -1,9 +1,9 @@
 import httpx
 import respx
 
-from murmur import evaluate
-from murmur.cleaner import GEMINI_BASE
-from murmur.evaluate import DEFAULT_SET, load_cases, score
+from gillspeak import evaluate
+from gillspeak.cleaner import GEMINI_BASE
+from gillspeak.evaluate import DEFAULT_SET, load_cases, score
 
 
 def test_eval_set_is_valid():
@@ -22,7 +22,7 @@ def test_score():
 @respx.mock
 def test_run_eval_against_mock(tmp_path, monkeypatch, capsys):
     monkeypatch.setenv("GEMINI_API_KEY", "k")
-    monkeypatch.setattr("murmur.secrets._keyring_get", lambda user: None)
+    monkeypatch.setattr("gillspeak.secrets._keyring_get", lambda user: None)
     f = tmp_path / "set.jsonl"
     f.write_text(
         '{"input": "the meeting is thursday sorry friday", "must_contain": ["Friday"], "must_not_contain": ["Thursday"]}\n'
@@ -56,7 +56,7 @@ def _mock_gemini(responses):
 
 def _eval_env(tmp_path, monkeypatch, n):
     monkeypatch.setenv("GEMINI_API_KEY", "k")
-    monkeypatch.setattr("murmur.secrets._keyring_get", lambda user: None)
+    monkeypatch.setattr("gillspeak.secrets._keyring_get", lambda user: None)
     monkeypatch.setattr(evaluate, "RATE_LIMIT_WAIT_S", 0.0)
     f = tmp_path / "set.jsonl"
     f.write_text("".join('{"input": "the meeting is on friday", "must_contain": ["Friday"]}\n' for _ in range(n)))
@@ -102,7 +102,7 @@ def test_every_case_is_passable():
 
 
 def test_shipped_prompt_exists_and_is_current():
-    from murmur.cleaner import PROMPT_VERSION, system_prompt
+    from gillspeak.cleaner import PROMPT_VERSION, system_prompt
 
     assert PROMPT_VERSION == "clean_v2"
     text = system_prompt()

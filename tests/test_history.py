@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from murmur.history import History, Record, compute_stats, percentile, word_diff
+from gillspeak.history import History, Record, compute_stats, percentile, word_diff
 
 
 def test_save_and_recent(tmp_path):

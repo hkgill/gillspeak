@@ -1,7 +1,7 @@
 import pytest
 
-from murmur.config import GateConfig
-from murmur.gate import decide
+from gillspeak.config import GateConfig
+from gillspeak.gate import decide
 
 LONG = "this sentence has quite a few words in it so it should clearly be sent along"
 

@@ -1,0 +1,18 @@
+[Unit]
+Description=gillspeak dictation daemon
+After=graphical-session.target pipewire.service
+PartOf=graphical-session.target
+
+[Service]
+ExecStart=%h/.local/bin/gillspeakd
+# ~/.config/gillspeak/env is deliberately not imported here: gillspeakd reads that file itself on
+# every reload, and importing it would freeze a rotated key at its startup value.
+# Socket created by the ydotool drop-in that scripts/setup-fedora.sh installs.
+Environment=YDOTOOL_SOCKET=/run/ydotoold/socket
+Restart=on-failure
+RestartSec=2
+# The spec's Nice=-5 is left out: an unprivileged user unit can't lower its nice
+# level, so systemd would refuse to start it (status=201/NICE).
+
+[Install]
+WantedBy=graphical-session.target

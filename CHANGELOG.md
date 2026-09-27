@@ -1,8 +1,11 @@
 # Changelog
 
-All notable changes to Murmur. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
+All notable changes to gillspeak (called Murmur up to 0.5.1). The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
+
+### Changed
+- **Murmur is now gillspeak, everywhere.** The commands are `gillspeak`, `gillspeakd` and `gillspeak-keyd`, the services `gillspeakd.service` and `gillspeak-keyd.service`, and the folders `~/.config/gillspeak`, `~/.local/share/gillspeak` and `~/.cache/gillspeak`. **Upgrading keeps everything:** on first run gillspeak moves the old `murmur` folders over (config, dictionary, history, models) and copies the API key from the old keyring entry. Re-run `scripts/setup-fedora.sh`: it removes the old service, command, shortcuts, ydotool drop-in and hold-to-talk helper (`scripts/remove-legacy-murmur.sh`) before installing the new ones. The Android app's package id is now `dev.hkgill.gillspeak`, so it installs as a new app.
 
 ### Added
 - **Android voice keyboard (experimental)** in `android/`: hold or tap the mic, and Gemini transcribes and cleans the audio in one request with the `clean_v2` prompt. The rules and validator are ported to Kotlin, with the rules-cleaned transcript as the fallback. Audio leaves the device on Android; there is no on-device speech recognition yet. A floating "G" bubble works over any keyboard (accessibility service): hold or tap to dictate, a red pill with a live waveform while recording, draggable and resizable. See [android/README.md](android/README.md).

@@ -12,7 +12,7 @@ body:
   - type: textarea
     id: doctor
     attributes:
-      label: Output of `murmur doctor --no-mic`
+      label: Output of `gillspeak doctor --no-mic`
       description: Remove anything you consider private. It never prints your API key.
       render: text
     validations:
@@ -21,7 +21,7 @@ body:
     id: logs
     attributes:
       label: Logs around the time it happened
-      description: "`journalctl --user -u murmurd --since '-10min'` (and `journalctl -u murmur-keyd --since '-10min'` for hold-to-talk). These can include dictated text; redact as needed."
+      description: "`journalctl --user -u gillspeakd --since '-10min'` (and `journalctl -u gillspeak-keyd --since '-10min'` for hold-to-talk). These can include dictated text; redact as needed."
       render: text
   - type: input
     id: system
@@ -33,5 +33,5 @@ body:
   - type: input
     id: version
     attributes:
-      label: Murmur version or commit
+      label: gillspeak version or commit
       placeholder: "0.5.0 / 909ce95"

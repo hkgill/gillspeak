@@ -7,7 +7,7 @@ one-time dialog asking you to confirm the shortcut.
 
 Usage: scripts/ptt-portal-test.py [--trigger CTRL+ALT+h] [--seconds 60]
 
-Uses the system python3 (needs python3-gobject), not the murmur venv.
+Uses the system python3 (needs python3-gobject), not the gillspeak venv.
 """
 
 from __future__ import annotations
@@ -22,11 +22,11 @@ import gi
 gi.require_version("Gio", "2.0")
 from gi.repository import Gio, GLib  # noqa: E402
 
-APP_ID = "io.github.hkgill.Murmur"
+APP_ID = "io.github.hkgill.gillspeak"
 BUS = "org.freedesktop.portal.Desktop"
 PATH = "/org/freedesktop/portal/desktop"
 IFACE = "org.freedesktop.portal.GlobalShortcuts"
-SHORTCUT_ID = "murmur-ptt-test"
+SHORTCUT_ID = "gillspeak-ptt-test"
 DESKTOP_FILE = Path.home() / ".local/share/applications" / f"{APP_ID}.desktop"
 
 
@@ -36,8 +36,8 @@ def ensure_desktop_file() -> None:
         return
     DESKTOP_FILE.parent.mkdir(parents=True, exist_ok=True)
     DESKTOP_FILE.write_text(
-        "[Desktop Entry]\nType=Application\nName=Murmur\nComment=Dictation\n"
-        f"Exec={Path.home()}/.local/bin/murmur status\nNoDisplay=true\nTerminal=false\n"
+        "[Desktop Entry]\nType=Application\nName=gillspeak\nComment=Dictation\n"
+        f"Exec={Path.home()}/.local/bin/gillspeak status\nNoDisplay=true\nTerminal=false\n"
     )
     print(f"created {DESKTOP_FILE}")
 
@@ -57,7 +57,7 @@ class PortalTest:
     # -- request/response plumbing ------------------------------------------
     def _token(self) -> str:
         self.token_n += 1
-        return f"murmur_ptt_{self.token_n}"
+        return f"gillspeak_ptt_{self.token_n}"
 
     def _call(self, method: str, params: GLib.Variant, token: str, on_response) -> None:
         """Portal calls return a Request object; the real result arrives later as its Response signal."""
@@ -93,7 +93,7 @@ class PortalTest:
             "CreateSession",
             GLib.Variant("(a{sv})", ({
                 "handle_token": GLib.Variant("s", token),
-                "session_handle_token": GLib.Variant("s", "murmur_ptt_session"),
+                "session_handle_token": GLib.Variant("s", "gillspeak_ptt_session"),
             },)),
             token,
             self.on_session,
@@ -113,7 +113,7 @@ class PortalTest:
         print(f"session {self.session}")
         token = self._token()
         shortcuts = [(SHORTCUT_ID, {
-            "description": GLib.Variant("s", "Murmur hold-to-talk (test)"),
+            "description": GLib.Variant("s", "gillspeak hold-to-talk (test)"),
             "preferred_trigger": GLib.Variant("s", self.trigger),
         })]
         print(f"binding {self.trigger}; confirm in the GNOME dialog if one appears")

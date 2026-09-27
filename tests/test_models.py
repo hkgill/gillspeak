@@ -8,8 +8,8 @@ import httpx
 import pytest
 import respx
 
-from murmur import models
-from murmur.models import MODELS, ModelSpec, download, load_manifest, verify
+from gillspeak import models
+from gillspeak.models import MODELS, ModelSpec, download, load_manifest, verify
 
 
 def _tarball(dirname, files):

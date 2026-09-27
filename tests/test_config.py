@@ -2,8 +2,8 @@ import tomllib
 
 import pytest
 
-from murmur import paths
-from murmur.config import DEFAULT_CONFIG_TOML, Config, ConfigError, from_dict, load, load_dictionary
+from gillspeak import paths
+from gillspeak.config import DEFAULT_CONFIG_TOML, Config, ConfigError, from_dict, load, load_dictionary
 
 
 def test_default_toml_matches_dataclass_defaults():
@@ -71,7 +71,7 @@ def test_shipped_defaults_are_the_tested_setup():
     cfg = Config()
     assert not cfg.llm.model.endswith("latest") and cfg.llm.model == "gemini-3.5-flash-lite"
     assert cfg.audio.keep_mic_open is False
-    assert cfg.hotkey.hold_to_talk is True and cfg.hotkey.keyd_socket == "/run/murmur-keyd/socket"
+    assert cfg.hotkey.hold_to_talk is True and cfg.hotkey.keyd_socket == "/run/gillspeak-keyd/socket"
 
 
 def test_hotkey_section_types_are_checked():

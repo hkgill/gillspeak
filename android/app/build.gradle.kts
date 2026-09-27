@@ -44,11 +44,11 @@ if (!sherpaAar.exists()) {
 }
 
 android {
-    namespace = "dev.hkgill.murmur"
+    namespace = "dev.hkgill.gillspeak"
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "dev.hkgill.murmur"
+        applicationId = "dev.hkgill.gillspeak"
         minSdk = 30
         targetSdk = 36
         versionCode = 1

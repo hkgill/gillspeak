@@ -1,4 +1,4 @@
-"""API key lookup order and storage: keyring first, then environment, then ~/.config/murmur/env (0600)."""
+"""API key lookup order and storage: keyring first, then environment, then ~/.config/gillspeak/env (0600)."""
 
 import io
 import os
@@ -8,7 +8,7 @@ import types
 
 import pytest
 
-from murmur import paths, secrets
+from gillspeak import paths, secrets
 
 
 @pytest.fixture
@@ -39,11 +39,11 @@ def test_lookup_order(monkeypatch, no_keyring):
 
 def test_env_file_is_private_and_updates_in_place(no_keyring):
     secrets.write_env_file("GEMINI_API_KEY", "one")
-    secrets.write_env_file("MURMUR_PROXY_TOKEN", "tok")
+    secrets.write_env_file("GILLSPEAK_PROXY_TOKEN", "tok")
     secrets.write_env_file("GEMINI_API_KEY", "two")
     path = paths.env_file()
     assert stat.S_IMODE(os.stat(path).st_mode) == 0o600
-    assert path.read_text() == "MURMUR_PROXY_TOKEN=tok\nGEMINI_API_KEY=two\n"
+    assert path.read_text() == "GILLSPEAK_PROXY_TOKEN=tok\nGEMINI_API_KEY=two\n"
     assert secrets.get_api_key() == "two" and secrets.get_proxy_token() == "tok"
 
 
@@ -67,7 +67,7 @@ def test_keyring_errors_fall_through(monkeypatch):
 def test_set_key_prefers_keyring(monkeypatch, fake_keyring):
     monkeypatch.setattr(sys, "stdin", io.StringIO("  sekrit \n"))
     assert secrets.set_key() == "keyring (libsecret)"
-    assert fake_keyring[("murmur", "gemini_api_key")] == "sekrit"
+    assert fake_keyring[("gillspeak", "gemini_api_key")] == "sekrit"
     assert not paths.env_file().exists()
 
 

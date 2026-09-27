@@ -7,12 +7,12 @@ import stat
 import numpy as np
 import pytest
 
-from murmur import cli, paths
-from murmur.cleaner import CleanerError, CleanResult
-from murmur.config import Config, Dictionary
-from murmur.daemon import Daemon
-from murmur.history import History
-from murmur.inject import InjectError
+from gillspeak import cli, paths
+from gillspeak.cleaner import CleanerError, CleanResult
+from gillspeak.config import Config, Dictionary
+from gillspeak.daemon import Daemon
+from gillspeak.history import History
+from gillspeak.inject import InjectError
 
 LONG_RAW = "um so the the meeting with super base folks moved to thursday sorry friday so can you send the deck before then"
 
@@ -307,7 +307,7 @@ async def test_stale_socket_replaced(make_daemon):
 
 
 async def test_reload(make_daemon):
-    from murmur import config
+    from gillspeak import config
 
     d = make_daemon(cleaner=FakeCleaner("x"))
     config.ensure_defaults()
@@ -323,7 +323,7 @@ async def test_empty_transcript_is_logged_not_silent(make_daemon, caplog):
     import logging
 
     d = make_daemon(raw="   ")
-    with caplog.at_level(logging.INFO, logger="murmurd"):
+    with caplog.at_level(logging.INFO, logger="gillspeakd"):
         row = await dictate(d)
     assert row is None and not d.injector.inserted
     assert "empty transcript" in caplog.text
@@ -335,7 +335,7 @@ async def test_dictated_text_stays_out_of_info_logs(make_daemon, caplog):
     import logging
 
     d = make_daemon(cleaner=FakeCleaner("Sure! Here is the cleaned text: meeting Friday with Supabase."))
-    with caplog.at_level(logging.INFO, logger="murmurd"):
+    with caplog.at_level(logging.INFO, logger="gillspeakd"):
         await dictate(d)
     info = " ".join(r.getMessage() for r in caplog.records if r.levelno >= logging.INFO)
     assert "LLM output rejected" in info
@@ -417,7 +417,7 @@ async def test_helper_disconnect_releases_waiting_paste(make_daemon):
 
 
 def _write_config(**sections):
-    from murmur import config
+    from gillspeak import config
 
     config.ensure_defaults()
     text = config.DEFAULT_CONFIG_TOML
@@ -428,7 +428,7 @@ def _write_config(**sections):
 
 async def test_reload_can_turn_hold_to_talk_off_and_on(make_daemon, tmp_path):
     """Regression (Codex review #6): the keyd listener was only set up at startup, so
-    hold_to_talk = false + `murmur reload` reported success but holds kept recording."""
+    hold_to_talk = false + `gillspeak reload` reported success but holds kept recording."""
     d = make_daemon()
     d.cfg.hotkey.keyd_socket = str(tmp_path / "keyd.sock")
     d.sync_hotkey()
@@ -439,7 +439,7 @@ async def test_reload_can_turn_hold_to_talk_off_and_on(make_daemon, tmp_path):
     assert d._keyd is None
     await d.on_hold("start")
     assert d.state == "idle"  # ignored while disabled
-    _write_config(**{'keyd_socket = "/run/murmur-keyd/socket"': f'keyd_socket = "{tmp_path / "other.sock"}"'})
+    _write_config(**{'keyd_socket = "/run/gillspeak-keyd/socket"': f'keyd_socket = "{tmp_path / "other.sock"}"'})
     assert (await d.handle({"cmd": "reload"}))["ok"]
     assert d._keyd is not None and d._keyd_socket == str(tmp_path / "other.sock")
     d._keyd.cancel()
@@ -450,7 +450,7 @@ async def test_reload_applies_retention_immediately(make_daemon):
     text stayed until a later dictation or restart triggered a purge."""
     from datetime import UTC, datetime, timedelta
 
-    from murmur.history import Record
+    from gillspeak.history import Record
 
     d = make_daemon()
     old = (datetime.now(UTC) - timedelta(days=2)).isoformat(timespec="seconds")
@@ -465,9 +465,9 @@ async def test_idle_daemon_purges_on_a_timer(make_daemon, monkeypatch):
     daemon kept expired text indefinitely."""
     from datetime import UTC, datetime, timedelta
 
-    from murmur.history import Record
+    from gillspeak.history import Record
 
-    monkeypatch.setattr("murmur.daemon.PURGE_INTERVAL_S", 0.01)
+    monkeypatch.setattr("gillspeak.daemon.PURGE_INTERVAL_S", 0.01)
     d = make_daemon()
     old = (datetime.now(UTC) - timedelta(days=40)).isoformat(timespec="seconds")
     d.history.save(Record(created_at=old, raw_text="private", final_text="private", total_ms=1))
@@ -484,15 +484,15 @@ async def test_idle_daemon_purges_on_a_timer(make_daemon, monkeypatch):
 
 def test_service_does_not_import_the_env_file():
     """Regression (Codex review #9): EnvironmentFile= froze the fallback API key into the daemon's
-    environment, which then beat the rotated value in ~/.config/murmur/env on `murmur reload`."""
+    environment, which then beat the rotated value in ~/.config/gillspeak/env on `gillspeak reload`."""
     from pathlib import Path
 
-    unit = (Path(__file__).parent.parent / "systemd" / "murmurd.service").read_text()
+    unit = (Path(__file__).parent.parent / "systemd" / "gillspeakd.service").read_text()
     assert "EnvironmentFile" not in unit
 
 
 def test_rotated_env_file_key_is_read_fresh(monkeypatch):
-    from murmur import secrets
+    from gillspeak import secrets
 
     monkeypatch.setattr(secrets, "_keyring_get", lambda user: None)
     secrets.write_env_file("GEMINI_API_KEY", "old")

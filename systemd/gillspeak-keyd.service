@@ -1,0 +1,28 @@
+[Unit]
+Description=gillspeak hold-to-talk key helper (Right Ctrl + Right Alt)
+Documentation=file:///usr/local/libexec/gillspeak-keyd
+
+[Service]
+# scripts/install-keyd.sh substitutes @OWNER@ with the user allowed to connect.
+ExecStart=/usr/bin/python3 -I /usr/local/libexec/gillspeak-keyd --owner @OWNER@
+RuntimeDirectory=gillspeak-keyd
+RuntimeDirectoryMode=0755
+Restart=on-failure
+RestartSec=2
+# Reads /dev/input and chowns its socket to @OWNER@; nothing else.
+CapabilityBoundingSet=CAP_CHOWN
+NoNewPrivileges=yes
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+MemoryDenyWriteExecute=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

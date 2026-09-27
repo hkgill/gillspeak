@@ -6,12 +6,12 @@
 
 What counts as a secret here:
 - Gemini API keys (they start with `AIza`) and any other API key
-- `MURMUR_PROXY_TOKEN` and any bearer or proxy token
+- `GILLSPEAK_PROXY_TOKEN` and any bearer or proxy token
 - Android signing keystores (`*.jks`, `*.keystore`) and their passwords
-- The contents of `~/.config/murmur/env`, the GNOME keyring, or `android/local.properties`
+- The contents of `~/.config/gillspeak/env`, the GNOME keyring, or `android/local.properties`
 
 Where secrets belong (never in tracked files):
-- Desktop: the GNOME keyring (`murmur set-key`), or `~/.config/murmur/env` (mode 0600)
+- Desktop: the GNOME keyring (`gillspeak set-key`), or `~/.config/gillspeak/env` (mode 0600)
 - Android builds: `android/local.properties` (git-ignored), or typed into the app's settings
 - Tests: obviously fake values such as `"from-file"` or `"test-key"`, never a real key
 
