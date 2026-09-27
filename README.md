@@ -54,7 +54,7 @@ Run `murmur doctor` to list the available Flash-Lite model IDs, then pin one in 
 | | `murmur status` / `murmur reload` | Daemon state / reload config and dictionary |
 | | `murmur doctor` | Check the setup, with a fix hint for each problem |
 | | `murmur bench clip.wav …` | ASR load time, RTF, latency, RSS (and WER if `clip.txt` exists) |
-| | `murmur eval [tests/llm_eval.jsonl]` | Run the LLM evaluation set (target ≥ 95%) |
+| | `murmur eval [--limit N] [--delay 4]` | Run the bundled LLM evaluation set (target ≥ 95%); requests are spaced out and a 429 waits once, then stops |
 
 Spoken commands: "new line", "new paragraph", "bullet point", "question mark", and "full stop"/"period" at the end of an utterance. Turn any of them off with `rules.disabled_commands`.
 

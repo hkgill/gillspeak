@@ -11,7 +11,8 @@ from typing import Any
 
 from .history import percentile
 
-DEFAULT_SET = Path(__file__).resolve().parent.parent / "tests" / "llm_eval.jsonl"
+DEFAULT_SET = Path(__file__).resolve().parent / "evals" / "llm_eval.jsonl"
+RATE_LIMIT_WAIT_S = 30.0  # one wait-and-retry per case on HTTP 429, then stop the run
 
 
 @dataclass
@@ -46,7 +47,10 @@ def score(case: dict[str, Any], output: str) -> list[str]:
     return reasons
 
 
-async def _run_cases(cfg: Any, cases: list[dict[str, Any]], verbose: bool) -> list[CaseResult]:
+async def _run_cases(
+    cfg: Any, cases: list[dict[str, Any]], verbose: bool, delay: float = 0.0, rate_limit_wait: float | None = None
+) -> tuple[list[CaseResult], bool]:
+    """Returns (results, stopped_early). Requests are spaced `delay` seconds apart to stay under free-tier quotas."""
     from . import validate
     from .cleaner import CleanerError, make_cleaner
     from .config import load_dictionary
@@ -56,19 +60,35 @@ async def _run_cases(cfg: Any, cases: list[dict[str, Any]], verbose: bool) -> li
     rules = RulesEngine(cfg.rules, dictionary)
     cleaner = make_cleaner(cfg)
     await cleaner.warm()
-    results = []
+    wait = RATE_LIMIT_WAIT_S if rate_limit_wait is None else rate_limit_wait
+    results: list[CaseResult] = []
+    stopped = False
     try:
-        for case in cases:
+        for i, case in enumerate(cases):
+            if i and delay:
+                await asyncio.sleep(delay)
             res = CaseResult(case)
             text = rules.apply(case["input"])
             t0 = time.monotonic()
             try:
-                out = await cleaner.clean(text, mode=case["mode"], instructions=cfg.llm.instructions, bias_terms=dictionary.bias)
+                try:
+                    out = await cleaner.clean(text, mode=case["mode"], instructions=cfg.llm.instructions, bias_terms=dictionary.bias)
+                except CleanerError as e:
+                    if e.kind != "rate_limited":
+                        raise
+                    print(f"   rate limited; waiting {wait:.0f} s before retrying line {case['_line']}")
+                    await asyncio.sleep(wait)
+                    t0 = time.monotonic()
+                    out = await cleaner.clean(text, mode=case["mode"], instructions=cfg.llm.instructions, bias_terms=dictionary.bias)
                 res.output = rules.apply_dictionary(out.text)
                 ok, why = validate.check(text, out.text, case["mode"], bias_terms=dictionary.bias, check_bias=cfg.llm.check_bias_terms)
                 if not ok:
                     res.reasons.append(f"validator rejected: {why}")
             except CleanerError as e:
+                if e.kind == "rate_limited":
+                    print(f"   still rate limited at line {case['_line']}; stopping (raise --delay or use --limit)")
+                    stopped = True
+                    break
                 res.reasons.append(f"{e.kind}: {e}")
             res.ms = (time.monotonic() - t0) * 1000
             res.reasons += score(case, res.output) if res.output else []
@@ -81,10 +101,10 @@ async def _run_cases(cfg: Any, cases: list[dict[str, Any]], verbose: bool) -> li
                     print(f"     {r}")
     finally:
         await cleaner.aclose()
-    return results
+    return results, stopped
 
 
-def run_eval(file: str | None = None, *, limit: int | None = None, verbose: bool = False) -> int:
+def run_eval(file: str | None = None, *, limit: int | None = None, delay: float = 0.0, verbose: bool = False) -> int:
     from .config import load
 
     cfg = load()
@@ -93,15 +113,16 @@ def run_eval(file: str | None = None, *, limit: int | None = None, verbose: bool
         return 1
     path = Path(file) if file else DEFAULT_SET
     if not path.exists():
-        print(f"{path} not found; pass the eval set path (tests/llm_eval.jsonl in the source tree)")
+        print(f"{path} not found")
         return 1
     cases = load_cases(path)[:limit]
     print(f"{len(cases)} cases from {path}, model {cfg.llm.model}\n")
-    results = asyncio.run(_run_cases(cfg, cases, verbose))
+    results, stopped = asyncio.run(_run_cases(cfg, cases, verbose, delay))
     passed = sum(r.passed for r in results)
     lat = [r.ms for r in results]
     rate = passed / len(results) if results else 0.0
-    print(f"\nPass rate {passed}/{len(results)} = {rate:.1%} (acceptance ≥ 95%)")
+    note = f", stopped early after {len(results)}/{len(cases)} cases" if stopped else ""
+    print(f"\nPass rate {passed}/{len(results)} = {rate:.1%} (acceptance ≥ 95%{note})")
     if lat:
         print(f"Latency p50 {percentile(lat, 50):.0f} ms, p90 {percentile(lat, 90):.0f} ms")
-    return 0 if rate >= 0.95 else 1
+    return 0 if rate >= 0.95 and not stopped else 1

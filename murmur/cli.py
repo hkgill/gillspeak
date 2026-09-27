@@ -137,7 +137,7 @@ def cmd_bench(a: argparse.Namespace) -> int:
 def cmd_eval(a: argparse.Namespace) -> int:
     from .evaluate import run_eval
 
-    return run_eval(a.file, limit=a.limit, verbose=a.verbose)
+    return run_eval(a.file, limit=a.limit, delay=a.delay, verbose=a.verbose)
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -185,8 +185,9 @@ def build_parser() -> argparse.ArgumentParser:
     b.set_defaults(func=cmd_bench)
 
     e = sub.add_parser("eval", help="run the LLM evaluation set")
-    e.add_argument("file", nargs="?", help="JSONL eval set (default: tests/llm_eval.jsonl)")
-    e.add_argument("--limit", type=int)
+    e.add_argument("file", nargs="?", help="JSONL eval set (default: the bundled murmur/evals/llm_eval.jsonl)")
+    e.add_argument("--limit", type=int, help="run only the first N cases")
+    e.add_argument("--delay", type=float, default=4.0, help="seconds between requests (default 4, ~15/min for free-tier keys)")
     e.add_argument("-v", "--verbose", action="store_true")
     e.set_defaults(func=cmd_eval)
     return p

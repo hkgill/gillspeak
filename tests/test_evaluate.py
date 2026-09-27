@@ -39,3 +39,45 @@ def test_run_eval_against_mock(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "Pass rate 1/2" in out
     assert "validator rejected: missing_number:420" in out
+
+
+def _mock_gemini(responses):
+    respx.get(url__regex=rf"{GEMINI_BASE}/models/[^:]+$").mock(return_value=httpx.Response(200, json={}))
+    it = iter(responses)
+
+    def reply(req):
+        r = next(it)
+        if r == 429:
+            return httpx.Response(429, json={})
+        return httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": r}]}, "finishReason": "STOP"}]})
+
+    return respx.post(url__regex=r".*:generateContent").mock(side_effect=reply)
+
+
+def _eval_env(tmp_path, monkeypatch, n):
+    monkeypatch.setenv("GEMINI_API_KEY", "k")
+    monkeypatch.setattr("murmur.secrets._keyring_get", lambda user: None)
+    monkeypatch.setattr(evaluate, "RATE_LIMIT_WAIT_S", 0.0)
+    f = tmp_path / "set.jsonl"
+    f.write_text("".join('{"input": "the meeting is on friday", "must_contain": ["Friday"]}\n' for _ in range(n)))
+    return str(f)
+
+
+@respx.mock
+def test_run_eval_retries_once_after_rate_limit(tmp_path, monkeypatch, capsys):
+    f = _eval_env(tmp_path, monkeypatch, 2)
+    route = _mock_gemini([429, "The meeting is on Friday.", "The meeting is on Friday."])
+    assert evaluate.run_eval(f) == 0
+    out = capsys.readouterr().out
+    assert "rate limited; waiting" in out and "Pass rate 2/2" in out
+    assert route.call_count == 3
+
+
+@respx.mock
+def test_run_eval_stops_when_still_rate_limited(tmp_path, monkeypatch, capsys):
+    f = _eval_env(tmp_path, monkeypatch, 3)
+    route = _mock_gemini(["The meeting is on Friday.", 429, 429])
+    assert evaluate.run_eval(f) == 1
+    out = capsys.readouterr().out
+    assert "stopping" in out and "Pass rate 1/1" in out and "stopped early after 1/3" in out
+    assert route.call_count == 3  # nothing sent after the second 429
