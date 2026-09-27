@@ -116,3 +116,6 @@ class Settings(context: Context) {
         private const val SEP = "\u001e"
     }
 }
+
+/** A debug self-test file name: a plain name ending in .wav, so it can't reach outside the app's files dir. */
+fun isSafeTestFile(name: String) = Regex("""[A-Za-z0-9_-]{1,64}\.wav""").matches(name)

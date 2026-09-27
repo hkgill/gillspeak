@@ -186,27 +186,7 @@ class MainActivity : Activity() {
             }
         })
 
-        // Debug builds only: `adb shell am start -n dev.hkgill.murmur/.MainActivity --es selftest t.wav`
-        // runs a WAV from the app's files dir through the full pipeline, without speaking into the phone.
-        if (BuildConfig.DEBUG) intent.getStringExtra("selftest")?.let(::selfTest)
-        // Debug builds only: `--ez download_model true` starts the on-device model download, as its button does.
-        if (BuildConfig.DEBUG && intent.getBooleanExtra("download_model", false)) onModelButton()
     }
-
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent)
-        if (BuildConfig.DEBUG) intent.getStringExtra("selftest")?.let(::selfTest)
-    }
-
-    private fun selfTest(name: String) = Thread {
-        // An optional `--es engine local|groq|gemini` tries another engine for this run only.
-        val engine = intent.getStringExtra("engine") ?: settings.engine
-        runCatching { Dictation.run(this, settings, java.io.File(filesDir, name).readBytes(), engine) }
-            .onSuccess { android.util.Log.i(Dictation.TAG, "selftest ok: $it") }
-            .onFailure { Dictation.logFailure(settings, it) }
-        runOnUiThread(::refresh)
-    }.start()
 
     override fun onResume() {
         super.onResume()
@@ -310,8 +290,15 @@ class MainActivity : Activity() {
     private fun onModelButton() {
         when (LocalAsr.refresh(this)) {
             LocalAsr.Status.Ready -> {
-                LocalAsr.delete(this)
-                Toast.makeText(this, "On-device model deleted", Toast.LENGTH_SHORT).show()
+                modelButton.text = ""
+                modelStatus.text = "Deleting…"
+                LocalAsr.delete(applicationContext) {
+                    runOnUiThread {
+                        showEngine()
+                        Toast.makeText(this, "On-device model deleted", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                return
             }
             is LocalAsr.Status.Downloading -> Unit
             else -> LocalAsr.download(applicationContext) { runOnUiThread(::showEngine) }

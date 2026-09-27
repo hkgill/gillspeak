@@ -1,13 +1,12 @@
 package dev.hkgill.murmur
 
 import android.annotation.SuppressLint
-import android.content.ClipData
-import android.content.ClipboardManager
 import android.content.Intent
 import android.graphics.Color
 import android.inputmethodservice.InputMethodService
 import android.os.Handler
 import android.os.Looper
+import android.text.InputType
 import android.view.Gravity
 import android.view.HapticFeedbackConstants
 import android.view.KeyEvent
@@ -28,7 +27,7 @@ class MurmurIme : InputMethodService(), MicController.Ui {
     private lateinit var mic: MicController
     private val main = Handler(Looper.getMainLooper())
     private var lastInserted: String? = null
-    private var statusOpensApp = false
+    private var inputSession = 0 // changes whenever the keyboard moves to another field
 
     private lateinit var statusView: TextView
     private lateinit var micKey: TextView
@@ -43,6 +42,24 @@ class MurmurIme : InputMethodService(), MicController.Ui {
         mic.shutdown()
         super.onDestroy()
     }
+
+    override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
+        super.onStartInput(attribute, restarting)
+        if (!restarting) inputSession++
+    }
+
+    override fun onFinishInput() {
+        inputSession++
+        super.onFinishInput()
+    }
+
+    override fun field(): Any? {
+        val info = currentInputEditorInfo ?: return null
+        return if (info.inputType == InputType.TYPE_NULL || currentInputConnection == null) null else inputSession
+    }
+
+    override fun blocked(): String? =
+        if (isPasswordInput(currentInputEditorInfo?.inputType ?: 0)) "Dictation is off in password fields" else null
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
@@ -157,13 +174,12 @@ class MurmurIme : InputMethodService(), MicController.Ui {
     }
 
     override fun status(text: String, opensApp: Boolean) {
-        statusOpensApp = opensApp
         if (::statusView.isInitialized) statusView.text = text
     }
 
     private fun showIdleHint() {
         val (hint, opensApp) = mic.idleHint()
-        status(hint, opensApp)
+        status(blocked() ?: hint, opensApp)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -179,12 +195,7 @@ class MurmurIme : InputMethodService(), MicController.Ui {
     }
 
     override fun insert(text: String) {
-        val ic = currentInputConnection
-        if (ic == null) {
-            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(Settings.APP_NAME, text))
-            status("No text field. Copied to clipboard")
-            return
-        }
+        val ic = currentInputConnection ?: return status("No text field")
         val out = withLeadingSpace(ic.getTextBeforeCursor(1, 0)?.toString().orEmpty(), text)
         ic.commitText(out, 1)
         lastInserted = out
@@ -195,7 +206,7 @@ class MurmurIme : InputMethodService(), MicController.Ui {
     private fun onStatusTap() {
         when {
             mic.canRetry -> mic.retry()
-            statusOpensApp -> startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            mic.needsSetup() -> startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
     }
 
@@ -222,6 +233,18 @@ class MurmurIme : InputMethodService(), MicController.Ui {
 
     private fun switchKeyboard() {
         if (!switchToPreviousInputMethod()) getSystemService(InputMethodManager::class.java).showInputMethodPicker()
+    }
+}
+
+/** True for every kind of password field: text, visible, web and numeric. */
+fun isPasswordInput(inputType: Int): Boolean {
+    val variation = inputType and InputType.TYPE_MASK_VARIATION
+    return when (inputType and InputType.TYPE_MASK_CLASS) {
+        InputType.TYPE_CLASS_TEXT -> variation == InputType.TYPE_TEXT_VARIATION_PASSWORD ||
+            variation == InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD ||
+            variation == InputType.TYPE_TEXT_VARIATION_WEB_PASSWORD
+        InputType.TYPE_CLASS_NUMBER -> variation == InputType.TYPE_NUMBER_VARIATION_PASSWORD
+        else -> false
     }
 }
 

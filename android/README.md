@@ -38,11 +38,12 @@ Then open the app and allow the microphone. For the bubble, turn on **gillspeak 
 - `RulesTest` holds cases copied from `tests/test_rules.py` and `tests/test_validate.py`. Android's regex engine is ICU, not the JVM's: don't use `(?U)` (ICU rejects it at load time, which JVM tests won't catch).
 - `MicController` is the mic state machine (hold, latch, retry) shared by the keyboard and the bubble. The bubble waits 150 ms before starting the mic so a drag never starts a recording, and refuses to send all-silent audio (what Android returns when it blocks background recording).
 - Logs: `adb logcat -s Murmur` shows why the bubble is or isn't shown, where each Gemini request spent its time (upload, wait, thinking tokens), and how text was inserted.
-- Debug builds have a self-test that runs a WAV through the whole pipeline without speaking:
+- Debug builds have test hooks, reachable from adb only (a debug-only receiver that requires `DUMP`):
 
   ```bash
   adb push clip.wav /data/local/tmp/t.wav
   adb shell run-as dev.hkgill.murmur sh -c 'mkdir -p files && cp /data/local/tmp/t.wav files/t.wav'
-  adb shell am start -S -n dev.hkgill.murmur/.MainActivity --es selftest t.wav
+  adb shell am broadcast -n dev.hkgill.murmur/.DebugReceiver --es selftest t.wav   # optional: --es engine local|groq|gemini
+  adb shell am broadcast -n dev.hkgill.murmur/.DebugReceiver --ez download_model true
   adb logcat -s Murmur
   ```

@@ -13,6 +13,9 @@ import java.util.concurrent.Executors
  * The mic state machine shared by the keyboard and the floating bubble: press and hold to talk, release to
  * finish, or press briefly to latch and press again to finish. Runs the pipeline off the main thread and hands
  * the result to [Ui.insert].
+ *
+ * Each dictation is tied to the field it started in ([Ui.field]). If the field has changed by the time the text
+ * is ready, it is not inserted anywhere: it's kept, and the user can tap to put it in the current field.
  */
 class MicController(private val context: Context, private val ui: Ui) {
     enum class State { IDLE, RECORDING, LATCHED, WORKING }
@@ -21,6 +24,12 @@ class MicController(private val context: Context, private val ui: Ui) {
         fun render(state: State)
         fun status(text: String, opensApp: Boolean = false)
         fun insert(text: String)
+
+        /** Identifies the text field in focus (compared with ==), or null when there is none. */
+        fun field(): Any?
+
+        /** Why dictation isn't allowed in the current field (a password field), or null when it is. */
+        fun blocked(): String?
     }
 
     val settings = Settings(context)
@@ -32,11 +41,14 @@ class MicController(private val context: Context, private val ui: Ui) {
         private set
     private var pressedAt = 0L
     private var recordingSince = 0L
-    private var job = 0 // bumped on every dictation so a stale result is ignored
+    private var job = 0 // bumped on every dictation (and on shutdown) so a stale result is ignored
+    private var session: Any? = null // the field this dictation belongs to
     private var failedAudio: ByteArray? = null
+    private var pendingText: String? = null // finished, but the field changed before it could be inserted
     private var lastWarm = 0L
 
-    val canRetry get() = failedAudio != null && state == State.IDLE
+    /** A tap now retries a failed request, or inserts text that couldn't be delivered. */
+    val canRetry get() = (failedAudio != null || pendingText != null) && state == State.IDLE
     val level get() = recorder.level
     val isActive get() = state != State.IDLE
 
@@ -67,16 +79,26 @@ class MicController(private val context: Context, private val ui: Ui) {
         message?.let { ui.status(it) }
     }
 
-    /** Forgets audio kept for a retry, e.g. when the field it was meant for is gone. */
-    fun discardFailed() {
-        failedAudio = null
-    }
-
+    /** Inserts undelivered text into the current field, or retries a failed request for it. */
     fun retry() {
-        failedAudio?.takeIf { state == State.IDLE }?.let(::process)
+        if (state != State.IDLE) return
+        ui.blocked()?.let { return ui.status(it) }
+        pendingText?.let {
+            pendingText = null
+            ui.insert(it)
+            ui.status("Inserted")
+            return
+        }
+        failedAudio?.let {
+            session = ui.field()
+            process(it)
+        }
     }
 
-    /** Opens the TLS connection ahead of time, at most once a minute. */
+    /** True when tapping should open the app to finish setup. Checked fresh each time, never remembered. */
+    fun needsSetup() = idleHint().second
+
+    /** Opens the TLS connection or loads the local model ahead of time, at most once a minute. */
     fun warm() {
         val now = SystemClock.uptimeMillis()
         if (settings.engineProblem(context) != null || now - lastWarm < 60_000) return
@@ -89,6 +111,7 @@ class MicController(private val context: Context, private val ui: Ui) {
     }
 
     fun shutdown() {
+        job++ // a result still in flight must not be delivered anywhere
         recorder.cancel()
         worker.shutdownNow()
     }
@@ -106,6 +129,10 @@ class MicController(private val context: Context, private val ui: Ui) {
             ui.status(hint, opensApp = true)
             return false
         }
+        ui.blocked()?.let {
+            ui.status(it)
+            return false
+        }
         try {
             recorder.start()
         } catch (e: Exception) {
@@ -113,6 +140,8 @@ class MicController(private val context: Context, private val ui: Ui) {
             return false
         }
         failedAudio = null
+        pendingText = null
+        session = ui.field()
         recordingSince = SystemClock.uptimeMillis()
         set(State.RECORDING)
         tick()
@@ -121,7 +150,7 @@ class MicController(private val context: Context, private val ui: Ui) {
 
     private fun tick() {
         if (state != State.RECORDING && state != State.LATCHED) return
-        if (!recorder.isRecording) { // hit the 5-minute cap
+        if (!recorder.isRecording) { // hit the 5-minute cap, or the microphone failed
             finish()
             return
         }
@@ -132,15 +161,17 @@ class MicController(private val context: Context, private val ui: Ui) {
 
     private fun finish() {
         val peak = recorder.peak
+        val error = recorder.error
         val wav = recorder.stop()
         val ms = Recorder.durationMs(wav)
-        Log.i(Dictation.TAG, "recording stopped: ${ms} ms, peak=$peak")
+        Log.i(Dictation.TAG, "recording stopped: $ms ms, peak=$peak${error?.let { ", microphone error $it" }.orEmpty()}")
+        if (error != null) settings.log("Microphone error $error after $ms ms; using what was recorded")
         when {
             ms < MIN_MS -> {
                 set(State.IDLE)
-                ui.status("Too short. Hold the mic while you speak")
+                ui.status(if (error != null) "The microphone stopped working" else "Too short. Hold the mic while you speak")
             }
-            // Android hands background apps pure silence instead of an error. Never send that to Gemini.
+            // Android hands background apps pure silence instead of an error. Never send that anywhere.
             peak == 0 -> {
                 set(State.IDLE)
                 settings.log("FAILED silent: the microphone returned only silence (blocked in the background?)")
@@ -152,6 +183,7 @@ class MicController(private val context: Context, private val ui: Ui) {
 
     private fun process(wav: ByteArray) {
         val id = ++job
+        val forField = session
         set(State.WORKING)
         ui.status("Transcribing…")
         worker.execute {
@@ -160,20 +192,33 @@ class MicController(private val context: Context, private val ui: Ui) {
                 if (id != job) return@post
                 set(State.IDLE)
                 result.fold(
-                    onSuccess = { out ->
-                        if (out.text.isBlank()) {
-                            ui.status("No speech heard")
-                        } else {
-                            ui.insert(out.text)
-                            ui.status("%.1f s%s".format(out.ms / 1000.0, if (out.reason.isEmpty()) "" else " · rules only (${out.reason})"))
-                        }
-                    },
+                    onSuccess = { out -> deliver(out, forField) },
                     onFailure = { e ->
                         failedAudio = wav
                         val kind = Dictation.logFailure(settings, e)
-                        ui.status(if (kind == "rate_limit") "Gemini rate limit. Tap to retry" else "Failed ($kind). Tap to retry")
+                        ui.status(if (kind == "rate_limit") "Rate limit reached. Tap to retry" else "Failed ($kind). Tap to retry")
                     },
                 )
+            }
+        }
+    }
+
+    private fun deliver(out: Dictation.Outcome, forField: Any?) {
+        failedAudio = null
+        val here = ui.field()
+        val blocked = ui.blocked()
+        when {
+            out.text.isBlank() -> ui.status("No speech heard")
+            // Moved to another field (or it closed) while this was transcribing: never put it somewhere the user
+            // didn't dictate. Keep it for an explicit tap instead.
+            here == null || here != forField -> {
+                pendingText = out.text
+                ui.status("The field changed. Tap to insert it here")
+            }
+            blocked != null -> ui.status(blocked)
+            else -> {
+                ui.insert(out.text)
+                ui.status("%.1f s%s".format(out.ms / 1000.0, if (out.reason.isEmpty()) "" else " · rules only (${out.reason})"))
             }
         }
     }

@@ -24,6 +24,10 @@ class Recorder {
     @Volatile var level = 0f
         private set
 
+    /** The AudioRecord error that stopped the recording early (e.g. ERROR_DEAD_OBJECT), or null. */
+    @Volatile var error: Int? = null
+        private set
+
     val isRecording get() = running
 
     /** Caller checks RECORD_AUDIO first. Throws if the microphone can't be opened. */
@@ -36,11 +40,12 @@ class Recorder {
         )
         if (r.state != AudioRecord.STATE_INITIALIZED) {
             r.release()
-            error("microphone unavailable")
+            throw IllegalStateException("microphone unavailable")
         }
         synchronized(pcm) { pcm.reset() }
         peak = 0
         level = 0f
+        error = null
         record = r
         running = true
         r.startRecording()
@@ -48,7 +53,14 @@ class Recorder {
             val buf = ByteArray(1600) // 50 ms, so stopping never waits long
             while (running) {
                 val n = r.read(buf, 0, buf.size)
-                if (n <= 0) continue
+                if (n < 0) {
+                    // Errors don't clear on their own (a dead object needs a new AudioRecord), so retrying would
+                    // spin forever. Stop; the controller finishes with what was recorded.
+                    error = n
+                    running = false
+                    break
+                }
+                if (n == 0) continue
                 var chunk = 0
                 for (i in 0 until n - 1 step 2) chunk = maxOf(chunk, kotlin.math.abs((buf[i].toInt() and 0xff) or (buf[i + 1].toInt() shl 8)))
                 peak = maxOf(peak, chunk)

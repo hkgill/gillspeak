@@ -47,10 +47,8 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     ).apply { gravity = Gravity.TOP or Gravity.START }
     private var shown = false
     private var keyboardTop = 0
-    private var target: AccessibilityNodeInfo? = null
     private var prefsListener: SharedPreferences.OnSharedPreferenceChangeListener? = null
     private var message: String? = null // shown in the bar instead of the idle label, until it expires
-    private var statusOpensApp = false
     private val refresh = Runnable { refresh() }
     private var lastSummary = ""
     private var lastEvented: AccessibilityNodeInfo? = null
@@ -99,14 +97,14 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         when {
             // Any open keyboard gets the bubble, except over password fields and Murmur's own keyboard.
             keyboard != null && field?.isPassword != true && !ownKeyboard -> {
-                if (field != null) target = field
                 keyboardTop = keyboard.top
                 show()
             }
             mic.state == MicController.State.WORKING -> Unit // stay visible until the text lands
             else -> {
-                mic.cancel(null) // the keyboard closed mid-recording
-                mic.discardFailed()
+                // The keyboard closed mid-recording: discard it. Undelivered text and failed audio are kept, so
+                // after switching apps a tap can still insert or retry them in the new field.
+                mic.cancel(null)
                 hide()
             }
         }
@@ -116,6 +114,10 @@ class BubbleService : AccessibilityService(), MicController.Ui {
      * The text field with input focus. The service-level lookup only searches the "active" window, which some
      * apps (Claude, for one) don't report as such, so fall back to searching every app window.
      */
+    override fun field(): Any? = focusedField()
+
+    override fun blocked(): String? = if (focusedField()?.isPassword == true) "Dictation is off in password fields" else null
+
     private fun focusedField(): AccessibilityNodeInfo? {
         findFocus(AccessibilityNodeInfo.FOCUS_INPUT)?.takeIf { it.isEditable }?.let { return it }
         windows.asSequence()
@@ -234,7 +236,6 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     }
 
     override fun status(text: String, opensApp: Boolean) {
-        statusOpensApp = opensApp
         if (mic.isActive && text.firstOrNull()?.isDigit() == true) { // the recording timer
             timer = text
             label()
@@ -282,7 +283,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
                 startY = params.y
                 dragging = false
                 holding = false
-                if (mic.state == MicController.State.IDLE && !mic.canRetry && !statusOpensApp) main.postDelayed(startHold, HOLD_MS)
+                if (mic.state == MicController.State.IDLE && !mic.canRetry && !mic.needsSetup()) main.postDelayed(startHold, HOLD_MS)
             }
             MotionEvent.ACTION_MOVE -> {
                 if (!dragging && !holding && abs(e.rawX - downX) + abs(e.rawY - downY) > dp(8)) {
@@ -308,7 +309,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
                     }
                     holding -> if (mic.release()) v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     mic.canRetry -> mic.retry()
-                    statusOpensApp && !mic.isActive ->
+                    !mic.isActive && mic.needsSetup() ->
                         startActivity(Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                     mic.state == MicController.State.LATCHED -> {
                         mic.press() // finishes the latched recording
@@ -347,7 +348,9 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     // ---- Inserting text into another app's field ----
 
     override fun insert(text: String) {
-        val node = focusedField()?.takeIf { !it.isPassword } ?: target?.takeIf { it.refresh() && it.isEditable }
+        // Only ever the field in focus now (the controller has checked it's the one dictated into), never a
+        // remembered node, which might since have become a password field.
+        val node = focusedField()?.takeIf { !it.isPassword }
         val set = node != null && setText(node, text)
         var pasted = false
         if (!set) {

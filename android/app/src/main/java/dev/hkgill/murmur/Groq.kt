@@ -41,11 +41,7 @@ class Groq(private val apiKey: String) {
             .put("messages", JSONArray()
                 .put(JSONObject().put("role", "system").put("content", systemPrompt))
                 .put(JSONObject().put("role", "user").put("content", payload)))
-        val out = post("chat/completions", "application/json", body.toString().toByteArray())
-        val content = runCatching {
-            JSONObject(out).getJSONArray("choices").getJSONObject(0).getJSONObject("message").getString("content")
-        }.getOrElse { throw GeminiError("error", "unexpected chat response") }
-        return stripEcho(content, text)
+        return parseChat(post("chat/completions", "application/json", body.toString().toByteArray()), text)
     }
 
     private fun post(path: String, contentType: String, body: ByteArray): String {
@@ -79,6 +75,19 @@ class Groq(private val apiKey: String) {
         const val STYLE = "Australian English spelling. Never use em dashes."
 
         private val TAG_RE = Regex("</?transcript>", RegexOption.IGNORE_CASE)
+
+        /**
+         * The cleaned text from a chat completion. Anything but a normal stop (e.g. "length": the token limit cut
+         * it off) is an error, so the caller keeps the rules text; a truncated reply can still pass the validator.
+         */
+        fun parseChat(json: String, original: String): String {
+            val choice = runCatching { JSONObject(json).getJSONArray("choices").getJSONObject(0) }
+                .getOrElse { throw GeminiError("error", "unexpected chat response") }
+            val finish = choice.optString("finish_reason")
+            if (finish != "stop") throw GeminiError("truncated", "clean-up ended with finish_reason=$finish")
+            val content = choice.optJSONObject("message")?.optString("content").orEmpty()
+            return stripEcho(content, original)
+        }
 
         /** Removes wrappers a model sometimes adds: transcript tags and surrounding quotes (as cleaner.py does). */
         fun stripEcho(out: String, original: String): String {

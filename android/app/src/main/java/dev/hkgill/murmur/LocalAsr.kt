@@ -1,8 +1,6 @@
 package dev.hkgill.murmur
 
 import android.content.Context
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OfflineModelConfig
@@ -15,6 +13,9 @@ import java.net.URL
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.security.MessageDigest
+import java.util.concurrent.Executors
+import java.util.concurrent.ScheduledFuture
+import java.util.concurrent.TimeUnit
 
 /**
  * On-device speech recognition: NVIDIA Parakeet TDT 0.6B v3 (int8) through sherpa-onnx, the same model and
@@ -49,8 +50,15 @@ object LocalAsr {
 
     private var recognizer: OfflineRecognizer? = null
     private val lock = Any()
-    private val main = Handler(Looper.getMainLooper())
-    private val release = Runnable { synchronized(lock) { recognizer?.release(); recognizer = null } }
+    // Releasing and deleting wait for a running decode, so they happen here, never on the main thread.
+    private val background = Executors.newSingleThreadScheduledExecutor()
+    private var releaseTask: ScheduledFuture<*>? = null
+
+    /** Frees the ~1 GB recognizer after [IDLE_RELEASE_MS] without use (restarts the countdown). */
+    private fun scheduleRelease() {
+        releaseTask?.cancel(false)
+        releaseTask = background.schedule({ synchronized(lock) { recognizer?.release(); recognizer = null } }, IDLE_RELEASE_MS, TimeUnit.MILLISECONDS)
+    }
 
     private fun dir(context: Context) = File(context.filesDir, "models/parakeet-tdt-0.6b-v3-int8")
 
@@ -119,15 +127,27 @@ object LocalAsr {
         }, "model-download").start()
     }
 
-    fun delete(context: Context) {
-        synchronized(lock) { recognizer?.release(); recognizer = null }
-        dir(context).deleteRecursively()
-        status = Status.Missing
+    /** Deletes the model in the background (it may have to wait for a dictation to finish), then calls [onDone]. */
+    fun delete(context: Context, onDone: () -> Unit) {
+        background.execute {
+            synchronized(lock) {
+                releaseTask?.cancel(false)
+                recognizer?.release()
+                recognizer = null
+                dir(context).deleteRecursively()
+                status = Status.Missing
+            }
+            onDone()
+        }
     }
 
     /** Loads the model ahead of the first dictation (a few seconds), on the caller's thread. */
     fun warm(context: Context) {
-        if (isReady(context)) synchronized(lock) { load(context) }
+        if (!isReady(context)) return
+        synchronized(lock) {
+            load(context)
+            scheduleRelease() // loaded but perhaps never used: don't hold 1 GB forever
+        }
     }
 
     /** Transcribes a WAV from [Recorder] (16 kHz mono PCM16). Blocking; call off the main thread. */
@@ -136,7 +156,7 @@ object LocalAsr {
         val pcm = ByteBuffer.wrap(wav, 44, wav.size - 44).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
         val samples = FloatArray(pcm.remaining()) { pcm.get(it) / 32768f }
         synchronized(lock) {
-            main.removeCallbacks(release)
+            releaseTask?.cancel(false)
             val rec = load(context)
             val stream = rec.createStream()
             try {
@@ -145,7 +165,7 @@ object LocalAsr {
                 return rec.getResult(stream).text.trim()
             } finally {
                 stream.release()
-                main.postDelayed(release, IDLE_RELEASE_MS)
+                scheduleRelease()
             }
         }
     }
