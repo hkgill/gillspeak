@@ -51,6 +51,9 @@ if [[ $MODELS == 1 ]]; then
   murmur download-models
 fi
 
+say "Hold-to-talk helper (murmur-keyd, Right Ctrl + Right Alt)"
+"$REPO/scripts/install-keyd.sh" || echo "WARNING: hold-to-talk unavailable; Ctrl+Space still works" >&2
+
 say "systemd user service"
 mkdir -p "$HOME/.config/systemd/user"
 cp "$REPO/systemd/murmurd.service" "$HOME/.config/systemd/user/murmurd.service"

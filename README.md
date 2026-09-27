@@ -44,6 +44,7 @@ Run `murmur doctor` to list the available Flash-Lite model IDs, then pin one in 
 
 | Shortcut | Command | What it does |
 |---|---|---|
+| Hold Right Ctrl + Right Alt | | Hold to talk; release to paste (needs `murmur-keyd`, below) |
 | Ctrl+Space | `murmur toggle` | Start/stop dictation |
 | Ctrl+Alt+Space | `murmur toggle --raw` | Dictate without the LLM |
 | Ctrl+Shift+Space | `murmur toggle --mode formal` | Dictate in a formal tone |
@@ -57,6 +58,8 @@ Run `murmur doctor` to list the available Flash-Lite model IDs, then pin one in 
 | | `murmur eval [--limit N] [--delay 4]` | Run the bundled LLM evaluation set (target ≥ 95%); requests are spaced out and a 429 waits once, then stops |
 
 Spoken commands: "new line", "new paragraph", "bullet point", "question mark", and "full stop"/"period" at the end of an utterance. Turn any of them off with `rules.disabled_commands`.
+
+**Hold-to-talk** comes from `murmur-keyd`, a small root service (`scripts/install-keyd.sh`, also run by the setup script). GNOME shortcuts can't bind modifier keys on their own, so it reads the keyboards directly, and it is the only process that does. It sends murmurd just three events over a socket only you can open: start (both keys held alone for 0.3 s), end (released) and cancel (a third key joined, as in Ctrl+Alt+T, so the recording is discarded). A quick tap does nothing. Root runs a root-owned copy in `/usr/local/libexec`, not your tool install. Turn it off with `hotkey.hold_to_talk = false`; remove it with `scripts/install-keyd.sh --uninstall`.
 
 **Terminals** paste with Ctrl+Shift+V. Either add Ctrl+V as a paste shortcut in Ptyxis/GNOME Terminal (recommended), or bind another shortcut to `murmur toggle --chord ctrl+shift+v`.
 

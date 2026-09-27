@@ -32,6 +32,7 @@ log = logging.getLogger("murmurd")
 
 MAX_INFLIGHT = 2
 RATE_LIMIT_BACKOFF_S = 60.0
+KEYD_RETRY_S = 5.0
 DEBUG_AUDIO_KEEP_DAYS = 7
 
 
@@ -77,6 +78,7 @@ class Daemon:
         self.queue: asyncio.Queue[Job] = asyncio.Queue()
         self.inflight = 0
         self.opts = JobOptions()
+        self.holding = False  # the current recording was started by a murmur-keyd hold
         self.backoff_until = 0.0
         self.last_text: str | None = None
         self.ready = asyncio.Event()
@@ -84,6 +86,7 @@ class Daemon:
         self._loop: asyncio.AbstractEventLoop | None = None
         self._server: asyncio.base_events.Server | None = None
         self._worker: asyncio.Task[None] | None = None
+        self._keyd: asyncio.Task[None] | None = None
         self._tasks: set[asyncio.Task[Any]] = set()
         self._last_purge = time.monotonic()
 
@@ -165,6 +168,8 @@ class Daemon:
             await self._server.wait_closed()
         if self._worker:
             self._worker.cancel()
+        if self._keyd:
+            self._keyd.cancel()
         if self.recorder is not None:
             self.recorder.close()
         if self.cleaner is not None:
@@ -241,6 +246,7 @@ class Daemon:
         return self._resp(True, "recording")
 
     def _stop(self) -> dict[str, Any]:
+        self.holding = False
         audio = self.recorder.stop()
         self.inflight += 1
         self.queue.put_nowait(Job(audio, self.opts, time.monotonic()))
@@ -258,11 +264,57 @@ class Daemon:
             self._stop()
 
     async def cancel(self) -> dict[str, Any]:
+        self.holding = False
         if self.recorder is not None and self.recorder.is_recording:
             self.recorder.cancel()
             await self.notifier.clear()
             return self._resp(True, "cancelled")
         return self._resp(True, "nothing to cancel")
+
+    # -- hold-to-talk (murmur-keyd) ---------------------------------------------
+    async def on_hold(self, event: str) -> None:
+        """start: begin recording unless one is already running (e.g. from Ctrl+Space).
+        end: stop and paste. cancel: another key joined the chord, so discard."""
+        recording = self.recorder is not None and self.recorder.is_recording
+        if event == "start" and not recording:
+            resp = await self.toggle({})
+            self.holding = resp["ok"] and resp["msg"] == "recording"
+            if not resp["ok"]:
+                log.info("hold start refused: %s", resp["msg"])
+        elif event == "end" and self.holding and recording:
+            self._stop()
+        elif event == "cancel" and self.holding:
+            await self.cancel()
+
+    async def keyd_listener(self, path: str) -> None:
+        """Follow murmur-keyd's event socket, reconnecting quietly if the helper isn't running."""
+        warned = False
+        while True:
+            try:
+                reader, writer = await asyncio.open_unix_connection(path)
+            except OSError as e:
+                if not warned:
+                    log.info("hold-to-talk off: murmur-keyd not reachable at %s (%s); retrying", path, e.strerror or e)
+                    warned = True
+                await asyncio.sleep(KEYD_RETRY_S)
+                continue
+            log.info("hold-to-talk on (Right Ctrl + Right Alt) via %s", path)
+            warned = False
+            try:
+                while line := await reader.readline():
+                    try:
+                        event = json.loads(line).get("event")
+                    except (ValueError, AttributeError):
+                        continue
+                    await self.on_hold(str(event))
+            except ConnectionError:
+                pass
+            finally:
+                writer.close()
+            if self.holding:  # helper went away mid-hold: don't leave the mic recording
+                await self.cancel()
+            log.info("murmur-keyd disconnected; retrying")
+            await asyncio.sleep(KEYD_RETRY_S)
 
     async def paste_last(self) -> dict[str, Any]:
         text = self.last_text
@@ -456,6 +508,8 @@ async def amain() -> None:
     for sig in (signal.SIGTERM, signal.SIGINT):
         loop.add_signal_handler(sig, stop.set)
     await daemon.load()
+    if cfg.hotkey.hold_to_talk:
+        daemon._keyd = asyncio.create_task(daemon.keyd_listener(cfg.hotkey.keyd_socket))
     await stop.wait()
     log.info("shutting down")
     await daemon.close()

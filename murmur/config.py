@@ -69,6 +69,10 @@ settle_ms = 60
 restore_clipboard = true
 restore_delay_ms = 400
 
+[hotkey]
+hold_to_talk = true                       # hold Right Ctrl + Right Alt; needs murmur-keyd (scripts/install-keyd.sh)
+keyd_socket = "/run/murmur-keyd/socket"
+
 [history]
 keep_days = 30                            # 0 = metrics only, no text stored
 
@@ -169,6 +173,12 @@ class InjectConfig:
 
 
 @dataclass
+class HotkeyConfig:
+    hold_to_talk: bool = True
+    keyd_socket: str = "/run/murmur-keyd/socket"
+
+
+@dataclass
 class HistoryConfig:
     keep_days: int = 30
 
@@ -213,6 +223,7 @@ class Config:
     llm: LlmConfig = field(default_factory=LlmConfig)
     modes: dict[str, str] = field(default_factory=_default_modes)
     inject: InjectConfig = field(default_factory=InjectConfig)
+    hotkey: HotkeyConfig = field(default_factory=HotkeyConfig)
     history: HistoryConfig = field(default_factory=HistoryConfig)
     sounds: SoundsConfig = field(default_factory=SoundsConfig)
     notify: NotifyConfig = field(default_factory=NotifyConfig)
