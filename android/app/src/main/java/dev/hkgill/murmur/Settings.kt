@@ -17,6 +17,17 @@ class Settings(context: Context) {
 
     val hasOwnKey get() = !prefs.getString("api_key", "").isNullOrBlank()
 
+    var groqKey: String
+        get() = prefs.getString("groq_key", "").orEmpty().ifBlank { BuildConfig.GROQ_API_KEY }
+        set(v) = prefs.edit().putString("groq_key", v.trim()).apply()
+
+    val hasOwnGroqKey get() = !prefs.getString("groq_key", "").isNullOrBlank()
+
+    /** Which speech engine this phone uses: [ENGINE_GEMINI], [ENGINE_GROQ] or [ENGINE_LOCAL]. */
+    var engine: String
+        get() = prefs.getString("engine", ENGINE_GEMINI) ?: ENGINE_GEMINI
+        set(v) = prefs.edit().putString("engine", v).apply()
+
     var model: String
         get() = prefs.getString("model", "").orEmpty().ifBlank { DEFAULT_MODEL }
         set(v) = prefs.edit().putString("model", v.trim()).apply()
@@ -68,6 +79,17 @@ class Settings(context: Context) {
         android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key -> if (key?.startsWith("bubble_") == true) listener() }
             .also(prefs::registerOnSharedPreferenceChangeListener)
 
+    /** The desktop clean-up prompt alone, for text-only clean-up (Groq). */
+    fun cleanPrompt(): String = assets.open("clean_v2.txt").bufferedReader().use { it.readText() }
+
+    /** Can this phone dictate with its chosen engine? Returns null when ready, otherwise what's missing. */
+    fun engineProblem(context: Context): String? = when (engine) {
+        ENGINE_GROQ -> if (groqKey.isBlank()) "Tap here to add a Groq API key" else null
+        ENGINE_LOCAL -> if (!LocalAsr.isReady(context)) "Tap here to download the on-device model" else null
+        else -> if (apiKey.isBlank()) "Tap here to add a Gemini API key" else null
+    }
+
+    /** The Gemini prompt: audio instructions + the desktop clean-up prompt. */
     fun systemPrompt(): String =
         listOf("audio_preface.txt", "clean_v2.txt").joinToString("") { name -> assets.open(name).bufferedReader().use { it.readText() } }
 
@@ -82,6 +104,9 @@ class Settings(context: Context) {
     companion object {
         /** The name people see. The package id stays dev.hkgill.murmur so installs upgrade in place. */
         const val APP_NAME = "gillspeak"
+        const val ENGINE_GEMINI = "gemini"
+        const val ENGINE_GROQ = "groq"
+        const val ENGINE_LOCAL = "local"
         const val DEFAULT_MODEL = "gemini-3.5-flash-lite"
         const val DEFAULT_REPLACE = "super base = Supabase\nget hub = GitHub\ncube control = kubectl"
         const val DEFAULT_BIAS = "Supabase, Fedora, Parakeet"

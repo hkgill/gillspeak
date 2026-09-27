@@ -27,7 +27,6 @@ class MicController(private val context: Context, private val ui: Ui) {
     private val recorder = Recorder()
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
-    private val systemPrompt by lazy { settings.systemPrompt() }
 
     var state = State.IDLE
         private set
@@ -80,10 +79,13 @@ class MicController(private val context: Context, private val ui: Ui) {
     /** Opens the TLS connection ahead of time, at most once a minute. */
     fun warm() {
         val now = SystemClock.uptimeMillis()
-        if (settings.apiKey.isBlank() || now - lastWarm < 60_000) return
+        if (settings.engineProblem(context) != null || now - lastWarm < 60_000) return
         lastWarm = now
-        val gemini = Gemini(settings.apiKey, settings.model, "")
-        worker.execute { gemini.warm() }
+        when (settings.engine) {
+            // Loading the on-device model takes a few seconds; do it while the keyboard is up, not after speaking.
+            Settings.ENGINE_LOCAL -> worker.execute { runCatching { LocalAsr.warm(context) } }
+            Settings.ENGINE_GEMINI -> Gemini(settings.apiKey, settings.model, "").let { worker.execute { it.warm() } }
+        }
     }
 
     fun shutdown() {
@@ -92,10 +94,10 @@ class MicController(private val context: Context, private val ui: Ui) {
     }
 
     /** What to show when nothing is happening, and whether tapping it should open the app. */
-    fun idleHint(): Pair<String, Boolean> = when {
-        !hasMicPermission() -> "Tap here to allow the microphone" to true
-        settings.apiKey.isBlank() -> "Tap here to add a Gemini API key" to true
-        else -> Settings.APP_NAME to false
+    fun idleHint(): Pair<String, Boolean> {
+        if (!hasMicPermission()) return "Tap here to allow the microphone" to true
+        settings.engineProblem(context)?.let { return it to true }
+        return Settings.APP_NAME to false
     }
 
     private fun start(): Boolean {
@@ -153,7 +155,7 @@ class MicController(private val context: Context, private val ui: Ui) {
         set(State.WORKING)
         ui.status("Transcribing…")
         worker.execute {
-            val result = runCatching { Dictation.run(settings, systemPrompt, wav) }
+            val result = runCatching { Dictation.run(context, settings, wav) }
             main.post {
                 if (id != job) return@post
                 set(State.IDLE)

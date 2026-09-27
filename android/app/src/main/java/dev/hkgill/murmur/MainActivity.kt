@@ -30,13 +30,14 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 
-/** Setup (microphone, bubble, keyboard), a test field, bubble and Gemini settings, and recent dictations. */
+/** Setup (microphone, bubble, keyboard), a test field, the speech engine, bubble settings, keys and dictionary, recent dictations. */
 class MainActivity : Activity() {
     private data class Colors(
         val bg: Int, val card: Int, val text: Int, val dim: Int, val accent: Int, val ok: Int, val field: Int,
     )
 
     private class SetupRow(val view: View, val icon: TextView, val subtitle: TextView)
+    private class EngineRow(val id: String, val view: LinearLayout, val dot: TextView)
 
     private lateinit var settings: Settings
     private lateinit var c: Colors
@@ -44,6 +45,10 @@ class MainActivity : Activity() {
     private lateinit var bubbleRow: SetupRow
     private lateinit var keyboardRow: SetupRow
     private lateinit var keyField: EditText
+    private lateinit var groqField: EditText
+    private lateinit var engineRows: List<EngineRow>
+    private lateinit var modelStatus: TextView
+    private lateinit var modelButton: TextView
     private lateinit var roundChip: TextView
     private lateinit var barChip: TextView
     private lateinit var preview: BubbleView
@@ -80,6 +85,18 @@ class MainActivity : Activity() {
         column.addView(card("Setup", micRow.view, divider(), bubbleRow.view, divider(), keyboardRow.view))
 
         column.addView(card("Try it", field("Tap here, then use the bubble", lines = 3)))
+
+        engineRows = listOf(
+            engineRow(Settings.ENGINE_GEMINI, "Gemini", "Your audio is sent to Google. Handles Punjabi and mixed languages. About 2–3 s."),
+            engineRow(Settings.ENGINE_GROQ, "Groq", "Your audio is sent to Groq (Whisper); text clean-up only when needed. Needs a free Groq key."),
+            engineRow(Settings.ENGINE_LOCAL, "Local only", "Nothing leaves your phone. English and 24 European languages. Rules clean-up, no AI polish."),
+        )
+        modelStatus = text("", 14f, c.dim).apply { setPadding(0, dp(10), 0, dp(4)) }
+        modelButton = text("", 15f, c.accent, bold = true).apply {
+            setPadding(0, dp(4), 0, dp(4))
+            setOnClickListener { onModelButton() }
+        }
+        column.addView(card("Speech engine", *engineRows.map { it.view }.toTypedArray(), modelStatus, modelButton))
 
         roundChip = chip("Square") { settings.bubbleShape = "circle"; refresh() }
         barChip = chip("Wide bar") { settings.bubbleShape = "bar"; refresh() }
@@ -124,18 +141,22 @@ class MainActivity : Activity() {
         ))
 
         keyField = field("", password = true)
+        groqField = field("", password = true)
         val model = field("").apply { setText(settings.model) }
         val replace = field("super base = Supabase", lines = 3).apply { setText(settings.replaceText) }
         val bias = field("Supabase, Fedora").apply { setText(settings.biasText) }
         column.addView(card(
-            "Gemini",
-            label("API key"), keyField,
-            label("Model"), model,
+            "Keys and dictionary",
+            label("Gemini API key"), keyField,
+            label("Gemini model"), model,
+            label("Groq API key (free at console.groq.com)"), groqField,
             label("Dictionary: one per line, spoken = Written"), replace,
             label("Preferred spellings, comma-separated"), bias,
             primaryButton("Save") {
                 if (keyField.text.isNotBlank()) settings.apiKey = keyField.text.toString()
+                if (groqField.text.isNotBlank()) settings.groqKey = groqField.text.toString()
                 keyField.text.clear()
+                groqField.text.clear()
                 settings.model = model.text.toString()
                 settings.replaceText = replace.text.toString()
                 settings.biasText = bias.text.toString()
@@ -150,7 +171,8 @@ class MainActivity : Activity() {
         column.addView(text(
             "The bubble uses Android's accessibility service only to see when a keyboard and a text field are on " +
                 "screen and to type your dictation into that field. It skips password fields and reads nothing else. " +
-                "Your recorded audio goes to Gemini for transcription; dictations are kept only on this phone.",
+                "With Gemini or Groq your recorded audio is sent to that service; with Local only nothing leaves the phone. " +
+                "Dictations are kept only on this phone.",
             13f, c.dim,
         ).apply { setPadding(dp(4), dp(8), dp(4), 0) })
 
@@ -167,10 +189,20 @@ class MainActivity : Activity() {
         // Debug builds only: `adb shell am start -n dev.hkgill.murmur/.MainActivity --es selftest t.wav`
         // runs a WAV from the app's files dir through the full pipeline, without speaking into the phone.
         if (BuildConfig.DEBUG) intent.getStringExtra("selftest")?.let(::selfTest)
+        // Debug builds only: `--ez download_model true` starts the on-device model download, as its button does.
+        if (BuildConfig.DEBUG && intent.getBooleanExtra("download_model", false)) onModelButton()
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (BuildConfig.DEBUG) intent.getStringExtra("selftest")?.let(::selfTest)
     }
 
     private fun selfTest(name: String) = Thread {
-        runCatching { Dictation.run(settings, settings.systemPrompt(), java.io.File(filesDir, name).readBytes()) }
+        // An optional `--es engine local|groq|gemini` tries another engine for this run only.
+        val engine = intent.getStringExtra("engine") ?: settings.engine
+        runCatching { Dictation.run(this, settings, java.io.File(filesDir, name).readBytes(), engine) }
             .onSuccess { android.util.Log.i(Dictation.TAG, "selftest ok: $it") }
             .onFailure { Dictation.logFailure(settings, it) }
         runOnUiThread(::refresh)
@@ -208,7 +240,83 @@ class MainActivity : Activity() {
             settings.apiKey.isNotBlank() -> "Using the key built into this app"
             else -> "Paste your Gemini API key"
         }
+        groqField.hint = when {
+            settings.hasOwnGroqKey -> "Saved. Type to replace"
+            settings.groqKey.isNotBlank() -> "Using the key built into this app"
+            else -> "Paste your Groq API key"
+        }
+        showEngine()
         showLog()
+    }
+
+    private fun engineRow(id: String, title: String, detail: String): EngineRow {
+        val dot = TextView(this).apply {
+            gravity = Gravity.CENTER
+            textSize = 13f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+        }
+        val labels = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(dp(12), 0, 0, 0)
+            addView(text(title, 16f, c.text, bold = true))
+            addView(text(detail, 14f, c.dim))
+        }
+        val row = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(dp(12), dp(12), dp(12), dp(12))
+            layoutParams = LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) }
+            addView(dot, LinearLayout.LayoutParams(dp(22), dp(22)))
+            addView(labels, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            setOnClickListener {
+                settings.engine = id
+                refresh()
+            }
+        }
+        return EngineRow(id, row, dot)
+    }
+
+    private fun showEngine() {
+        for (row in engineRows) {
+            val on = row.id == settings.engine
+            row.view.background = rounded(if (on) c.field else c.card, dp(14).toFloat())
+            row.dot.text = if (on) "✓" else ""
+            row.dot.background = rounded(if (on) c.accent else c.field, dp(11).toFloat())
+        }
+        val local = settings.engine == Settings.ENGINE_LOCAL
+        modelStatus.visibility = if (local) View.VISIBLE else View.GONE
+        modelButton.visibility = if (local) View.VISIBLE else View.GONE
+        val mb = LocalAsr.TOTAL_BYTES / 1_000_000
+        when (val s = LocalAsr.refresh(this)) {
+            LocalAsr.Status.Ready -> {
+                modelStatus.text = "On-device model ready ✓ (Parakeet, $mb MB)"
+                modelButton.text = "Delete model"
+            }
+            LocalAsr.Status.Missing -> {
+                modelStatus.text = "Needs a one-time $mb MB download (Wi-Fi recommended)."
+                modelButton.text = "Download model"
+            }
+            is LocalAsr.Status.Downloading -> {
+                modelStatus.text = "Downloading… ${s.done * 100 / s.total}% of $mb MB"
+                modelButton.text = ""
+            }
+            is LocalAsr.Status.Failed -> {
+                modelStatus.text = "Download failed: ${s.reason}"
+                modelButton.text = "Try again"
+            }
+        }
+    }
+
+    private fun onModelButton() {
+        when (LocalAsr.refresh(this)) {
+            LocalAsr.Status.Ready -> {
+                LocalAsr.delete(this)
+                Toast.makeText(this, "On-device model deleted", Toast.LENGTH_SHORT).show()
+            }
+            is LocalAsr.Status.Downloading -> Unit
+            else -> LocalAsr.download(applicationContext) { runOnUiThread(::showEngine) }
+        }
+        showEngine()
     }
 
     private fun showRow(row: SetupRow, done: Boolean, number: String, subtitle: String) {
