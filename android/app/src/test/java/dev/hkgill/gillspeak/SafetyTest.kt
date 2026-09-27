@@ -51,4 +51,13 @@ class SafetyTest {
     @Test fun groqCleanupStripsEchoedWrappers() {
         assertEquals("Hello there.", Groq.parseChat(chat("<transcript>\"Hello there.\"</transcript>", "stop"), "hello there"))
     }
+
+    @Test fun placeholderIsNotTreatedAsTypedText() {
+        // WhatsApp: an empty box reports its hint "Message" as its text, without isShowingHintText.
+        assertEquals("", realText("Message", "Message", showingHint = false))
+        assertEquals("", realText("Type a message", "Type a message", showingHint = true))
+        assertEquals("", realText(null, "Message", showingHint = false))
+        assertEquals("Hello", realText("Hello", "Message", showingHint = false))
+        assertEquals("Message", realText("Message", null, showingHint = false)) // no hint: it's real text
+    }
 }

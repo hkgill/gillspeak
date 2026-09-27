@@ -97,7 +97,9 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         when {
             // Any open keyboard gets the bubble, except over password fields and gillspeak's own keyboard.
             keyboard != null && field?.isPassword != true && !ownKeyboard -> {
-                keyboardTop = keyboard.top
+                // Keyboards change height while typing (Samsung's suggestion strip comes and goes). Anchor to the
+                // highest the keyboard has been since it opened, so the bubble stays put instead of bobbing.
+                keyboardTop = if (shown) minOf(keyboardTop, keyboard.top) else keyboard.top
                 show()
             }
             mic.state == MicController.State.WORKING -> Unit // stay visible until the text lands
@@ -364,7 +366,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
 
     /** Splices the text in at the cursor (replacing any selection) and puts the cursor after it. */
     private fun setText(node: AccessibilityNodeInfo, text: String): Boolean {
-        val current = if (node.isShowingHintText) "" else node.text?.toString().orEmpty()
+        val current = realText(node.text?.toString(), node.hintText?.toString(), node.isShowingHintText)
         var start = node.textSelectionStart
         var end = node.textSelectionEnd
         if (start !in 0..current.length || end !in 0..current.length) {
