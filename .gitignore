@@ -9,3 +9,9 @@ tests/fixtures/audio/*.wav
 tests/fixtures/audio/*.txt
 .coverage
 .ruff_cache/
+
+# Secrets: never commit (see AGENTS.md)
+local.properties
+.env
+*.jks
+*.keystore
