@@ -187,7 +187,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
             params.x = 0
         } else {
             val centre = settings.bubbleX * screenW
-            val targetW = if (pill) (square + size * 1.6f).toInt() else square
+            val targetW = if (pill) (square + size * 2.0f).toInt() else square
             val onRight = centre > screenW / 2
             fun place(w: Int) {
                 params.width = w

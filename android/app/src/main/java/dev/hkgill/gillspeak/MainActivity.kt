@@ -41,6 +41,7 @@ class MainActivity : Activity() {
 
     private lateinit var settings: Settings
     private lateinit var c: Colors
+    private var night = false
     private lateinit var micRow: SetupRow
     private lateinit var bubbleRow: SetupRow
     private lateinit var keyboardRow: SetupRow
@@ -58,11 +59,11 @@ class MainActivity : Activity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         settings = Settings(this)
-        val night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
+        night = (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES
         c = if (night) {
-            Colors(0xFF0E0E11.toInt(), 0xFF1C1C21.toInt(), 0xFFF5F5F7.toInt(), 0xFF9A9AA5.toInt(), 0xFF7FA2FF.toInt(), 0xFF34C77B.toInt(), 0xFF2A2A31.toInt())
+            Colors(Brand.NIGHT, Brand.NIGHT_SURFACE, Brand.PAPER, 0xFFA9ADB6.toInt(), Brand.TEAL, Brand.TEAL, 0xFF2A2D35.toInt())
         } else {
-            Colors(0xFFF2F2F7.toInt(), Color.WHITE, 0xFF111114.toInt(), 0xFF6B6B76.toInt(), 0xFF2F6BF0.toInt(), 0xFF1F9D55.toInt(), 0xFFF2F2F7.toInt())
+            Colors(Brand.PAPER, Brand.SURFACE, Brand.INK, Brand.INK_2, Brand.TEAL_TEXT, Brand.TEAL_TEXT, Brand.FIELD)
         }
         actionBar?.hide()
         val lightBars = WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
@@ -72,8 +73,18 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(24), dp(16), dp(32))
         }
-        column.addView(text(Settings.APP_NAME, 34f, c.text, bold = true))
-        column.addView(text("Talk, and clean text lands where you're typing. Local only: nothing leaves your phone.", 16f, c.dim).apply { setPadding(0, dp(4), 0, dp(20)) })
+        val badge = text("Local only", 13f, if (night) Brand.TEAL_SOFT else Brand.TEAL_DEEP, bold = true).apply {
+            background = rounded(if (night) 0xFF14302C.toInt() else Brand.TEAL_SOFT, dp(999).toFloat())
+            setPadding(dp(12), dp(6), dp(12), dp(6))
+        }
+        column.addView(LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(MarkView(this@MainActivity), LinearLayout.LayoutParams(dp(44), dp(44)))
+            addView(text(Settings.APP_NAME, 28f, c.text, bold = true).apply { setPadding(dp(10), 0, 0, 0) },
+                LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(badge)
+        })
+        column.addView(text("Talk, and clean text lands where you type. Nothing leaves your phone.", 16f, c.dim).apply { setPadding(0, dp(10), 0, dp(20)) })
 
         micRow = setupRow("Microphone") { requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1) }
         bubbleRow = setupRow("Floating bubble") { startActivity(Intent(ACTION_ACCESSIBILITY_SETTINGS)) }
@@ -87,9 +98,9 @@ class MainActivity : Activity() {
         column.addView(card("Try it", field("Tap here, then use the bubble", lines = 3)))
 
         engineRows = listOf(
-            engineRow(Settings.ENGINE_LOCAL, "Local only (default)", "Nothing leaves your phone. Instant, works offline. English and 24 European languages."),
-            engineRow(Settings.ENGINE_GEMINI, "Gemini (optional, cloud)", "Sends your audio to Google. Adds AI polish and handles Punjabi and mixed languages. Needs a Gemini key."),
-            engineRow(Settings.ENGINE_GROQ, "Groq (optional, cloud)", "Sends your audio to Groq, and some text for clean-up. Needs a free Groq key."),
+            engineRow(Settings.ENGINE_LOCAL, "Local only", "Default", cloud = false, "Nothing leaves your phone. Instant, works offline. English and 24 European languages."),
+            engineRow(Settings.ENGINE_GEMINI, "Gemini", "Sends audio", cloud = true, "Optional cloud engine: your audio goes to Google. AI polish, Punjabi and mixed languages. Needs a Gemini key."),
+            engineRow(Settings.ENGINE_GROQ, "Groq", "Sends audio", cloud = true, "Optional cloud engine: your audio goes to Groq. Fast Whisper transcription. Needs a free Groq key."),
         )
         modelStatus = text("", 14f, c.dim).apply { setPadding(0, dp(10), 0, dp(4)) }
         modelButton = text("", 15f, c.accent, bold = true).apply {
@@ -229,7 +240,7 @@ class MainActivity : Activity() {
         showLog()
     }
 
-    private fun engineRow(id: String, title: String, detail: String): EngineRow {
+    private fun engineRow(id: String, title: String, tag: String, cloud: Boolean, detail: String): EngineRow {
         val dot = TextView(this).apply {
             gravity = Gravity.CENTER
             textSize = 13f
@@ -239,8 +250,15 @@ class MainActivity : Activity() {
         val labels = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(12), 0, 0, 0)
-            addView(text(title, 16f, c.text, bold = true))
-            addView(text(detail, 14f, c.dim))
+            addView(LinearLayout(this@MainActivity).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                addView(text(title, 16f, c.text, bold = true))
+                addView(text(tag, 12f, if (cloud) Brand.AMBER_TEXT else Brand.TEAL_DEEP, bold = true).apply {
+                    background = rounded(if (cloud) Brand.AMBER_SOFT else Brand.TEAL_SOFT, dp(999).toFloat())
+                    setPadding(dp(8), dp(3), dp(8), dp(3))
+                }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
+            })
+            addView(text(detail, 14f, c.dim).apply { setPadding(0, dp(4), 0, 0) })
         }
         val row = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
@@ -259,7 +277,11 @@ class MainActivity : Activity() {
     private fun showEngine() {
         for (row in engineRows) {
             val on = row.id == settings.engine
-            row.view.background = rounded(if (on) c.field else c.card, dp(14).toFloat())
+            row.view.background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(16).toFloat()
+                setColor(if (!on) c.card else if (night) 0xFF14302C.toInt() else 0xFFF1FAF8.toInt())
+                setStroke(dp(if (on) 2 else 1), if (on) c.accent else if (night) 0xFF2A2D35.toInt() else Brand.LINE)
+            }
             row.dot.text = if (on) "✓" else ""
             row.dot.background = rounded(if (on) c.accent else c.field, dp(11).toFloat())
         }

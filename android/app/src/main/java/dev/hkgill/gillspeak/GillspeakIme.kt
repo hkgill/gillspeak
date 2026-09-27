@@ -2,7 +2,7 @@ package dev.hkgill.gillspeak
 
 import android.annotation.SuppressLint
 import android.content.Intent
-import android.graphics.Color
+import android.graphics.Typeface
 import android.inputmethodservice.InputMethodService
 import android.os.Handler
 import android.os.Looper
@@ -15,6 +15,7 @@ import android.view.View
 import android.view.WindowInsets
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputMethodManager
+import android.widget.FrameLayout
 import android.widget.LinearLayout
 import android.widget.TextView
 
@@ -30,7 +31,10 @@ class GillspeakIme : InputMethodService(), MicController.Ui {
     private var inputSession = 0 // changes whenever the keyboard moves to another field
 
     private lateinit var statusView: TextView
-    private lateinit var micKey: TextView
+    private lateinit var micKey: LinearLayout
+    private lateinit var micMark: View
+    private lateinit var micTitle: TextView
+    private lateinit var micSub: TextView
     private lateinit var colors: Palette
 
     override fun onCreate() {
@@ -101,18 +105,41 @@ class GillspeakIme : InputMethodService(), MicController.Ui {
             key("↶") { undoLast() } to dp(56),
         ))
 
-        micKey = TextView(this).apply {
+        // The mic: the gillspeak mark on a tile, and what to do.
+        micMark = FrameLayout(this).apply {
+            background = rounded(0xFF2C3038.toInt(), dp(24).toFloat())
+            addView(MarkView(this@GillspeakIme), FrameLayout.LayoutParams(dp(52), dp(52), Gravity.CENTER))
+        }
+        micTitle = TextView(this).apply {
+            textSize = 17f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Brand.PAPER)
             gravity = Gravity.CENTER
-            textSize = 20f
-            setTextColor(Color.WHITE)
+        }
+        micSub = TextView(this).apply {
+            textSize = 14f
+            setTextColor(colors.dim)
+            gravity = Gravity.CENTER
+        }
+        micKey = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER
+            isClickable = true
+            contentDescription = "Dictate: hold to talk, or tap to start and tap again to finish"
+            addView(micMark, LinearLayout.LayoutParams(dp(76), dp(76)).apply { bottomMargin = dp(10) })
+            addView(micTitle)
+            addView(micSub)
             setOnTouchListener(::onMicTouch)
         }
-        root.addView(row(dp(150), micKey to 0))
+        root.addView(row(dp(190), micKey to 0))
 
         root.addView(row(dp(50),
             repeatingKey("⌫") { sendDownUpKeyEvents(KeyEvent.KEYCODE_DEL) } to dp(80),
             key("space") { currentInputConnection?.commitText(" ", 1) } to 0,
-            key("↵") { enter() } to dp(80),
+            key("↵") { enter() }.apply {
+                background = rounded(Brand.TEAL, dp(12).toFloat())
+                setTextColor(Brand.INK)
+            } to dp(80),
         ))
         render(mic.state)
         showIdleHint()
@@ -164,13 +191,17 @@ class GillspeakIme : InputMethodService(), MicController.Ui {
 
     override fun render(state: MicController.State) {
         if (!::micKey.isInitialized) return
-        micKey.text = when (state) {
-            MicController.State.IDLE -> "🎤\nHold to talk · tap to latch"
-            MicController.State.RECORDING -> "● Listening…\nRelease to insert"
-            MicController.State.LATCHED -> "● Listening…\nTap to finish"
-            MicController.State.WORKING -> "Cleaning up…"
+        val (title, sub) = when (state) {
+            MicController.State.IDLE -> "Hold to talk" to "or tap to start, tap to finish"
+            MicController.State.RECORDING -> "Listening…" to "Release to insert"
+            MicController.State.LATCHED -> "Listening…" to "Tap to finish"
+            MicController.State.WORKING -> "Transcribing…" to ""
         }
-        micKey.background = rounded(colors.forState(state), dp(10).toFloat())
+        micTitle.text = title
+        micTitle.setTextColor(if (state == MicController.State.RECORDING || state == MicController.State.LATCHED) 0xFFFF8A8E.toInt() else Brand.PAPER)
+        micSub.text = sub
+        micMark.visibility = if (state == MicController.State.IDLE) View.VISIBLE else View.GONE
+        micKey.background = rounded(colors.forState(state), dp(20).toFloat())
     }
 
     override fun status(text: String, opensApp: Boolean) {
