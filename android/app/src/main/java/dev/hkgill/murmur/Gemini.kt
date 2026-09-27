@@ -13,7 +13,11 @@ class GeminiError(val kind: String, message: String) : Exception(message)
  * Murmur's clean_v2 prompt ("text"). The verbatim transcript gives the rules fallback something to work with.
  */
 class Gemini(private val apiKey: String, private val model: String, private val systemPrompt: String) {
-    data class Result(val transcript: String, val text: String, val ms: Long)
+    /** [timing] says where the time went: upload, waiting for Gemini, and any thinking tokens. */
+    data class Result(val transcript: String, val text: String, val ms: Long, val timing: String)
+
+    private var sendMs = 0L
+    private var waitMs = 0L
 
     fun transcribe(wav: ByteArray, bias: List<String>, mode: String = "default"): Result {
         val t0 = System.nanoTime()
@@ -34,7 +38,9 @@ class Gemini(private val apiKey: String, private val model: String, private val 
             (0 until content.length()).joinToString("") { content.getJSONObject(it).optString("text") }
         }.getOrElse { throw GeminiError("error", "unexpected response shape") }
         val out = runCatching { JSONObject(text) }.getOrElse { throw GeminiError("error", "response is not JSON") }
-        return Result(out.optString("transcript").trim(), out.optString("text").trim(), (System.nanoTime() - t0) / 1_000_000)
+        val thoughts = runCatching { JSONObject(data).getJSONObject("usageMetadata").optInt("thoughtsTokenCount") }.getOrDefault(0)
+        val timing = "upload $sendMs ms, wait $waitMs ms" + if (thoughts > 0) ", thinking $thoughts tokens" else ""
+        return Result(out.optString("transcript").trim(), out.optString("text").trim(), (System.nanoTime() - t0) / 1_000_000, timing)
     }
 
     /** Opens the TLS connection ahead of time with a free metadata call, so dictation doesn't pay for it. */
@@ -48,6 +54,7 @@ class Gemini(private val apiKey: String, private val model: String, private val 
         try {
             conn.connectTimeout = 5_000
             conn.readTimeout = 30_000
+            val t0 = System.nanoTime()
             conn.setRequestProperty("x-goog-api-key", apiKey)
             if (body != null) {
                 conn.requestMethod = "POST"
@@ -55,7 +62,10 @@ class Gemini(private val apiKey: String, private val model: String, private val 
                 conn.setRequestProperty("Content-Type", "application/json")
                 conn.outputStream.use { it.write(body.toByteArray()) }
             }
+            val t1 = System.nanoTime()
             val code = conn.responseCode
+            sendMs = (t1 - t0) / 1_000_000
+            waitMs = (System.nanoTime() - t1) / 1_000_000
             if (code != 200) {
                 val detail = conn.errorStream?.bufferedReader()?.use { it.readText() }.orEmpty()
                 val msg = runCatching { JSONObject(detail).getJSONObject("error").getString("message") }.getOrDefault("HTTP $code")

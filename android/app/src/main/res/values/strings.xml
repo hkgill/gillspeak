@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="bubble_description">Shows a floating mic over your keyboard whenever you type in a text field, and types your dictation into that field. Murmur reads only the focused text field, skips password fields, and sends nothing but your recorded audio (to Gemini, for transcription).</string>
+</resources>

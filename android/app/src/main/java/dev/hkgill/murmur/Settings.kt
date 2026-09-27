@@ -31,6 +31,43 @@ class Settings(context: Context) {
 
     fun dictionary() = Dictionary.parse(replaceText, biasText)
 
+    // Floating bubble. Position is relative to the keyboard, so it follows the keyboard when its height changes.
+
+    /** Circle diameter, or bar height, in dp. */
+    var bubbleSize: Int
+        get() = prefs.getInt("bubble_size", 56)
+        set(v) = prefs.edit().putInt("bubble_size", v.coerceIn(BUBBLE_MIN, BUBBLE_MAX)).apply()
+
+    /** "circle", or "bar": a full-width strip laid over the keyboard. */
+    var bubbleShape: String
+        get() = prefs.getString("bubble_shape", "circle") ?: "circle"
+        set(v) = prefs.edit().putString("bubble_shape", v).apply()
+
+    /** Horizontal centre of the circle as a fraction of the screen width. */
+    var bubbleX: Float
+        get() = prefs.getFloat("bubble_x", 0.9f)
+        set(v) = prefs.edit().putFloat("bubble_x", v.coerceIn(0f, 1f)).apply()
+
+    /**
+     * Top of the bubble relative to the top of the keyboard, in dp: negative is above it, positive over it.
+     * Until the user drags it, it sits just above the keyboard (the bar sits over the keyboard's top edge).
+     */
+    var bubbleDy: Int
+        get() = prefs.getInt("bubble_dy", Int.MIN_VALUE).takeIf { it != Int.MIN_VALUE }
+            ?: if (bubbleShape == "bar") 0 else -(bubbleSize + 12)
+        set(v) = prefs.edit().putInt("bubble_dy", v).apply()
+
+    /** Saves both coordinates in one write, so listeners never see half an update. */
+    fun setBubblePosition(x: Float, dy: Int) =
+        prefs.edit().putFloat("bubble_x", x.coerceIn(0f, 1f)).putInt("bubble_dy", dy).apply()
+
+    fun resetBubblePosition() = prefs.edit().remove("bubble_x").remove("bubble_dy").apply()
+
+    /** Calls [listener] when a bubble setting changes. Keep the returned object: preferences hold listeners weakly. */
+    fun onBubbleChange(listener: () -> Unit) =
+        android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key -> if (key?.startsWith("bubble_") == true) listener() }
+            .also(prefs::registerOnSharedPreferenceChangeListener)
+
     fun systemPrompt(): String =
         listOf("audio_preface.txt", "clean_v2.txt").joinToString("") { name -> assets.open(name).bufferedReader().use { it.readText() } }
 
@@ -46,6 +83,8 @@ class Settings(context: Context) {
         const val DEFAULT_MODEL = "gemini-3.5-flash-lite"
         const val DEFAULT_REPLACE = "super base = Supabase\nget hub = GitHub\ncube control = kubectl"
         const val DEFAULT_BIAS = "Supabase, Fedora, Parakeet"
+        const val BUBBLE_MIN = 40
+        const val BUBBLE_MAX = 200
         private const val MAX_LOG = 30
         private const val SEP = "\u001e"
     }

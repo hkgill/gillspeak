@@ -21,7 +21,8 @@ object Dictation {
             else -> Validate.check(fallback, res.text)
         }
         val text = if (why.isEmpty()) dictionary.apply(res.text) else fallback
-        settings.log("${res.ms} ms ${why.ifEmpty { "ok" }}\n  heard: ${res.transcript}\n  typed: $text")
+        Log.i(TAG, "gemini ${res.ms} ms: ${res.timing}")
+        settings.log("${res.ms} ms ${why.ifEmpty { "ok" }} (${res.timing})\n  heard: ${res.transcript}\n  typed: $text")
         return Outcome(text, why, res.ms)
     }
 

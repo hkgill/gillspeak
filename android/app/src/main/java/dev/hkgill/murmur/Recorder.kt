@@ -16,6 +16,14 @@ class Recorder {
 
     @Volatile private var running = false
 
+    /** Loudest sample so far (0..32767). Stays 0 when Android silences a background recording. */
+    @Volatile var peak = 0
+        private set
+
+    /** Loudness of the last 100 ms, 0..1, for the recording animation. */
+    @Volatile var level = 0f
+        private set
+
     val isRecording get() = running
 
     /** Caller checks RECORD_AUDIO first. Throws if the microphone can't be opened. */
@@ -31,14 +39,20 @@ class Recorder {
             error("microphone unavailable")
         }
         synchronized(pcm) { pcm.reset() }
+        peak = 0
+        level = 0f
         record = r
         running = true
         r.startRecording()
         thread = Thread({
-            val buf = ByteArray(3200) // 100 ms
+            val buf = ByteArray(1600) // 50 ms, so stopping never waits long
             while (running) {
                 val n = r.read(buf, 0, buf.size)
                 if (n <= 0) continue
+                var chunk = 0
+                for (i in 0 until n - 1 step 2) chunk = maxOf(chunk, kotlin.math.abs((buf[i].toInt() and 0xff) or (buf[i + 1].toInt() shl 8)))
+                peak = maxOf(peak, chunk)
+                level = (chunk / 12_000f).coerceAtMost(1f) // normal speech peaks well below full scale
                 synchronized(pcm) {
                     pcm.write(buf, 0, n)
                     if (pcm.size() >= MAX_BYTES) running = false
