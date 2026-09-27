@@ -2,6 +2,11 @@
 
 All notable changes to Murmur. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- **Android voice keyboard (experimental)** in `android/`: hold or tap the mic, and Gemini transcribes and cleans the audio in one request with the `clean_v2` prompt. The rules and validator are ported to Kotlin, with the rules-cleaned transcript as the fallback. Audio leaves the device on Android; there is no on-device speech recognition yet. See [android/README.md](android/README.md).
+
 ## [0.5.1] - 2026-09-27
 
 Fixes from an independent review (Codex, `gpt-6-astra`, high effort). Every fix has a regression test that fails on 0.5.0.

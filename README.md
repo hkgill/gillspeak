@@ -22,6 +22,7 @@ Hold a key, talk, and clean text lands at your cursor in any app.
 | KDE, Sway, Hyprland (Wayland) | ⚠️ Untested. Bind `murmur toggle` in your desktop's settings; hold-to-talk doesn't depend on the desktop |
 | X11 sessions | ⚠️ Code path exists (`xclip`, `xdotool`) but is only tested with fakes |
 | Debian / Ubuntu | ⚠️ Untested. May need `ydotool` 1.x; older 0.1.x releases use a different command syntax |
+| Android 11+ | 🧪 Experimental voice keyboard in [`android/`](android/README.md); uses Gemini for speech recognition, so audio leaves the phone |
 | macOS, Windows | ❌ Not supported |
 
 Needs Python 3.12+, a microphone, and about 1 GB of RAM for the speech model. Reports from other setups are welcome: open an issue with your `murmur doctor` output.
