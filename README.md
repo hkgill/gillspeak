@@ -1,12 +1,30 @@
 # Murmur
 
-Press a hotkey, talk, and clean text lands at your cursor in any app.
+[![CI](https://github.com/hkgill/gillspeak/actions/workflows/ci.yml/badge.svg)](https://github.com/hkgill/gillspeak/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
+![Fedora GNOME](https://img.shields.io/badge/platform-Fedora%20GNOME%20Wayland-294172.svg)
+
+Hold a key, talk, and clean text lands at your cursor in any app.
 
 - **Local speech-to-text**: NVIDIA Parakeet-TDT 0.6B v3 (int8) through sherpa-onnx, on the CPU. Audio never leaves the laptop.
 - **Smart clean-up**: only the *text* goes to Gemini Flash-Lite, which applies self-corrections ("Thursday, sorry Friday"), strips fillers and fixes punctuation. Short, clean utterances skip the LLM completely.
 - **Never loses words**: if the LLM is slow, offline or returns something odd, the rules-cleaned transcript is pasted instead.
 
-Target: Fedora Workstation (GNOME on Wayland). X11 works through xclip/xdotool.
+- **Hold-to-talk**: hold Right Ctrl + Right Alt, speak, let go. Or tap Ctrl+Space to start and stop.
+
+## Supported platforms
+
+| Platform | Status |
+|---|---|
+| **Fedora Workstation, GNOME on Wayland** | ✅ Supported: one-script install, tested on real hardware and in CI |
+| Other distros with GNOME on Wayland | ⚠️ Should work with the manual install; package names differ and shortcuts need adding by hand |
+| KDE, Sway, Hyprland (Wayland) | ⚠️ Untested. Bind `murmur toggle` in your desktop's settings; hold-to-talk doesn't depend on the desktop |
+| X11 sessions | ⚠️ Code path exists (`xclip`, `xdotool`) but is only tested with fakes |
+| Debian / Ubuntu | ⚠️ Untested. May need `ydotool` 1.x; older 0.1.x releases use a different command syntax |
+| macOS, Windows | ❌ Not supported |
+
+Needs Python 3.12+, a microphone, and about 1 GB of RAM for the speech model. Reports from other setups are welcome: open an issue with your `murmur doctor` output.
 
 ## Install
 
@@ -21,11 +39,16 @@ The script:
 2. sets up `ydotoold` with a socket your user owns (`/run/ydotoold/socket`) and tests it;
 3. installs murmur with `uv tool install` (puts `murmur` and `murmurd` in `~/.local/bin`);
 4. downloads the Parakeet and Silero VAD models (SHA256-checked);
-5. installs and starts the `murmurd` systemd user service;
-6. adds GNOME shortcuts, warning you if something already uses Ctrl+Space (IBus often does);
-7. asks for your Gemini API key and runs `murmur doctor`.
+5. installs `murmur-keyd`, the hold-to-talk helper (root service; see below);
+6. installs and starts the `murmurd` systemd user service;
+7. adds GNOME shortcuts, warning you if something already uses Ctrl+Space (IBus often does);
+8. asks for your Gemini API key and runs `murmur doctor`.
 
-Manual install: `uv tool install --python 3.12 .`, then `murmur download-models`, copy `systemd/murmurd.service` to `~/.config/systemd/user/` and `systemctl --user enable --now murmurd`.
+Manual install: `uv tool install --python 3.12 .`, then `murmur download-models`, copy `systemd/murmurd.service` to `~/.config/systemd/user/` and `systemctl --user enable --now murmurd`. For hold-to-talk, run `scripts/install-keyd.sh`.
+
+**Update:** `git pull && scripts/setup-fedora.sh --no-models`. `murmur doctor` warns if the hold-to-talk helper is older than your install.
+
+**Uninstall:** `scripts/uninstall.sh` removes the services, shortcuts and command but keeps your config, history and models; add `--purge` to remove those and the stored API key too.
 
 ### Gemini API key (the free tier works)
 
@@ -41,7 +64,7 @@ Murmur only needs a Gemini API key for the clean-up step; speech recognition is 
    ```
 
    If no keyring is available, the key goes to `~/.config/murmur/env` (mode 0600), which the service loads with `EnvironmentFile=`.
-3. Pin a model in `~/.config/murmur/config.toml`, for example `model = "gemini-3.5-flash-lite"` under `[llm]`. Aliases such as `gemini-flash-lite-latest` can change underneath you.
+3. The default model is `gemini-3.5-flash-lite` (56/58 = 96.6% on the eval set with the `clean_v2` prompt, ~1 s median). If `murmur doctor` says your key can't use it, pick another ID from its list and set `model` under `[llm]` in `~/.config/murmur/config.toml`. Prefer versioned IDs: aliases such as `gemini-flash-lite-latest` can change underneath you.
 
 **Is the free tier enough?** Usually. Google shows your project's exact limits in AI Studio (Projects → rate limits); for Flash-Lite they have been around 30 requests a minute and a few hundred a day. Murmur uses far less than you'd expect:
 
@@ -117,11 +140,11 @@ uv venv -p 3.12 && uv pip install -e '.[dev]'
 
 The tests mock the audio stream, subprocesses and HTTP, so they need neither models nor a desktop session. `MURMUR_TEST_MODELS=~/.local/share/murmur/models pytest tests/test_models_integration.py` also runs the real Silero and Parakeet models.
 
-`murmur/prompts/clean_v1.txt` holds the system prompt. If you change it, add `clean_v2.txt`, bump `PROMPT_VERSION` in `cleaner.py` (history records which version was used), and re-run `murmur eval`.
+`murmur/prompts/clean_v2.txt` holds the system prompt. If you change it, add `clean_v3.txt`, bump `PROMPT_VERSION` in `cleaner.py` (history records which version was used), and re-run `murmur eval`.
 
 ## Contributing
 
-Issues and pull requests are welcome at <https://github.com/hkgill/gillspeak>. Please run `.venv/bin/pytest` before sending a change; tests must not need models, a microphone, a desktop session or network access (mock them as the existing tests do). Changes to the clean-up prompt should include a `murmur eval` pass rate.
+Issues and pull requests are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, the test rules (every bug fix needs a regression test) and prompt changes, and [SECURITY.md](SECURITY.md) to report vulnerabilities privately. Changes are listed in [CHANGELOG.md](CHANGELOG.md). Everyone is expected to follow the [code of conduct](CODE_OF_CONDUCT.md).
 
 ## License
 

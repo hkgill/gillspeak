@@ -1,0 +1,37 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+      placeholder: "Held Right Ctrl + Right Alt, heard the start sound, released, nothing was pasted into Firefox."
+    validations:
+      required: true
+  - type: textarea
+    id: doctor
+    attributes:
+      label: Output of `murmur doctor --no-mic`
+      description: Remove anything you consider private. It never prints your API key.
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs around the time it happened
+      description: "`journalctl --user -u murmurd --since '-10min'` (and `journalctl -u murmur-keyd --since '-10min'` for hold-to-talk). These can include dictated text; redact as needed."
+      render: text
+  - type: input
+    id: system
+    attributes:
+      label: Distro, desktop and session
+      placeholder: "Fedora 44, GNOME 50, Wayland"
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Murmur version or commit
+      placeholder: "0.5.0 / 909ce95"
