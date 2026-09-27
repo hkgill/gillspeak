@@ -276,6 +276,7 @@ class Daemon:
         """start: begin recording unless one is already running (e.g. from Ctrl+Space).
         end: stop and paste. cancel: another key joined the chord, so discard."""
         recording = self.recorder is not None and self.recorder.is_recording
+        log.info("hold %s (recording=%s, holding=%s)", event, recording, self.holding)
         if event == "start" and not recording:
             resp = await self.toggle({})
             self.holding = resp["ok"] and resp["msg"] == "recording"
@@ -394,6 +395,7 @@ class Daemon:
         text = self.rules.apply(raw)
         rec.rules_text = text
         if not text.strip():
+            log.info("empty transcript (%.1fs of audio, raw %r); discarding", rec.audio_seconds, raw[:80])
             await self.notifier.clear()
             return
 
