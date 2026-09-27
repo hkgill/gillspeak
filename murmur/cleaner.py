@@ -105,7 +105,7 @@ class _HttpCleaner:
             http2=True,
             timeout=httpx.Timeout(cfg.llm.timeout_s, connect=cfg.llm.connect_timeout_s),
         )
-        self._last_used = 0.0
+        self._last_used: float | None = None  # None = never connected (monotonic time starts near 0 at boot)
 
     async def _post(self, url: str, *, headers: dict[str, str], json: dict[str, Any]) -> httpx.Response:
         total = self.cfg.llm.timeout_s
@@ -128,7 +128,7 @@ class _HttpCleaner:
         return resp
 
     def needs_warm(self) -> bool:
-        return time.monotonic() - self._last_used > WARM_IDLE_S
+        return self._last_used is None or time.monotonic() - self._last_used > WARM_IDLE_S
 
     async def aclose(self) -> None:
         await self._client.aclose()

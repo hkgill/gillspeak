@@ -155,3 +155,12 @@ async def test_warm_uses_metadata_call(cfg):
     assert route.called
     assert not cleaner.needs_warm()
     await cleaner.aclose()
+
+
+def test_never_used_cleaner_needs_warm_right_after_boot(cfg, monkeypatch):
+    """Regression: _last_used started at 0.0, and monotonic time is seconds since boot, so within
+    five minutes of boot a never-connected cleaner claimed it was warm (seen on fresh CI runners)."""
+    import murmur.cleaner as cleaner_mod
+
+    monkeypatch.setattr(cleaner_mod.time, "monotonic", lambda: 42.0)  # 42 s after boot
+    assert GeminiCleaner(cfg, "k").needs_warm()

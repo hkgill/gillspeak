@@ -49,8 +49,9 @@ jobs:
         run: dnf install -y --setopt=install_weak_deps=False git python3 uv
       - uses: actions/checkout@v4
       - name: Install
+        # Fedora's own python3 (what users run); Fedora's uv doesn't download interpreters.
         run: |
-          uv venv -p 3.12
+          uv venv -p /usr/bin/python3
           uv pip install -e '.[dev]'
       - name: Test
         run: .venv/bin/pytest -q
