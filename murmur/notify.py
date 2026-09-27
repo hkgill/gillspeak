@@ -21,6 +21,7 @@ class Notifier:
         self.sounds = sounds and shutil.which("pw-play") is not None
         self._id: int | None = None
         self._lock = asyncio.Lock()
+        self._sounds: set[asyncio.Task[None]] = set()  # keep references so playing sounds aren't garbage-collected
 
     async def _show(self, summary: str, body: str = "", *, urgency: str = "normal", timeout_ms: int = 0, transient: bool = True) -> None:
         if not self.notifications:
@@ -36,7 +37,7 @@ class Notifier:
                 proc = await asyncio.create_subprocess_exec(*argv, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL)
                 out, _ = await asyncio.wait_for(proc.communicate(), 2.0)
                 self._id = int(out.decode().strip().splitlines()[-1])
-            except (OSError, ValueError, IndexError, asyncio.TimeoutError) as e:
+            except (TimeoutError, OSError, ValueError, IndexError) as e:
                 log.debug("notify-send failed: %s", e)
 
     async def clear(self) -> None:
@@ -53,7 +54,7 @@ class Notifier:
                 stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
             )
             await asyncio.wait_for(proc.wait(), 2.0)
-        except (OSError, asyncio.TimeoutError) as e:
+        except (TimeoutError, OSError) as e:
             log.debug("close notification failed: %s", e)
 
     def play(self, name: str) -> None:
@@ -63,10 +64,11 @@ class Notifier:
         if not path.exists():
             return
         try:
-            loop = asyncio.get_running_loop()
-            loop.create_task(self._play(path))
+            task = asyncio.get_running_loop().create_task(self._play(path))
         except RuntimeError:
-            pass
+            return
+        self._sounds.add(task)
+        task.add_done_callback(self._sounds.discard)
 
     async def _play(self, path: Path) -> None:
         try:

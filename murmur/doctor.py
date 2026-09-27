@@ -2,15 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
 import os
 import shutil
+import socket
+import stat
 import subprocess
 import time
-from typing import Callable
+from collections.abc import Callable
+from pathlib import Path
 
 from . import paths
 
 OK, FAIL, WARN = "✅", "❌", "⚠️ "
+KEYD_INSTALLED = Path("/usr/local/libexec/murmur-keyd")
+INPUT_DIR = Path("/dev/input")
 
 
 class Report:
@@ -87,6 +93,10 @@ def run_doctor(skip_llm: bool = False, skip_mic: bool = False) -> int:
 
     for tool, pkg in (("notify-send", "libnotify"), ("pw-play", "pipewire-utils")):
         r.line(OK if shutil.which(tool) else WARN, f"{tool} installed", hint=f"sudo dnf install {pkg} (optional)")
+
+    if cfg.hotkey.hold_to_talk:
+        check_keyd(r, cfg.hotkey.keyd_socket)
+    check_input_permissions(r)
 
     # Daemon
     from .cli import send
@@ -182,3 +192,51 @@ def _check_gemini(r: Report, cfg: object) -> None:
 
     r.check("test generateContent", lambda: asyncio.run(one()),
             "check llm.extra_generation_config (thinking settings) against the Gemini docs for this model")
+
+
+def _sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def check_keyd(r: Report, sock_path: str, installed: Path = KEYD_INSTALLED) -> None:
+    """Hold-to-talk: the helper's socket answers, and its root-owned copy matches this package."""
+    install_hint = "run scripts/install-keyd.sh from the murmur source tree"
+    s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    s.settimeout(1.0)
+    try:
+        s.connect(sock_path)
+        r.line(OK, "hold-to-talk (murmur-keyd)", f"listening on {sock_path}")
+    except OSError as e:
+        r.line(WARN, "hold-to-talk (murmur-keyd)", f"not reachable at {sock_path} ({e.strerror or e})",
+               f"{install_hint}, or set hotkey.hold_to_talk = false")
+        return
+    finally:
+        s.close()
+    ours = Path(__file__).with_name("keyd.py")
+    try:
+        if _sha256(installed) != _sha256(ours):
+            r.line(WARN, "murmur-keyd version", f"{installed} differs from this murmur's keyd.py",
+                   f"{install_hint} to update it")
+        else:
+            r.line(OK, "murmur-keyd version", "matches this install")
+    except OSError as e:
+        r.line(WARN, "murmur-keyd version", f"cannot read {installed}: {e.strerror or e}", install_hint)
+
+
+def check_input_permissions(r: Report, input_dir: Path = INPUT_DIR) -> None:
+    """Warn if keyboards are readable by every user (some dictation apps install such udev rules)."""
+    if not input_dir.is_dir():
+        return
+    try:
+        exposed = sorted(
+            p.name for p in input_dir.glob("event*")
+            if p.stat().st_mode & (stat.S_IROTH | stat.S_IWOTH)
+        )
+    except OSError:
+        return
+    if exposed:
+        r.line(WARN, "input device permissions", f"{', '.join(exposed[:4])}{'…' if len(exposed) > 4 else ''} readable by all users",
+               "any program can log keystrokes; look for a rule in /etc/udev/rules.d setting MODE=\"0666\", "
+               "remove it, then: sudo udevadm trigger --subsystem-match=input")
+    else:
+        r.line(OK, "input device permissions", "not world-readable")

@@ -40,8 +40,13 @@ def load_cases(path: Path) -> list[dict[str, Any]]:
 
 
 def score(case: dict[str, Any], output: str) -> list[str]:
-    """must_contain is case-sensitive (names, figures); must_not_contain is case-insensitive."""
-    reasons = [f"missing {s!r}" for s in case["must_contain"] if s not in output]
+    """must_contain is case-sensitive (names, figures); an entry may be a list of acceptable
+    alternatives (e.g. ["milk", "Milk"] for a list item). must_not_contain is case-insensitive."""
+    reasons = []
+    for s in case["must_contain"]:
+        options = s if isinstance(s, list) else [s]
+        if not any(o in output for o in options):
+            reasons.append(f"missing {' or '.join(map(repr, options))}")
     low = output.lower()
     reasons += [f"contains {s!r}" for s in case["must_not_contain"] if s.lower() in low]
     return reasons

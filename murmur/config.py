@@ -25,7 +25,7 @@ DEFAULT_CONFIG_TOML = """\
 
 [audio]
 device = "default"          # "default" or a substring of the input device name
-keep_mic_open = true        # keeps a 300 ms pre-roll; GNOME shows the mic indicator while open
+keep_mic_open = false       # true keeps a 300 ms pre-roll, but the mic (and GNOME's indicator) stays on
 max_seconds = 300
 
 [vad]
@@ -48,7 +48,7 @@ min_words = 12
 
 [llm]
 provider = "gemini"                       # gemini | proxy | none
-model = "gemini-flash-lite-latest"        # pin exact ID after `murmur doctor`
+model = "gemini-3.5-flash-lite"           # pinned; `murmur doctor` lists the IDs your key can use
 timeout_s = 2.5
 connect_timeout_s = 1.0
 always = false
@@ -107,7 +107,7 @@ terms = ["Supabase", "Fedora", "Parakeet"]
 @dataclass
 class AudioConfig:
     device: str = "default"
-    keep_mic_open: bool = True
+    keep_mic_open: bool = False
     max_seconds: float = 300.0
 
 
@@ -144,7 +144,7 @@ class GateConfig:
 @dataclass
 class LlmConfig:
     provider: str = "gemini"
-    model: str = "gemini-flash-lite-latest"
+    model: str = "gemini-3.5-flash-lite"
     timeout_s: float = 2.5
     connect_timeout_s: float = 1.0
     always: bool = False

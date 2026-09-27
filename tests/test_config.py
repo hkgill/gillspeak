@@ -64,3 +64,17 @@ def test_bad_toml(tmp_path):
 def test_extra_generation_config_parsed():
     cfg = from_dict({"llm": {"extra_generation_config": '{"thinkingConfig": {"thinkingLevel": "minimal"}}'}})
     assert cfg.llm.extra_generation_dict() == {"thinkingConfig": {"thinkingLevel": "minimal"}}
+
+
+def test_shipped_defaults_are_the_tested_setup():
+    """Regression: defaults shipped an alias model (behaviour could change silently) and an always-open mic."""
+    cfg = Config()
+    assert not cfg.llm.model.endswith("latest") and cfg.llm.model == "gemini-3.5-flash-lite"
+    assert cfg.audio.keep_mic_open is False
+    assert cfg.hotkey.hold_to_talk is True and cfg.hotkey.keyd_socket == "/run/murmur-keyd/socket"
+
+
+def test_hotkey_section_types_are_checked():
+    with pytest.raises(ConfigError):
+        from_dict({"hotkey": {"hold_to_talk": "yes"}})
+    assert from_dict({"hotkey": {"hold_to_talk": False}}).hotkey.hold_to_talk is False

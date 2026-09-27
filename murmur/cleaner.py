@@ -16,7 +16,7 @@ from .config import Config
 
 log = logging.getLogger(__name__)
 
-PROMPT_VERSION = "clean_v1"
+PROMPT_VERSION = "clean_v2"
 GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta"
 WARM_IDLE_S = 300.0
 
@@ -111,7 +111,7 @@ class _HttpCleaner:
         total = self.cfg.llm.timeout_s
         try:
             resp = await asyncio.wait_for(self._client.post(url, headers=headers, json=json), timeout=total)
-        except (asyncio.TimeoutError, httpx.TimeoutException) as e:
+        except (TimeoutError, httpx.TimeoutException) as e:
             raise CleanerError("timeout", f"no response within {total}s") from e
         except (httpx.ConnectError, httpx.NetworkError) as e:
             raise CleanerError("offline", str(e)) from e

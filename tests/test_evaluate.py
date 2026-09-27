@@ -81,3 +81,30 @@ def test_run_eval_stops_when_still_rate_limited(tmp_path, monkeypatch, capsys):
     out = capsys.readouterr().out
     assert "stopping" in out and "Pass rate 1/1" in out and "stopped early after 1/3" in out
     assert route.call_count == 3  # nothing sent after the second 429
+
+
+def test_score_accepts_alternatives():
+    """Regression: a correctly capitalised list item ("Milk") failed a case-sensitive "milk"."""
+    case = {"must_contain": [["milk", "Milk"], "\n"], "must_not_contain": []}
+    assert score(case, "Shopping list\n- Milk") == []
+    assert score(case, "Shopping list\n- milk") == []
+    assert score(case, "Shopping list - bread") == ["missing 'milk' or 'Milk'", "missing '\\n'"]
+
+
+def test_every_case_is_passable():
+    """A forbidden phrase (matched case-insensitively) must not sit inside a required one,
+    or no output could satisfy the case."""
+    for c in load_cases(DEFAULT_SET):
+        wanted = [o for s in c["must_contain"] for o in (s if isinstance(s, list) else [s])]
+        for bad in c["must_not_contain"]:
+            clash = [w for w in wanted if bad.lower() in w.lower()]
+            assert not clash, f"line {c['_line']}: must_not_contain {bad!r} blocks must_contain {clash}"
+
+
+def test_shipped_prompt_exists_and_is_current():
+    from murmur.cleaner import PROMPT_VERSION, system_prompt
+
+    assert PROMPT_VERSION == "clean_v2"
+    text = system_prompt()
+    assert "let me rephrase" in text and "Output ONLY the final text" in text
+    assert system_prompt("clean_v1")  # older versions stay loadable for history rows

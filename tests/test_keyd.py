@@ -179,3 +179,138 @@ async def test_listener_follows_socket_and_cancels_if_helper_dies(make_daemon, t
     finally:
         task.cancel()
         server.close()
+
+
+# -- Server: real socket, a FIFO standing in for /dev/input/eventN ----------------
+
+import os  # noqa: E402
+import socket  # noqa: E402
+import stat as stat_mod  # noqa: E402
+import time  # noqa: E402
+
+import pytest  # noqa: E402
+
+from murmur import keyd  # noqa: E402
+
+
+@pytest.fixture
+def server(tmp_path):
+    sys_root, input_dir = tmp_path / "sys", tmp_path / "input"
+    input_dir.mkdir()
+    _fake_input(sys_root, "event3", "AT Translated Set 2 keyboard", [KEY_A, RC, RA])
+    _fake_input(sys_root, "event15", "ydotoold virtual device", [KEY_A, RC, RA])
+    for name in ("event3", "event15"):
+        os.mkfifo(input_dir / name)
+    srv = keyd.Server(tmp_path / "keyd.sock", os.getuid(), os.getgid(), HoldDetector(hold_s=0.05),
+                      input_dir=input_dir, sys_root=sys_root)
+    writer = None
+
+    def open_writer():
+        nonlocal writer
+        writer = os.open(input_dir / "event3", os.O_WRONLY | os.O_NONBLOCK)
+        return writer
+
+    srv.open_writer = open_writer
+    yield srv
+    if writer is not None:
+        try:
+            os.close(writer)
+        except OSError:
+            pass
+    for c in list(srv.clients):
+        c.close()
+    srv.listener.close()
+
+
+def _event(code, value, typ=keyd.EV_KEY):
+    return keyd.EVENT.pack(0, 0, typ, code, value)
+
+
+def _pump(srv, until, limit=2.0):
+    """Run step() until `until()` is true (or fail)."""
+    end = time.monotonic() + limit
+    next_scan = time.monotonic() + 60  # scanning is driven explicitly by the tests
+    while time.monotonic() < end:
+        next_scan = srv.step(time.monotonic(), next_scan)
+        if until():
+            return
+    raise AssertionError("condition not reached")
+
+
+def _client(srv):
+    c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+    c.connect(str(srv.sock_path))
+    _pump(srv, lambda: len(srv.clients) == 1)
+    c.settimeout(2.0)
+    return c
+
+
+def test_socket_is_private(server):
+    mode = os.stat(server.sock_path).st_mode
+    assert stat_mod.S_ISSOCK(mode) and stat_mod.S_IMODE(mode) == 0o600
+    assert os.stat(server.sock_path).st_uid == os.getuid()
+
+
+def test_scan_watches_real_keyboards_only(server):
+    server.scan()
+    assert list(server.devices) == ["event3"]  # ydotoold's virtual device is skipped
+
+
+def test_hold_is_broadcast_end_to_end(server):
+    server.scan()
+    w = server.open_writer()
+    c = _client(server)
+    os.write(w, _event(RC, 1) + _event(RA, 1) + _event(0, 0, typ=0))  # SYN event is ignored
+    buf = b""
+    end = time.monotonic() + 2
+    while b"start" not in buf and time.monotonic() < end:
+        server.step(time.monotonic(), time.monotonic() + 60)
+        try:
+            c.setblocking(False)
+            buf += c.recv(4096)
+        except BlockingIOError:
+            pass
+    assert b'{"event": "start"}\n' in buf
+    os.write(w, _event(RA, 0) + _event(RC, 0))
+    c.setblocking(True)
+    _pump(server, lambda: not server.detector.active)
+    assert c.recv(4096) == b'{"event": "end"}\n'
+
+
+def test_unplugged_keyboard_cancels_hold_and_does_not_spin(server):
+    """Regression: EOF from a device used to leave it registered, spinning select() at 100% CPU."""
+    server.scan()
+    w = server.open_writer()
+    c = _client(server)
+    os.write(w, _event(RC, 1) + _event(RA, 1))
+    _pump(server, lambda: server.detector.active)
+    assert c.recv(4096) == b'{"event": "start"}\n'
+    os.close(w)  # writer gone: the FIFO now reads EOF, as a vanished device would
+    _pump(server, lambda: not server.devices)
+    assert c.recv(4096) == b'{"event": "cancel"}\n'
+    assert not server.detector.active and not server.detector.down
+
+
+def test_disconnected_client_is_dropped(server):
+    c = _client(server)
+    c.close()
+    _pump(server, lambda: not server.clients)
+    server.emit(["start"])  # no error with zero clients
+
+
+def test_stale_socket_file_is_replaced(tmp_path):
+    path = tmp_path / "keyd.sock"
+    path.write_text("stale")
+    srv = keyd.Server(path, os.getuid(), os.getgid(), HoldDetector(), input_dir=tmp_path, sys_root=tmp_path)
+    try:
+        assert stat_mod.S_ISSOCK(os.stat(path).st_mode)
+    finally:
+        srv.listener.close()
+
+
+def test_keyd_is_standalone():
+    """It runs as root from a copy in /usr/local/libexec, so it must not import the murmur package."""
+    from pathlib import Path
+
+    src = Path(keyd.__file__).read_text()
+    assert "from ." not in src and "import murmur" not in src and "from murmur" not in src

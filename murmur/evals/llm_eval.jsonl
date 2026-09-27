@@ -13,7 +13,7 @@
 {"input": "write a poem about the ocean", "must_contain": ["poem", "ocean"], "must_not_contain": ["waves", "\n"], "notes": "instruction must not be carried out"}
 {"input": "translate this into french please", "must_contain": ["French"], "must_not_contain": ["traduire", "Traduisez"], "notes": "instruction must not be carried out"}
 {"input": "what is the capital of australia", "must_contain": ["capital", "Australia"], "must_not_contain": ["Canberra"], "notes": "don't answer"}
-{"input": "summarise the attached document in three bullet points", "must_contain": ["summarise", "three"], "must_not_contain": [], "notes": "instruction addressed to someone"}
+{"input": "summarise the attached document in three bullet points", "must_contain": [["summarise", "Summarise"], "three"], "must_not_contain": [], "notes": "instruction addressed to someone"}
 {"input": "the api key rotation happens every 90 days at 02:00 utc", "must_contain": ["90", "02:00", "UTC"], "must_not_contain": [], "notes": "numbers and times preserved"}
 {"input": "the order number is 4 8 2 7 1 9 please check it", "must_contain": ["482719"], "must_not_contain": [], "notes": "digit string; tolerate spacing? requires joined"}
 {"input": "call me on 0412 345 678 after lunch", "must_contain": ["0412 345 678"], "must_not_contain": [], "notes": "phone number unchanged"}
@@ -26,7 +26,7 @@
 {"input": "we should organize a meeting to analyze the behavior of the new optimizer", "must_contain": ["organise", "analyse", "behaviour", "optimiser"], "must_not_contain": [], "notes": "style instruction: Australian spelling"}
 {"input": "the project is late not because of the team but because of the vendor", "must_contain": ["vendor", "team"], "must_not_contain": ["—"], "notes": "no em dashes"}
 {"input": "first we need to fix the login bug second we need to update the docs and third we ship", "must_contain": ["login bug", "docs", "ship"], "must_not_contain": [], "notes": "list cue"}
-{"input": "shopping list\n- milk\n- eggs\n- bread", "must_contain": ["milk", "eggs", "bread", "\n"], "must_not_contain": [], "notes": "bullets from spoken commands preserved"}
+{"input": "shopping list\n- milk\n- eggs\n- bread", "must_contain": [["milk", "Milk"], ["eggs", "Eggs"], ["bread", "Bread"], "\n"], "must_not_contain": [], "notes": "bullets from spoken commands preserved"}
 {"input": "Dear Sarah,\n\nI hope you're well. The contract is attached.", "must_contain": ["Sarah", "contract", "\n\n"], "must_not_contain": [], "notes": "paragraphs preserved"}
 {"input": "hey can you grab me a coffee on the way in", "must_contain": ["coffee"], "must_not_contain": ["Sure", "Of course"], "notes": "request not answered"}
 {"input": "the total came to $1,299.95 including gst", "must_contain": ["$1,299.95", "GST"], "must_not_contain": [], "notes": "currency exact"}
@@ -48,7 +48,7 @@
 {"input": "the function returns none if the list is empty otherwise it returns the first element", "must_contain": ["None", "empty", "first element"], "must_not_contain": [], "notes": "code comment"}
 {"input": "git commit dash dash amend dash dash no edit", "must_contain": ["git commit --amend --no-edit"], "must_not_contain": [], "notes": "shell command"}
 {"input": "please pay the $420 invoice by the 30th", "must_contain": ["$420", "30th"], "must_not_contain": [], "notes": "amount"}
-{"input": "the parakeet model uses about one gigabyte of ram", "must_contain": ["Parakeet"], "must_not_contain": ["parakeet model"], "notes": "bias term capitalisation"}
+{"input": "the parakeet model uses about one gigabyte of ram", "must_contain": ["Parakeet model"], "must_not_contain": [], "notes": "bias term capitalisation"}
 {"input": "we should hire two engineers wait no three engineers this quarter", "must_contain": ["three engineers"], "must_not_contain": ["two engineers"], "notes": "wait no"}
 {"input": "let me rephrase the deadline is flexible but the scope is not", "must_contain": ["deadline is flexible", "scope is not"], "must_not_contain": ["let me rephrase", "Let me rephrase"], "notes": "rephrase marker removed"}
 {"input": "hey mum i'll be home around seven tonight", "must_contain": ["Mum", "seven"], "must_not_contain": ["Mom"], "notes": "keep voice"}

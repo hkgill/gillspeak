@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from murmur.history import History, Record, compute_stats, percentile, word_diff
 
@@ -21,7 +21,7 @@ def test_keep_days_zero_stores_metrics_only(tmp_path):
 
 def test_purge_drops_old_text(tmp_path):
     h = History(tmp_path / "h.db", keep_days=30)
-    old = (datetime.now(timezone.utc) - timedelta(days=40)).isoformat(timespec="seconds")
+    old = (datetime.now(UTC) - timedelta(days=40)).isoformat(timespec="seconds")
     h.save(Record(created_at=old, raw_text="old", final_text="old", total_ms=1))
     h.save(Record(raw_text="new", final_text="new", total_ms=1))
     assert h.purge() == 1
@@ -43,7 +43,7 @@ def test_percentile():
 
 
 def test_stats():
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     rows = [
         {"created_at": (now - timedelta(days=10)).isoformat(), "gate_llm": 1, "llm_status": "ok", "total_ms": 1000,
          "input_tokens": 1_000_000, "output_tokens": 100_000, "words": 20},

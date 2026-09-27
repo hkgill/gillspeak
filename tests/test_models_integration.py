@@ -53,7 +53,7 @@ def test_parakeet(model_dir, en_wav, hotwords):
     text = t.transcribe(en_wav)
     # Punctuation can vary with resampling; the words must not.
     words = [w.strip(",.").lower() for w in text.split()]
-    assert words == "ask not what your country can do for you ask what you can do for your country".split()
+    assert words == ["ask", "not", "what", "your", "country", "can", "do", "for", "you", "ask", "what", "you", "can", "do", "for", "your", "country"]
     assert text[0].isupper() and text.endswith(".")
 
 

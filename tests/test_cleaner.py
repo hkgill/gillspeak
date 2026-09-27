@@ -8,7 +8,7 @@ import respx
 from murmur.cleaner import GEMINI_BASE, CleanerError, GeminiCleaner, estimate_tokens, strip_echo
 from murmur.config import Config
 
-URL = f"{GEMINI_BASE}/models/gemini-flash-lite-latest:generateContent"
+URL = f"{GEMINI_BASE}/models/gemini-3.5-flash-lite:generateContent"
 
 
 def ok_response(text, finish="STOP"):
@@ -148,7 +148,7 @@ def test_strip_echo(out, original, expected):
 
 @respx.mock
 async def test_warm_uses_metadata_call(cfg):
-    route = respx.get(f"{GEMINI_BASE}/models/gemini-flash-lite-latest").mock(return_value=httpx.Response(200, json={}))
+    route = respx.get(f"{GEMINI_BASE}/models/gemini-3.5-flash-lite").mock(return_value=httpx.Response(200, json={}))
     cleaner = GeminiCleaner(cfg, "k")
     assert cleaner.needs_warm()
     await cleaner.warm()

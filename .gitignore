@@ -7,3 +7,5 @@ build/
 *.egg-info/
 tests/fixtures/audio/*.wav
 tests/fixtures/audio/*.txt
+.coverage
+.ruff_cache/

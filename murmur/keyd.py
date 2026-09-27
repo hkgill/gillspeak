@@ -122,9 +122,20 @@ def is_keyboard(event_name: str, sys_root: Path = Path("/sys/class/input")) -> b
 
 
 class Server:
-    def __init__(self, sock_path: Path, owner_uid: int, owner_gid: int, detector: HoldDetector):
+    def __init__(
+        self,
+        sock_path: Path,
+        owner_uid: int,
+        owner_gid: int,
+        detector: HoldDetector,
+        *,
+        input_dir: Path = Path("/dev/input"),
+        sys_root: Path = Path("/sys/class/input"),
+    ):
         self.sock_path = sock_path
         self.detector = detector
+        self.input_dir = input_dir
+        self.sys_root = sys_root
         self.sel = selectors.DefaultSelector()
         self.devices: dict[str, int] = {}  # eventN -> fd
         self.clients: list[socket.socket] = []
@@ -143,26 +154,27 @@ class Server:
 
     def scan(self) -> None:
         try:
-            names = {n for n in os.listdir("/dev/input") if n.startswith("event")}
+            names = {n for n in os.listdir(self.input_dir) if n.startswith("event")}
         except OSError:
             names = set()
         for name in names - self.devices.keys():
-            if not is_keyboard(name):
+            if not is_keyboard(name, self.sys_root):
                 continue
+            path = self.input_dir / name
             try:
-                fd = os.open(f"/dev/input/{name}", os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
+                fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK | os.O_CLOEXEC)
             except OSError as e:
-                log.warning("cannot open /dev/input/%s: %s", name, e)
+                log.warning("cannot open %s: %s", path, e)
                 continue
             self.devices[name] = fd
             self.sel.register(fd, selectors.EVENT_READ, name)
-            log.info("watching /dev/input/%s", name)
+            log.info("watching %s", path)
 
     def drop(self, name: str) -> None:
         fd = self.devices.pop(name)
         self.sel.unregister(fd)
         os.close(fd)
-        log.info("lost /dev/input/%s", name)
+        log.info("lost %s", self.input_dir / name)
         self.emit(self.detector.reset())
 
     def emit(self, events: list[str]) -> None:
@@ -188,40 +200,46 @@ class Server:
             if e.errno in (errno.EAGAIN, errno.EINTR):
                 return
             return self.drop(name)  # ENODEV: unplugged
+        if not data:  # EOF: the device is gone; staying registered would spin select() at 100% CPU
+            return self.drop(name)
         now = time.monotonic()
         for off in range(0, len(data) - EVENT.size + 1, EVENT.size):
             _s, _us, typ, code, value = EVENT.unpack_from(data, off)
             if typ == EV_KEY:
                 self.emit(self.detector.key(code, value, now))
 
+    def step(self, now: float, next_scan: float) -> float:
+        """One loop iteration: rescan if due, wait for input or the hold deadline, dispatch. Returns next_scan."""
+        if now >= next_scan:
+            self.scan()
+            next_scan = now + RESCAN_S
+        deadline = self.detector.deadline()
+        timeout = max(0.0, min(next_scan, deadline or next_scan) - now)
+        for key, _ in self.sel.select(timeout):
+            if key.data == "listener":
+                try:
+                    c, _ = self.listener.accept()
+                except OSError:
+                    continue
+                c.setblocking(False)
+                self.clients.append(c)
+                self.sel.register(c, selectors.EVENT_READ, "client")
+            elif key.data == "client":
+                try:
+                    gone = not key.fileobj.recv(256)
+                except OSError:
+                    gone = True
+                if gone:
+                    self._close_client(key.fileobj)
+            else:
+                self.read_device(key.data)
+        self.emit(self.detector.tick(time.monotonic()))
+        return next_scan
+
     def run(self) -> None:
         next_scan = 0.0
         while True:
-            now = time.monotonic()
-            if now >= next_scan:
-                self.scan()
-                next_scan = now + RESCAN_S
-            deadline = self.detector.deadline()
-            timeout = max(0.0, min(next_scan, deadline or next_scan) - now)
-            for key, _ in self.sel.select(timeout):
-                if key.data == "listener":
-                    try:
-                        c, _ = self.listener.accept()
-                    except OSError:
-                        continue
-                    c.setblocking(False)
-                    self.clients.append(c)
-                    self.sel.register(c, selectors.EVENT_READ, "client")
-                elif key.data == "client":
-                    try:
-                        gone = not key.fileobj.recv(256)
-                    except OSError:
-                        gone = True
-                    if gone:
-                        self._close_client(key.fileobj)
-                else:
-                    self.read_device(key.data)
-            self.emit(self.detector.tick(time.monotonic()))
+            next_scan = self.step(time.monotonic(), next_scan)
 
 
 def main() -> None:

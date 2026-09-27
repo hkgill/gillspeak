@@ -6,7 +6,7 @@ import difflib
 import sqlite3
 import threading
 from dataclasses import asdict, dataclass, field, fields
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -40,7 +40,7 @@ TEXT_COLUMNS = ("raw_text", "rules_text", "final_text")
 
 
 def now_iso() -> str:
-    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+    return datetime.now(UTC).isoformat(timespec="seconds")
 
 
 @dataclass
@@ -94,7 +94,7 @@ class History:
 
     def purge(self) -> int:
         """Retention: drop text older than keep_days (keep metrics for stats); keep_days=0 keeps no text at all."""
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=max(self.keep_days, 0))).isoformat(timespec="seconds")
+        cutoff = (datetime.now(UTC) - timedelta(days=max(self.keep_days, 0))).isoformat(timespec="seconds")
         sets = ", ".join(f"{c} = NULL" for c in TEXT_COLUMNS)
         with self._lock:
             cur = self._db.execute(
@@ -117,7 +117,7 @@ class History:
         return row[0] if row else None
 
     def rows_since(self, days: int) -> list[dict[str, Any]]:
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat(timespec="seconds")
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).isoformat(timespec="seconds")
         with self._lock:
             rows = self._db.execute("SELECT * FROM dictations WHERE created_at >= ?", (cutoff,)).fetchall()
         return [dict(r) for r in rows]
@@ -179,7 +179,7 @@ def compute_stats(rows: list[dict[str, Any]], days: int, input_per_m: float, out
     span_days = days
     if rows:
         first = min(datetime.fromisoformat(r["created_at"]) for r in rows)
-        span_days = max(1.0, min(days, (datetime.now(timezone.utc) - first).total_seconds() / 86400))
+        span_days = max(1.0, min(days, (datetime.now(UTC) - first).total_seconds() / 86400))
     return Stats(
         days=days,
         dictations=len(rows),

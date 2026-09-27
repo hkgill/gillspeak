@@ -97,10 +97,7 @@ def cmd_set_key(a: argparse.Namespace) -> int:
     from . import secrets
 
     try:
-        if a.proxy:
-            where = secrets.set_key(secrets.PROXY_USER, "MURMUR_PROXY_TOKEN")
-        else:
-            where = secrets.set_key()
+        where = secrets.set_key(secrets.PROXY_USER, "MURMUR_PROXY_TOKEN") if a.proxy else secrets.set_key()
     except ValueError as e:
         print(e, file=sys.stderr)
         return 1

@@ -132,7 +132,7 @@ async def test_llm_path(make_daemon):
     text, mode, bias = d.cleaner.calls[0]
     assert text.startswith("So the meeting with Supabase folks")  # rules ran first
     assert (mode, bias) == ("default", ["Supabase"])
-    assert row["llm_status"] == "ok" and row["gate_llm"] == 1 and row["prompt_ver"] == "clean_v1"
+    assert row["llm_status"] == "ok" and row["gate_llm"] == 1 and row["prompt_ver"] == "clean_v2"
     assert row["input_tokens"] == 300 and row["llm_model"] == "fake-lite"
     assert row["inject_status"] == "pasted"
     assert row["raw_text"] == LONG_RAW
@@ -316,3 +316,27 @@ async def test_reload(make_daemon):
     assert resp["ok"], resp
     assert d.cfg.gate.min_words == 3
     assert d.cleaner is None
+
+
+async def test_empty_transcript_is_logged_not_silent(make_daemon, caplog):
+    """Regression: a hold that transcribed to nothing left no trace in the journal."""
+    import logging
+
+    d = make_daemon(raw="   ")
+    with caplog.at_level(logging.INFO, logger="murmurd"):
+        row = await dictate(d)
+    assert row is None and not d.injector.inserted
+    assert "empty transcript" in caplog.text
+
+
+async def test_dictated_text_stays_out_of_info_logs(make_daemon, caplog):
+    """Regression (security review): rejected LLM output was logged verbatim at INFO, putting
+    dictated text into the journal."""
+    import logging
+
+    d = make_daemon(cleaner=FakeCleaner("Sure! Here is the cleaned text: meeting Friday with Supabase."))
+    with caplog.at_level(logging.INFO, logger="murmurd"):
+        await dictate(d)
+    info = " ".join(r.getMessage() for r in caplog.records if r.levelno >= logging.INFO)
+    assert "LLM output rejected" in info
+    assert "Supabase" not in info and "meeting" not in info

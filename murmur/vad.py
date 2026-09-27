@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import logging
 import threading
 from pathlib import Path
@@ -118,7 +119,7 @@ def plan_chunks(
     if total <= max_len:
         return [(0, total)]
     # Candidate cut points: midpoints of the gaps between speech segments.
-    cuts = sorted((a_end + b_start) // 2 for (_, a_end), (b_start, _) in zip(segs, segs[1:]) if b_start > a_end)
+    cuts = sorted((a_end + b_start) // 2 for (_, a_end), (b_start, _) in itertools.pairwise(segs) if b_start > a_end)
     chunks: list[Segment] = []
     start = 0
     while total - start > max_len:

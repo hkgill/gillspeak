@@ -7,8 +7,9 @@ import logging
 import threading
 import time
 import wave
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 import numpy as np
 
@@ -207,6 +208,6 @@ def read_wav(path: Path, target_rate: int = SAMPLE_RATE) -> np.ndarray:
     if channels > 1:
         audio = audio.reshape(-1, channels).mean(axis=1)
     if rate != target_rate and len(audio):
-        n = int(round(len(audio) * target_rate / rate))
+        n = round(len(audio) * target_rate / rate)
         audio = np.interp(np.linspace(0, len(audio) - 1, n), np.arange(len(audio)), audio).astype(np.float32)
     return audio

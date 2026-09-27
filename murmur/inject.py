@@ -50,7 +50,7 @@ async def run(
     )
     try:
         out, err = await asyncio.wait_for(proc.communicate(stdin), timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         proc.kill()
         await proc.wait()
         raise
@@ -129,13 +129,13 @@ class WaylandInjector(_ClipboardInjector):
                 return None
             code, out, _ = await run(["wl-paste", "--no-newline", "--type", "text"], timeout=1.0)
             return out.decode("utf-8") if code == 0 else None
-        except (OSError, asyncio.TimeoutError, UnicodeDecodeError):
+        except (TimeoutError, OSError, UnicodeDecodeError):
             return None
 
     async def copy(self, text: str) -> None:
         try:
             code, _, _ = await run(["wl-copy", "--type", "text/plain;charset=utf-8"], stdin=text.encode("utf-8"), capture=False)
-        except (OSError, asyncio.TimeoutError) as e:
+        except (TimeoutError, OSError) as e:
             raise InjectError(f"wl-copy failed: {e}", copied=False, kind="clipboard") from e
         if code != 0:
             raise InjectError(f"wl-copy exited {code}", copied=False, kind="clipboard")
@@ -146,7 +146,7 @@ class WaylandInjector(_ClipboardInjector):
             raise InjectError(f"ydotool socket {sock} not found", copied=True, kind="ydotool")
         try:
             code, _, err = await run(["ydotool", *args], stdin=stdin, env={**os.environ, "YDOTOOL_SOCKET": str(sock)})
-        except (OSError, asyncio.TimeoutError) as e:
+        except (TimeoutError, OSError) as e:
             raise InjectError(f"ydotool failed: {e}", copied=True, kind="ydotool") from e
         msg = err.decode(errors="replace")
         if code != 0 or "failed to connect" in msg.lower():
@@ -169,13 +169,13 @@ class X11Injector(_ClipboardInjector):
         try:
             code, out, _ = await run(["xclip", "-selection", "clipboard", "-o", "-t", "UTF8_STRING"], timeout=1.0)
             return out.decode("utf-8") if code == 0 else None
-        except (OSError, asyncio.TimeoutError, UnicodeDecodeError):
+        except (TimeoutError, OSError, UnicodeDecodeError):
             return None
 
     async def copy(self, text: str) -> None:
         try:
             code, _, _ = await run(["xclip", "-selection", "clipboard", "-i"], stdin=text.encode("utf-8"), capture=False)
-        except (OSError, asyncio.TimeoutError) as e:
+        except (TimeoutError, OSError) as e:
             raise InjectError(f"xclip failed: {e}", copied=False, kind="clipboard") from e
         if code != 0:
             raise InjectError(f"xclip exited {code}", copied=False, kind="clipboard")
@@ -183,7 +183,7 @@ class X11Injector(_ClipboardInjector):
     async def _paste(self, chord: str) -> None:
         try:
             code, _, err = await run(["xdotool", "key", "--clearmodifiers", chord])
-        except (OSError, asyncio.TimeoutError) as e:
+        except (TimeoutError, OSError) as e:
             raise InjectError(f"xdotool failed: {e}", copied=True, kind="xdotool") from e
         if code != 0:
             raise InjectError(f"xdotool: {err.decode(errors='replace').strip()}", copied=True, kind="xdotool")

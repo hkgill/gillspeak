@@ -395,7 +395,8 @@ class Daemon:
         text = self.rules.apply(raw)
         rec.rules_text = text
         if not text.strip():
-            log.info("empty transcript (%.1fs of audio, raw %r); discarding", rec.audio_seconds, raw[:80])
+            log.info("empty transcript (%.1fs of audio, %d raw chars); discarding", rec.audio_seconds, len(raw))
+            log.debug("empty transcript raw text: %r", raw[:80])  # dictated text stays out of the journal by default
             await self.notifier.clear()
             return
 
@@ -460,7 +461,8 @@ class Daemon:
             text, res.text, opts.mode, bias_terms=self.dictionary.bias, check_bias=self.cfg.llm.check_bias_terms
         )
         if not ok:
-            log.info("LLM output rejected (%s): %r", why, res.text[:200])
+            log.info("LLM output rejected (%s); pasting the rules text", why)
+            log.debug("rejected LLM output: %r", res.text[:200])
             return text, f"rejected:{why}", None
         return self.rules.apply_dictionary(res.text), "ok", None
 
@@ -491,7 +493,7 @@ async def _socket_alive(sock: Path) -> bool:
         _, writer = await asyncio.wait_for(asyncio.open_unix_connection(str(sock)), 0.5)
         writer.close()
         return True
-    except (OSError, asyncio.TimeoutError):
+    except (TimeoutError, OSError):
         return False
 
 
