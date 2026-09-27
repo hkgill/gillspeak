@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/assets/icon.png" width="96" height="96" alt="gillspeak mark: a speech bubble holding a g"></p>
+
 # gillspeak
 
 [![CI](https://github.com/hkgill/gillspeak/actions/workflows/ci.yml/badge.svg)](https://github.com/hkgill/gillspeak/actions/workflows/ci.yml)
@@ -24,6 +26,8 @@ Hold a key, talk, and clean text lands at your cursor in any app. **Local only: 
 | Debian / Ubuntu | ⚠️ Untested. May need `ydotool` 1.x; older 0.1.x releases use a different command syntax |
 | Android 11+ | 🧪 Experimental companion app in [`android/`](android/README.md): a floating dictation bubble over any keyboard, local only by default |
 | macOS, Windows | ❌ Not supported |
+
+<p align="center"><img src="docs/assets/bubble-states.png" width="600" alt="the Android bubble's states: idle, listening, transcribing, retry"></p>
 
 Needs Python 3.12+, a microphone, and about 1 GB of RAM for the speech model. Reports from other setups are welcome: open an issue with your `gillspeak doctor` output.
 

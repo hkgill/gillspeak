@@ -1,6 +1,10 @@
+<p align="center"><img src="../docs/assets/icon.png" width="96" height="96" alt="gillspeak mark: a speech bubble holding a g"></p>
+
 # gillspeak for Android (experimental)
 
 Dictation for Android: hold the mic, talk, let go, and clean text lands in the focused field. Two ways in:
+
+<p align="center"><img src="../docs/assets/bubble-states.png" width="640" alt="the floating bubble's states: idle, listening, transcribing, retry"></p>
 
 - **Floating bubble** (recommended): keep your usual keyboard; a small "G" appears over it whenever you type. Hold it to talk, or tap to start and tap again to finish. While recording it stretches into a red pill with a live waveform and timer. Drag it anywhere, including onto the keyboard; size and shape (square or a wide bar) are set in the app. It uses an accessibility service to see when a keyboard and a text field are on screen and to type into that field; it skips password fields.
 - **gillspeak keyboard**: a full-screen mic keyboard, for when you'd rather switch keyboards.
