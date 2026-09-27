@@ -22,4 +22,11 @@ Before every commit:
 
 Never print a secret either: not in command output, logs, error messages, commit messages, PR descriptions, or chat. When checking whether a key is present, count matches (`grep -c`) instead of showing them.
 
+## Keep personal data out of the repo
+
+This repo is public. Commit messages, PR titles and descriptions, and tracked files must not contain:
+- links to AI coding sessions (e.g. `claude.ai/code/session_…`); a plain `Co-Authored-By` line is fine
+- email addresses other than GitHub noreply addresses, phone numbers, or IP addresses
+- Wi-Fi network names, device serials or pairing codes, or anything about the people testing the app
+
 If a secret is ever committed, even locally and unpushed: stop and tell the user immediately. The key must be **revoked and replaced**; rewriting git history is not enough once it has left the machine.
