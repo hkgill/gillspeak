@@ -247,7 +247,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
             main.removeCallbacks(clearMessage)
             if (!mic.canRetry) main.postDelayed(clearMessage, 4000)
             label()
-        } else if (text != "Murmur") {
+        } else if (text != Settings.APP_NAME) {
             Toast.makeText(this, text, Toast.LENGTH_SHORT).show()
         }
     }
@@ -351,7 +351,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         val set = node != null && setText(node, text)
         var pasted = false
         if (!set) {
-            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Murmur", text))
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(Settings.APP_NAME, text))
             pasted = node?.performAction(AccessibilityNodeInfo.ACTION_PASTE) == true
             if (!pasted) Toast.makeText(this, "Copied. Paste it where you want it", Toast.LENGTH_LONG).show()
         }

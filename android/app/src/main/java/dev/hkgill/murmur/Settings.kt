@@ -80,6 +80,8 @@ class Settings(context: Context) {
     fun recentLog(): List<String> = prefs.getString("log", "").orEmpty().split(SEP).filter { it.isNotBlank() }
 
     companion object {
+        /** The name people see. The package id stays dev.hkgill.murmur so installs upgrade in place. */
+        const val APP_NAME = "gillspeak"
         const val DEFAULT_MODEL = "gemini-3.5-flash-lite"
         const val DEFAULT_REPLACE = "super base = Supabase\nget hub = GitHub\ncube control = kubectl"
         const val DEFAULT_BIAS = "Supabase, Fedora, Parakeet"

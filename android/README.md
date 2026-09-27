@@ -1,9 +1,9 @@
-# Murmur for Android (experimental)
+# gillspeak for Android (experimental)
 
-Dictation for Android: hold the mic, talk, let go, and clean text lands in the focused field. Two ways in:
+The Android app of Murmur, called **gillspeak** on the phone. Dictation for Android: hold the mic, talk, let go, and clean text lands in the focused field. Two ways in:
 
 - **Floating bubble** (recommended): keep your usual keyboard; a small "G" appears over it whenever you type. Hold it to talk, or tap to start and tap again to finish. While recording it stretches into a red pill with a live waveform and timer. Drag it anywhere, including onto the keyboard; size and shape (square or a wide bar) are set in the app. It uses an accessibility service to see when a keyboard and a text field are on screen and to type into that field; it skips password fields.
-- **Murmur keyboard**: a full-screen mic keyboard, for when you'd rather switch keyboards.
+- **gillspeak keyboard**: a full-screen mic keyboard, for when you'd rather switch keyboards.
 
 - One Gemini request transcribes the audio *and* cleans it with the desktop `clean_v2` prompt. Unlike the desktop app, **audio leaves the device**; there is no on-device speech recognition yet.
 - The desktop rules (`rules.py`) and validator (`validate.py`) are ported to Kotlin. If Gemini's cleaned text fails validation, the rules-cleaned transcript is inserted instead.
@@ -30,7 +30,7 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 Wireless debugging (Android 11+): Developer options → Wireless debugging → Pair device with pairing code, then `adb pair IP:PAIRPORT CODE` and `adb connect IP:PORT` (the port on the main Wireless debugging screen).
 
-Then open the app and allow the microphone. For the bubble, turn on **Murmur bubble** under Settings → Accessibility → Installed apps (apps installed from a file rather than adb may first need *App info → ⋮ → Allow restricted settings*). For the keyboard, turn on **Murmur voice** in keyboard settings and switch to it. On Samsung phones, *Settings → General management → Keyboard list and default → Keyboard button on navigation bar* makes switching quicker.
+Then open the app and allow the microphone. For the bubble, turn on **gillspeak bubble** under Settings → Accessibility → Installed apps (apps installed from a file rather than adb may first need *App info → ⋮ → Allow restricted settings*). For the keyboard, turn on **gillspeak keyboard** in keyboard settings and switch to it. On Samsung phones, *Settings → General management → Keyboard list and default → Keyboard button on navigation bar* makes switching quicker.
 
 ## Develop
 

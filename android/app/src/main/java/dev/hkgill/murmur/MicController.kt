@@ -95,7 +95,7 @@ class MicController(private val context: Context, private val ui: Ui) {
     fun idleHint(): Pair<String, Boolean> = when {
         !hasMicPermission() -> "Tap here to allow the microphone" to true
         settings.apiKey.isBlank() -> "Tap here to add a Gemini API key" to true
-        else -> "Murmur" to false
+        else -> Settings.APP_NAME to false
     }
 
     private fun start(): Boolean {

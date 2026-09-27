@@ -181,7 +181,7 @@ class MurmurIme : InputMethodService(), MicController.Ui {
     override fun insert(text: String) {
         val ic = currentInputConnection
         if (ic == null) {
-            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText("Murmur", text))
+            getSystemService(ClipboardManager::class.java).setPrimaryClip(ClipData.newPlainText(Settings.APP_NAME, text))
             status("No text field. Copied to clipboard")
             return
         }

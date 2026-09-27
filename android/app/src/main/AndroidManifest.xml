@@ -7,7 +7,7 @@
     <application
         android:allowBackup="false"
         android:icon="@android:drawable/ic_btn_speak_now"
-        android:label="Murmur"
+        android:label="@string/app_name"
         android:theme="@android:style/Theme.DeviceDefault.DayNight">
 
         <activity
@@ -23,7 +23,7 @@
         <service
             android:name=".MurmurIme"
             android:exported="true"
-            android:label="Murmur voice"
+            android:label="@string/keyboard_label"
             android:permission="android.permission.BIND_INPUT_METHOD">
             <intent-filter>
                 <action android:name="android.view.InputMethod" />
@@ -36,7 +36,7 @@
         <service
             android:name=".BubbleService"
             android:exported="true"
-            android:label="Murmur bubble"
+            android:label="@string/bubble_label"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

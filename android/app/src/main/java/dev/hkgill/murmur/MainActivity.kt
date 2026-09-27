@@ -67,12 +67,12 @@ class MainActivity : Activity() {
             orientation = LinearLayout.VERTICAL
             setPadding(dp(16), dp(24), dp(16), dp(32))
         }
-        column.addView(text("Murmur", 34f, c.text, bold = true))
+        column.addView(text(Settings.APP_NAME, 34f, c.text, bold = true))
         column.addView(text("Talk, and clean text lands where you're typing.", 16f, c.dim).apply { setPadding(0, dp(4), 0, dp(20)) })
 
         micRow = setupRow("Microphone") { requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), 1) }
         bubbleRow = setupRow("Floating bubble") { startActivity(Intent(ACTION_ACCESSIBILITY_SETTINGS)) }
-        keyboardRow = setupRow("Murmur keyboard") {
+        keyboardRow = setupRow("${Settings.APP_NAME} keyboard") {
             val ime = getSystemService(InputMethodManager::class.java)
             if (ime.enabledInputMethodList.any { it.packageName == packageName }) ime.showInputMethodPicker()
             else startActivity(Intent(ACTION_INPUT_METHOD_SETTINGS))
@@ -193,7 +193,7 @@ class MainActivity : Activity() {
         val services = Secure.getString(contentResolver, Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty()
         val bubble = ComponentName(this, BubbleService::class.java)
         val bubbleOn = services.split(':').any { it == bubble.flattenToString() || it == bubble.flattenToShortString() }
-        showRow(bubbleRow, bubbleOn, "2", if (bubbleOn) "On. It appears whenever you type" else "Tap, then turn on Murmur bubble")
+        showRow(bubbleRow, bubbleOn, "2", if (bubbleOn) "On. It appears whenever you type" else "Tap, then turn on ${getString(R.string.bubble_label)}")
 
         val keyboardOn = getSystemService(InputMethodManager::class.java).enabledInputMethodList.any { it.packageName == packageName }
         showRow(keyboardRow, keyboardOn, "3", if (keyboardOn) "On. Tap to switch keyboards" else "Optional: a full-screen mic keyboard")
