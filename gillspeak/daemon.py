@@ -480,7 +480,7 @@ class Daemon:
         if self.cleaner is None:
             return text, "error:no_cleaner", None
         rec.llm_model = self.cleaner.model
-        rec.prompt_ver = PROMPT_VERSION
+        rec.prompt_ver = getattr(self.cleaner, "prompt_ver", PROMPT_VERSION)
         t0 = time.monotonic()
         try:
             res = await self.cleaner.clean(

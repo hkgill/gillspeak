@@ -25,10 +25,11 @@ class ModelSpec:
     sha256: str        # of the release asset, pinned
     dirname: str       # extracted directory ("" for single files)
     files: dict[str, str]  # role -> file name inside dirname
+    source: str = ""   # full download URL when it isn't a sherpa-onnx release asset
 
     @property
     def url(self) -> str:
-        return f"{RELEASE}/{self.archive}"
+        return self.source or f"{RELEASE}/{self.archive}"
 
 
 # SHA256 values pinned from the sherpa-onnx `asr-models` release on 2026-09-26.
@@ -70,6 +71,43 @@ MODELS: dict[str, ModelSpec] = {
 }
 
 ASR_ENGINES = [k for k in MODELS if k != "silero-vad"]
+
+# Local clean-up (llm.provider = "local"): llama.cpp's server and a small instruct model, both pinned.
+LLAMA_BUILD = "b11223"
+_LLAMA_RELEASE = f"https://github.com/ggml-org/llama.cpp/releases/download/{LLAMA_BUILD}"
+LLAMA_SERVERS: dict[str, ModelSpec] = {
+    arch: ModelSpec(
+        "llama-server",
+        f"llama-{LLAMA_BUILD}-bin-ubuntu-{asset}.tar.gz",
+        sha,
+        f"llama-{LLAMA_BUILD}",
+        {"server": "llama-server"},
+        f"{_LLAMA_RELEASE}/llama-{LLAMA_BUILD}-bin-ubuntu-{asset}.tar.gz",
+    )
+    for arch, asset, sha in (
+        ("x86_64", "x64", "9ce07ebd35ccdbae598ef34d21607564c4a21956cf075409f82e4f4fe871ea5e"),
+        ("aarch64", "arm64", "e4280e5c71369a04bef5a171e50ab77fd923f6c86318106b19942397c4ded75f"),
+    )
+}
+
+# Apache-2.0. Pinned to a Hugging Face commit so the file can't change underneath the checksum.
+LLM_MODELS: dict[str, ModelSpec] = {
+    "qwen3.5-2b": ModelSpec(
+        "qwen3.5-2b",
+        "Qwen3.5-2B-Q4_K_M.gguf",
+        "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+        "",
+        {"model": "Qwen3.5-2B-Q4_K_M.gguf"},
+        "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q4_K_M.gguf",
+    ),
+}
+
+
+def llama_server_spec() -> ModelSpec | None:
+    """The llama-server build for this CPU, or None where there's no prebuilt one."""
+    import platform
+
+    return LLAMA_SERVERS.get(platform.machine())
 
 
 def model_files(spec: ModelSpec, model_dir: Path) -> dict[str, Path]:

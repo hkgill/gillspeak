@@ -107,7 +107,7 @@ def cmd_set_key(a: argparse.Namespace) -> int:
 
 def cmd_download(a: argparse.Namespace) -> int:
     from .config import load
-    from .models import ASR_ENGINES, MODELS, download
+    from .models import ASR_ENGINES, LLM_MODELS, MODELS, download, llama_server_spec
 
     cfg = load()
     names = ["silero-vad"] + (ASR_ENGINES if a.all else [a.engine or cfg.asr.engine])
@@ -116,6 +116,15 @@ def cmd_download(a: argparse.Namespace) -> int:
             print(f"unknown engine {name!r}; choose from {', '.join(ASR_ENGINES)}", file=sys.stderr)
             return 1
         download(MODELS[name], cfg.asr.model_path, force=a.force)
+    if a.llm or cfg.llm.provider == "local":
+        server = llama_server_spec()
+        if server is None:
+            import platform
+
+            print(f"local clean-up: no prebuilt llama-server for {platform.machine()}", file=sys.stderr)
+            return 1
+        download(server, cfg.asr.model_path, force=a.force)
+        download(LLM_MODELS[cfg.llm.local_model], cfg.asr.model_path, force=a.force)
     return 0
 
 
@@ -165,9 +174,10 @@ def build_parser() -> argparse.ArgumentParser:
     k.add_argument("--proxy", action="store_true", help="store the v2 proxy bearer token instead")
     k.set_defaults(func=cmd_set_key)
 
-    d = sub.add_parser("download-models", help="fetch ASR + VAD models (SHA256-verified)")
+    d = sub.add_parser("download-models", help="fetch ASR + VAD models, and the local clean-up model with --llm (SHA256-verified)")
     d.add_argument("--engine", help="ASR engine (default: asr.engine from config)")
     d.add_argument("--all", action="store_true", help="all ASR engines (for `gillspeak bench`)")
+    d.add_argument("--llm", action="store_true", help="also the local clean-up model and llama-server (~1.3 GB)")
     d.add_argument("--force", action="store_true")
     d.set_defaults(func=cmd_download)
 
@@ -186,7 +196,7 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument("--limit", type=int, help="run only the first N cases")
     e.add_argument("--delay", type=float, default=4.0, help="seconds between requests (default 4, ~15/min for free-tier keys)")
     e.add_argument("-v", "--verbose", action="store_true")
-    e.add_argument("--provider", choices=["gemini", "proxy"], help="evaluate this provider for this run only (llm.provider is none by default)")
+    e.add_argument("--provider", choices=["local", "gemini", "proxy"], help="evaluate this provider for this run only (llm.provider is none by default)")
     e.set_defaults(func=cmd_eval)
     return p
 

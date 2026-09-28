@@ -65,6 +65,9 @@ async def _run_cases(
     rules = RulesEngine(cfg.rules, dictionary)
     cleaner = make_cleaner(cfg)
     await cleaner.warm()
+    wait_ready = getattr(cleaner, "wait_ready", None)
+    if wait_ready is not None:
+        await wait_ready()  # a local model's first start can take longer than one dictation's budget
     wait = RATE_LIMIT_WAIT_S if rate_limit_wait is None else rate_limit_wait
     results: list[CaseResult] = []
     stopped = False
@@ -112,22 +115,23 @@ async def _run_cases(
 def run_eval(
     file: str | None = None, *, limit: int | None = None, delay: float = 0.0, verbose: bool = False, provider: str | None = None
 ) -> int:
-    """Scores the cloud clean-up. [provider] overrides llm.provider for this run only (it's "none" by default)."""
+    """Scores the LLM clean-up. [provider] overrides llm.provider for this run only (it's "none" by default)."""
     from .config import load
 
     cfg = load()
     if provider:
         cfg.llm.provider = provider
     if cfg.llm.provider == "none":
-        print("Cloud clean-up is off (llm.provider = none), so there is nothing to evaluate.")
-        print("To score Gemini clean-up without turning it on: gillspeak eval --provider gemini")
+        print("LLM clean-up is off (llm.provider = none), so there is nothing to evaluate.")
+        print("To score it without turning it on: gillspeak eval --provider local (or gemini)")
         return 1
     path = Path(file) if file else DEFAULT_SET
     if not path.exists():
         print(f"{path} not found")
         return 1
     cases = load_cases(path)[:limit]
-    print(f"{len(cases)} cases from {path}, model {cfg.llm.model}\n")
+    model = cfg.llm.local_model if cfg.llm.provider == "local" else cfg.llm.model
+    print(f"{len(cases)} cases from {path}, model {model}\n")
     results, stopped = asyncio.run(_run_cases(cfg, cases, verbose, delay))
     passed = sum(r.passed for r in results)
     lat = [r.ms for r in results]

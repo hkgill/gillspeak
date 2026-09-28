@@ -1,4 +1,4 @@
-"""LLM clean-up: GeminiCleaner (v1), ProxyCleaner (v2 contract), NoopCleaner."""
+"""LLM clean-up: LocalCleaner (local_llm.py), GeminiCleaner, ProxyCleaner (v2 contract), NoopCleaner."""
 
 from __future__ import annotations
 
@@ -236,6 +236,13 @@ def make_cleaner(cfg: Config) -> Cleaner:
         if not key:
             raise CleanerError("auth", "no Gemini API key (run `gillspeak set-key`)")
         return GeminiCleaner(cfg, key)
+    if cfg.llm.provider == "local":
+        from .local_llm import LocalCleaner, missing_files
+
+        problem = missing_files(cfg)
+        if problem:
+            raise CleanerError("error", f"local clean-up isn't installed ({problem}; run `gillspeak download-models --llm`)")
+        return LocalCleaner(cfg)
     if cfg.llm.provider == "proxy":
         return ProxyCleaner(cfg, secrets.get_proxy_token() or "")
     return NoopCleaner()

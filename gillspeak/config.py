@@ -46,11 +46,17 @@ disabled_commands = []      # e.g. ["period", "bullet point"]
 [gate]
 min_words = 12
 
-# Optional AI clean-up in the cloud. Off by default: with "none", nothing leaves this computer (speech
-# recognition is always local; the rules still remove fillers and apply spoken commands and the dictionary).
-# "gemini" sends the transcript *text* (never audio) of longer or corrected dictations to Google.
+# Optional AI clean-up of longer or corrected dictations ("Thursday, sorry Friday" -> "Friday").
+# Off by default: with "none", the rules still remove fillers and apply spoken commands and the dictionary.
+# "local" runs a small model (Qwen3.5 2B) on this computer: nothing leaves it; about 2 GB of RAM while
+#   loaded, freed after local_idle_unload_s. Fetch it with `gillspeak download-models --llm`.
+# "gemini" sends the transcript *text* (never audio) to Google.
 [llm]
-provider = "none"                         # none | gemini | proxy
+provider = "none"                         # none | local | gemini | proxy
+local_model = "qwen3.5-2b"
+local_timeout_s = 6.0                     # slower than the cloud on older CPUs; past this the rules text is pasted
+local_idle_unload_s = 300                 # free the model's RAM after this many idle seconds
+local_threads = 0                         # 0 = half the logical CPUs
 model = "gemini-3.5-flash-lite"           # pinned; `gillspeak doctor` lists the IDs your key can use
 timeout_s = 2.5
 connect_timeout_s = 1.0
@@ -146,8 +152,12 @@ class GateConfig:
 
 @dataclass
 class LlmConfig:
-    provider: str = "none"  # local only unless the user opts in to cloud clean-up
+    provider: str = "none"  # nothing leaves the computer unless the user opts in to cloud clean-up
     model: str = "gemini-3.5-flash-lite"
+    local_model: str = "qwen3.5-2b"
+    local_timeout_s: float = 6.0
+    local_idle_unload_s: float = 300.0
+    local_threads: int = 0
     timeout_s: float = 2.5
     connect_timeout_s: float = 1.0
     always: bool = False
@@ -234,8 +244,13 @@ class Config:
     debug: DebugConfig = field(default_factory=DebugConfig)
 
     def validate(self) -> None:
-        if self.llm.provider not in ("gemini", "proxy", "none"):
-            raise ConfigError(f"llm.provider must be gemini, proxy or none (got {self.llm.provider!r})")
+        if self.llm.provider not in ("local", "gemini", "proxy", "none"):
+            raise ConfigError(f"llm.provider must be local, gemini, proxy or none (got {self.llm.provider!r})")
+        if self.llm.provider == "local":
+            from .models import LLM_MODELS
+
+            if self.llm.local_model not in LLM_MODELS:
+                raise ConfigError(f"llm.local_model must be one of {', '.join(LLM_MODELS)} (got {self.llm.local_model!r})")
         if self.llm.provider == "proxy" and not self.llm.proxy_url:
             raise ConfigError("llm.provider = 'proxy' requires llm.proxy_url")
         if self.inject.method not in ("paste", "type"):

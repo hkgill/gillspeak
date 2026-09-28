@@ -136,6 +136,14 @@ def run_doctor(skip_llm: bool = False, skip_mic: bool = False) -> int:
     # LLM
     if cfg.llm.provider == "gemini" and not skip_llm:
         _check_gemini(r, cfg)
+    elif cfg.llm.provider == "local":
+        from .local_llm import missing_files
+
+        problem = missing_files(cfg, checksums=True)
+        if problem:
+            r.line(FAIL, "local clean-up", problem, "gillspeak download-models --llm")
+        else:
+            r.line(OK, "local clean-up", f"{cfg.llm.local_model} on this computer; nothing leaves it (~2 GB RAM while loaded)")
     elif cfg.llm.provider == "none":
         r.line(OK, "LLM clean-up", "off: local only, nothing leaves this computer (llm.provider = none)")
 
