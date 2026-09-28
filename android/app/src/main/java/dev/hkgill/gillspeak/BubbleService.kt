@@ -366,7 +366,10 @@ class BubbleService : AccessibilityService(), MicController.Ui {
 
     /** Splices the text in at the cursor (replacing any selection) and puts the cursor after it. */
     private fun setText(node: AccessibilityNodeInfo, text: String): Boolean {
-        val current = realText(node.text?.toString(), node.hintText?.toString(), node.isShowingHintText)
+        val current = realText(
+            node.text?.toString(), node.hintText?.toString(), node.isShowingHintText,
+            node.textSelectionStart, node.textSelectionEnd, node.packageName?.toString(),
+        )
         var start = node.textSelectionStart
         var end = node.textSelectionEnd
         if (start !in 0..current.length || end !in 0..current.length) {
