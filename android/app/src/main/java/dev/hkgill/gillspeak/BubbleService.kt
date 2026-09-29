@@ -55,6 +55,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     private val refresh = Runnable { refresh() }
     private var lastSummary = ""
     private var lastEvented: AccessibilityNodeInfo? = null
+    private var settleChecks = 0 // looks at a keyboard still sliding in, before showing anyway
     private val clearMessage = Runnable { message = null; label() }
     // Its own Runnable: accessibility events cancel and repost [refresh], which would drop the end-of-snooze check.
     private val wake = Runnable { refresh() }
@@ -119,11 +120,18 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         when {
             // Snoozed: stay hidden whatever is on screen. Snoozing needs an idle bubble, so nothing is in flight.
             snoozed && mic.state != MicController.State.WORKING -> hide()
+            // A keyboard still sliding in reaches past the bottom of the screen. Placing the bubble against it
+            // made the bubble jump up as the keyboard settled, so wait for it (but not forever).
+            keyboard != null && !shown && keyboard.bottom > screen().second && settleChecks < MAX_SETTLE_CHECKS -> {
+                settleChecks++
+                main.postDelayed(refresh, SETTLE_MS)
+            }
             // Any open keyboard gets the bubble, except over password fields and gillspeak's own keyboard.
             keyboard != null && field?.isPassword != true && !ownKeyboard -> {
                 // Keyboards change height while typing (Samsung's suggestion strip comes and goes). Anchor to the
                 // highest the keyboard has been since it opened, so the bubble stays put instead of bobbing.
                 keyboardTop = if (shown) minOf(keyboardTop, keyboard.top) else keyboard.top
+                settleChecks = 0
                 show()
             }
             mic.state == MicController.State.WORKING -> Unit // stay visible until the text lands
@@ -131,6 +139,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
                 // The keyboard closed mid-recording: discard it. Undelivered text and failed audio are kept, so
                 // after switching apps a tap can still insert or retry them in the new field.
                 mic.cancel(null)
+                settleChecks = 0
                 hide()
             }
         }
@@ -497,5 +506,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
 
     companion object {
         private const val HOLD_MS = 150L
+        private const val SETTLE_MS = 60L
+        private const val MAX_SETTLE_CHECKS = 10
     }
 }
