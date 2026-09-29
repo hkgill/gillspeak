@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The bubble's "Snooze" accessibility action, for screen-reader users who can't drag it. -->
+    <item name="action_snooze" type="id" />
+</resources>

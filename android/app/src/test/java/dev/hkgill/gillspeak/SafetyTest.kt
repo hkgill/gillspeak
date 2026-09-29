@@ -60,4 +60,13 @@ class SafetyTest {
         assertEquals("Hello", realText("Hello", "Message", showingHint = false))
         assertEquals("Message", realText("Message", null, showingHint = false)) // no hint: it's real text
     }
+
+    @Test fun chatPlaceholderWithoutHintOrSelectionIsNotInserted() {
+        // Observed on Telegram: text="Message", hint=null, showingHint=false, selection=-1,-1.
+        assertEquals("", realText("Message", null, false, -1, -1, "org.telegram.messenger"))
+        assertEquals("", realText("Message", null, false, -1, -1, "com.whatsapp"))
+        assertEquals("Message", realText("Message", null, false, 7, 7, "org.telegram.messenger"))
+        assertEquals("Message", realText("Message", null, false, -1, -1, "com.example.notes"))
+        assertEquals("Message me", realText("Message me", null, false, -1, -1, "org.telegram.messenger"))
+    }
 }

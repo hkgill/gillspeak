@@ -22,12 +22,15 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import android.widget.Toast
+import java.text.DateFormat
+import java.util.Date
 import kotlin.math.abs
 
 /**
  * Floating mic: shows over (or above) whatever keyboard is open while a text field has focus, so
  * dictation never needs a keyboard switch. Same gestures as the keyboard's mic: hold to talk, or tap to latch.
- * Drag it to move it; size and shape come from the app's settings. The accessibility service is needed to see
+ * Drag it to move it, or drop it on the target at the bottom of the screen to snooze it for a while; size, shape and
+ * snooze length come from the app's settings. The accessibility service is needed to see
  * when a keyboard and a text field are on screen, and to insert text into other apps' fields.
  */
 class BubbleService : AccessibilityService(), MicController.Ui {
@@ -52,14 +55,32 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     private val refresh = Runnable { refresh() }
     private var lastSummary = ""
     private var lastEvented: AccessibilityNodeInfo? = null
+    private var settleChecks = 0 // looks at a keyboard still sliding in, before showing anyway
     private val clearMessage = Runnable { message = null; label() }
+    // Its own Runnable: accessibility events cancel and repost [refresh], which would drop the end-of-snooze check.
+    private val wake = Runnable { refresh() }
+
+    private lateinit var target: SnoozeTargetView
+    private val targetParams = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+        WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+        // Only ever looked at: touches go straight through to the bubble and the app underneath.
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
+            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+        PixelFormat.TRANSLUCENT,
+    ).apply { gravity = Gravity.TOP or Gravity.START }
 
     override fun onServiceConnected() {
         settings = Settings(this)
         mic = MicController(this, this)
         wm = getSystemService(WindowManager::class.java)
-        button = BubbleView(this) { mic.level }.apply { setOnTouchListener(::onTouch) }
+        button = BubbleView(this) { mic.level }.apply {
+            setOnTouchListener(::onTouch)
+            accessibilityDelegate = snoozeAction
+        }
+        target = SnoozeTargetView(this).apply { visibility = View.INVISIBLE }
         prefsListener = settings.onBubbleChange { if (shown) layout() }
+        scheduleWake()
         Log.i(Dictation.TAG, "bubble service connected")
     }
 
@@ -75,6 +96,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
 
     override fun onDestroy() {
         if (::mic.isInitialized) mic.shutdown()
+        main.removeCallbacks(wake)
         hide()
         super.onDestroy()
     }
@@ -88,18 +110,28 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         val field = focusedField()
         // gillspeak's own keyboard already has a big mic.
         val ownKeyboard = Secure.getString(contentResolver, Secure.DEFAULT_INPUT_METHOD)?.startsWith("$packageName/") == true
-        val summary = "keyboard=${keyboard?.toShortString()} field=${field?.className} ownKeyboard=$ownKeyboard state=${mic.state}"
+        val snoozed = settings.snoozed()
+        val summary = "keyboard=${keyboard?.toShortString()} field=${field?.className} ownKeyboard=$ownKeyboard state=${mic.state} snoozed=$snoozed"
         if (summary != lastSummary) {
             Log.d(Dictation.TAG, "bubble: $summary")
             if (keyboard != null && field == null) Log.d(Dictation.TAG, "bubble: no field; windows: ${describeWindows()}")
             lastSummary = summary
         }
         when {
+            // Snoozed: stay hidden whatever is on screen. Snoozing needs an idle bubble, so nothing is in flight.
+            snoozed && mic.state != MicController.State.WORKING -> hide()
+            // A keyboard still sliding in reaches past the bottom of the screen. Placing the bubble against it
+            // made the bubble jump up as the keyboard settled, so wait for it (but not forever).
+            keyboard != null && !shown && keyboard.bottom > screen().second && settleChecks < MAX_SETTLE_CHECKS -> {
+                settleChecks++
+                main.postDelayed(refresh, SETTLE_MS)
+            }
             // Any open keyboard gets the bubble, except over password fields and gillspeak's own keyboard.
             keyboard != null && field?.isPassword != true && !ownKeyboard -> {
                 // Keyboards change height while typing (Samsung's suggestion strip comes and goes). Anchor to the
                 // highest the keyboard has been since it opened, so the bubble stays put instead of bobbing.
                 keyboardTop = if (shown) minOf(keyboardTop, keyboard.top) else keyboard.top
+                settleChecks = 0
                 show()
             }
             mic.state == MicController.State.WORKING -> Unit // stay visible until the text lands
@@ -107,9 +139,18 @@ class BubbleService : AccessibilityService(), MicController.Ui {
                 // The keyboard closed mid-recording: discard it. Undelivered text and failed audio are kept, so
                 // after switching apps a tap can still insert or retry them in the new field.
                 mic.cancel(null)
+                settleChecks = 0
                 hide()
             }
         }
+        scheduleWake()
+    }
+
+    /** Runs [refresh] when a snooze ends or the night snooze starts, as no accessibility event may come then. */
+    private fun scheduleWake() {
+        main.removeCallbacks(wake)
+        val now = System.currentTimeMillis()
+        settings.nextSnoozeChange(now)?.let { main.postDelayed(wake, it - now + 50) }
     }
 
     /**
@@ -147,6 +188,9 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     private fun show() {
         if (!shown || keyboardTop != laidOutFor) layout()
         if (!shown) {
+            // The target goes in first so the bubble, added after it, is drawn on top while dragged over it.
+            placeTarget()
+            wm.addView(target, targetParams)
             wm.addView(button, params)
             shown = true
             mic.warm()
@@ -156,6 +200,9 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     private fun hide() {
         if (!shown) return
         wm.removeView(button)
+        target.armed = false
+        target.visibility = View.INVISIBLE
+        wm.removeView(target)
         shown = false
     }
 
@@ -266,6 +313,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     private var startX = 0
     private var startY = 0
     private var dragging = false
+    private var snoozable = false // this drag can end on the snooze target
     private var holding = false // the mic started under this finger
     private val startHold = Runnable {
         if (mic.press()) {
@@ -292,12 +340,16 @@ class BubbleService : AccessibilityService(), MicController.Ui {
                     dragging = true
                     main.removeCallbacks(startHold)
                     button.pressed(false)
+                    // Like Wispr Flow, only an idle bubble snoozes: never mid-dictation or with text waiting.
+                    snoozable = mic.state == MicController.State.IDLE && !mic.canRetry
+                    if (snoozable) showTarget()
                 }
                 if (dragging) {
                     val (screenW, screenH) = screen()
                     if (!isBar) params.x = (startX + (e.rawX - downX).toInt()).coerceIn(0, maxOf(0, screenW - params.width))
                     params.y = (startY + (e.rawY - downY).toInt()).coerceIn(0, maxOf(0, screenH - params.height))
                     wm.updateViewLayout(button, params)
+                    if (snoozable) armTarget()
                 }
             }
             MotionEvent.ACTION_UP -> {
@@ -306,7 +358,9 @@ class BubbleService : AccessibilityService(), MicController.Ui {
                 when {
                     dragging -> {
                         dragging = false
-                        savePosition()
+                        // Dropped on the target: snooze, and keep the saved spot so it comes back where it was.
+                        if (target.armed) snooze() else savePosition()
+                        hideTarget()
                         main.post(refresh)
                     }
                     holding -> if (mic.release()) v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
@@ -328,11 +382,77 @@ class BubbleService : AccessibilityService(), MicController.Ui {
                 main.removeCallbacks(startHold)
                 button.pressed(false)
                 dragging = false
+                hideTarget()
                 if (holding) mic.cancel(null)
                 holding = false
             }
         }
         return true
+    }
+
+    // ---- Snooze ----
+
+    /** Centres the target near the bottom of the screen, clear of the navigation bar. */
+    private fun placeTarget() {
+        val (screenW, screenH) = screen()
+        targetParams.width = target.windowWidth
+        targetParams.height = target.windowHeight
+        targetParams.x = (screenW - target.windowWidth) / 2
+        targetParams.y = screenH - target.windowHeight - dp(56)
+    }
+
+    private fun showTarget() {
+        placeTarget()
+        target.label = "Snooze ${Snooze.label(settings.snoozeMinutes)}"
+        target.armed = false
+        target.alpha = 0f
+        target.visibility = View.VISIBLE
+        target.animate().alpha(1f).setDuration(150).start()
+        wm.updateViewLayout(target, targetParams)
+    }
+
+    private fun hideTarget() {
+        snoozable = false
+        if (!::target.isInitialized || target.visibility != View.VISIBLE) return
+        target.armed = false
+        target.animate().alpha(0f).setDuration(120).withEndAction { target.visibility = View.INVISIBLE }.start()
+    }
+
+    /** Arms the target while the bubble is over it, with one buzz on the way in. */
+    private fun armTarget() {
+        val over = Snooze.over(
+            params.x + params.width / 2f, params.y + params.height / 2f,
+            targetParams.x + target.centreX, targetParams.y + target.centreY,
+            target.radius + dp(settings.bubbleSize) / 2f,
+        )
+        if (over && !target.armed) button.performHapticFeedback(HapticFeedbackConstants.CONFIRM)
+        target.armed = over
+    }
+
+    private fun snooze() {
+        val until = settings.snooze()
+        hide()
+        scheduleWake()
+        val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(until))
+        Toast.makeText(this, "Bubble snoozed until $time. End it early in the ${Settings.APP_NAME} app", Toast.LENGTH_LONG).show()
+        Log.i(Dictation.TAG, "bubble snoozed for ${settings.snoozeMinutes} min")
+    }
+
+    /** Screen-reader users can't drag, so snoozing is also an action on the bubble. */
+    private val snoozeAction = object : View.AccessibilityDelegate() {
+        override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+            super.onInitializeAccessibilityNodeInfo(host, info)
+            if (mic.state == MicController.State.IDLE && !mic.canRetry) {
+                info.addAction(AccessibilityNodeInfo.AccessibilityAction(R.id.action_snooze, "Snooze for ${Snooze.label(settings.snoozeMinutes)}"))
+            }
+        }
+
+        override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean {
+            if (action != R.id.action_snooze) return super.performAccessibilityAction(host, action, args)
+            if (mic.state != MicController.State.IDLE || mic.canRetry) return false
+            snooze()
+            return true
+        }
     }
 
     private fun savePosition() {
@@ -366,7 +486,10 @@ class BubbleService : AccessibilityService(), MicController.Ui {
 
     /** Splices the text in at the cursor (replacing any selection) and puts the cursor after it. */
     private fun setText(node: AccessibilityNodeInfo, text: String): Boolean {
-        val current = realText(node.text?.toString(), node.hintText?.toString(), node.isShowingHintText)
+        val current = realText(
+            node.text?.toString(), node.hintText?.toString(), node.isShowingHintText,
+            node.textSelectionStart, node.textSelectionEnd, node.packageName?.toString(),
+        )
         var start = node.textSelectionStart
         var end = node.textSelectionEnd
         if (start !in 0..current.length || end !in 0..current.length) {
@@ -389,5 +512,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
 
     companion object {
         private const val HOLD_MS = 150L
+        private const val SETTLE_MS = 60L
+        private const val MAX_SETTLE_CHECKS = 10
     }
 }

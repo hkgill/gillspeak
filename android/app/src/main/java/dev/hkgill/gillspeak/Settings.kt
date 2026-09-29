@@ -1,6 +1,9 @@
 package dev.hkgill.gillspeak
 
 import android.content.Context
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -78,6 +81,61 @@ class Settings(context: Context) {
     fun onBubbleChange(listener: () -> Unit) =
         android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key -> if (key?.startsWith("bubble_") == true) listener() }
             .also(prefs::registerOnSharedPreferenceChangeListener)
+
+    // Snooze. Not "bubble_" keys: changing them shouldn't re-lay-out a bubble that's showing.
+
+    /** How long dropping the bubble on the snooze target hides it, in minutes. */
+    var snoozeMinutes: Int
+        get() = Snooze.minutesOrDefault(prefs.getInt("snooze_minutes", Snooze.DEFAULT_MINUTES))
+        set(v) = prefs.edit().putInt("snooze_minutes", Snooze.minutesOrDefault(v)).apply()
+
+    /** When the current snooze ends, in wall-clock milliseconds; 0 when not snoozed. */
+    val snoozeUntil get() = prefs.getLong("snooze_until", 0L)
+
+    /** Night snooze: hide the bubble every night between [nightStart] and [nightEnd], minutes after midnight. */
+    var nightSnooze: Boolean
+        get() = prefs.getBoolean("night_snooze", false)
+        set(v) = prefs.edit().putBoolean("night_snooze", v).apply()
+
+    var nightStart: Int
+        get() = prefs.getInt("night_start", Snooze.NIGHT_START)
+        set(v) = prefs.edit().putInt("night_start", v.coerceIn(0, 24 * 60 - 1)).apply()
+
+    var nightEnd: Int
+        get() = prefs.getInt("night_end", Snooze.NIGHT_END)
+        set(v) = prefs.edit().putInt("night_end", v.coerceIn(0, 24 * 60 - 1)).apply()
+
+    /** When tonight's night snooze ends, or null outside one or after "End snooze now" skipped it. */
+    fun nightUntil(now: Long): Long? {
+        if (!nightSnooze) return null
+        val end = Snooze.nightEnd(local(now), nightStart, nightEnd)?.let(::millis) ?: return null
+        return end.takeIf { it > prefs.getLong("night_skip_until", 0L) }
+    }
+
+    /** When the bubble comes back from a snooze of either kind, or null if it isn't snoozed. */
+    fun snoozedUntil(now: Long = System.currentTimeMillis()): Long? =
+        listOfNotNull(snoozeUntil.takeIf { Snooze.isActive(now, it) }, nightUntil(now)).maxOrNull()
+
+    fun snoozed(now: Long = System.currentTimeMillis()) = snoozedUntil(now) != null
+
+    /** The next moment the bubble may need to appear or disappear by itself, or null if none is due. */
+    fun nextSnoozeChange(now: Long = System.currentTimeMillis()): Long? = listOfNotNull(
+        snoozeUntil.takeIf { Snooze.isActive(now, it) },
+        if (nightSnooze) Snooze.nextNightChange(local(now), nightStart, nightEnd)?.let(::millis) else null,
+    ).minOrNull()
+
+    private fun local(ms: Long) = LocalDateTime.ofInstant(Instant.ofEpochMilli(ms), ZoneId.systemDefault())
+    private fun millis(t: LocalDateTime) = t.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+
+    /** Starts a snooze of [snoozeMinutes] and returns when it ends. */
+    fun snooze(now: Long = System.currentTimeMillis()): Long =
+        Snooze.until(now, snoozeMinutes).also { prefs.edit().putLong("snooze_until", it).apply() }
+
+    /** Ends a snooze now. During the night it shows the bubble until the night ends; the next night hides it again. */
+    fun endSnooze(now: Long = System.currentTimeMillis()) {
+        val night = nightUntil(now)
+        prefs.edit().remove("snooze_until").apply { if (night != null) putLong("night_skip_until", night) }.apply()
+    }
 
     /** The desktop clean-up prompt alone, for text-only clean-up (Groq). */
     fun cleanPrompt(): String = assets.open("clean_v2.txt").bufferedReader().use { it.readText() }

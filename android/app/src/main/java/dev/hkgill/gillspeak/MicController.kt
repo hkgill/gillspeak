@@ -177,6 +177,11 @@ class MicController(private val context: Context, private val ui: Ui) {
                 settings.log("FAILED silent: the microphone returned only silence (blocked in the background?)")
                 ui.status("The microphone was blocked (silent audio)")
             }
+            // A tap with nothing said: don't transcribe near-silence, which only ever comes back empty.
+            tooQuiet(peak) -> {
+                set(State.IDLE)
+                ui.status("No speech heard")
+            }
             else -> process(wav)
         }
     }
@@ -236,3 +241,8 @@ class MicController(private val context: Context, private val ui: Ui) {
         private const val MIN_MS = 400L
     }
 }
+
+/** Speech peaks in the thousands even far from the mic; a quiet room peaks around 100. Zero is a blocked mic. */
+const val QUIET_PEAK = 200
+
+fun tooQuiet(peak: Int) = peak in 1 until QUIET_PEAK

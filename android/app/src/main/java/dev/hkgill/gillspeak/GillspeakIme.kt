@@ -284,9 +284,16 @@ fun isPasswordInput(inputType: Int): Boolean {
  * placeholder as its text (WhatsApp's "Message"), and not every app sets isShowingHintText, so text that
  * equals the hint counts as empty. Otherwise the placeholder would end up in front of the dictation.
  */
-fun realText(text: String?, hint: String?, showingHint: Boolean): String = when {
+fun realText(
+    text: String?, hint: String?, showingHint: Boolean,
+    selectionStart: Int = -1, selectionEnd: Int = -1, packageName: String? = null,
+): String = when {
     showingHint || text == null -> ""
     !hint.isNullOrEmpty() && text == hint -> ""
+    // These chat fields can expose their placeholder without hint metadata. Real typed text has a cursor;
+    // the empty placeholder reports no selection at all.
+    text == "Message" && selectionStart == -1 && selectionEnd == -1 &&
+        packageName in listOf("org.telegram.messenger", "com.whatsapp", "com.whatsapp.w4b") -> ""
     else -> text
 }
 

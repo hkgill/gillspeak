@@ -35,7 +35,7 @@ object Dictation {
         }
         val text = if (why.isEmpty()) dictionary.apply(res.text) else fallback
         Log.i(TAG, "gemini ${res.ms} ms: ${res.timing}")
-        settings.log("Gemini ${res.ms} ms ${why.ifEmpty { "ok" }} (${res.timing})\n  heard: ${res.transcript}\n  typed: $text")
+        if (res.transcript.isNotBlank() || res.text.isNotBlank()) settings.log("Gemini ${res.ms} ms ${why.ifEmpty { "ok" }} (${res.timing})\n  heard: ${res.transcript}\n  typed: $text")
         return Outcome(text, why, res.ms)
     }
 
@@ -64,7 +64,7 @@ object Dictation {
         }
         val total = ms(t0)
         Log.i(TAG, "groq $total ms: whisper $sttMs ms, $reason")
-        settings.log("Groq $total ms (whisper $sttMs ms, $reason)\n  heard: $raw\n  typed: $text")
+        if (raw.isNotBlank()) settings.log("Groq $total ms (whisper $sttMs ms, $reason)\n  heard: $raw\n  typed: $text")
         // Only a failed or rejected clean-up counts as a fallback in the status line.
         val shown = if (reason.startsWith("cleaned") || !useLlm) "" else reason.substringBefore(" in ")
         return Outcome(text, shown, total)
@@ -76,7 +76,7 @@ object Dictation {
         val text = Rules(settings.dictionary()).apply(raw)
         val total = ms(t0)
         Log.i(TAG, "local $total ms for ${Recorder.durationMs(wav)} ms of audio")
-        settings.log("Local $total ms\n  heard: $raw\n  typed: $text")
+        if (raw.isNotBlank()) settings.log("Local $total ms\n  heard: $raw\n  typed: $text")
         return Outcome(text, "", total)
     }
 

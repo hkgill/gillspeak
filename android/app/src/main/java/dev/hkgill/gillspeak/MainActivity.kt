@@ -55,6 +55,13 @@ class MainActivity : Activity() {
     private lateinit var preview: BubbleView
     private lateinit var sizeLabel: TextView
     private lateinit var log: LinearLayout
+    private lateinit var snoozeCard: View
+    private lateinit var snoozeStatus: TextView
+    private lateinit var snoozeChips: List<Pair<Int, TextView>>
+    private lateinit var nightSwitch: android.widget.Switch
+    private lateinit var nightFrom: TextView
+    private lateinit var nightTo: TextView
+    private lateinit var nightTimes: View
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,6 +101,17 @@ class MainActivity : Activity() {
             else startActivity(Intent(ACTION_INPUT_METHOD_SETTINGS))
         }
         column.addView(card("Setup", micRow.view, divider(), bubbleRow.view, divider(), keyboardRow.view))
+
+        snoozeStatus = text("", 15f, c.dim)
+        snoozeCard = card(
+            "Bubble is snoozed", snoozeStatus,
+            primaryButton("End snooze now") {
+                settings.endSnooze()
+                refresh()
+                Toast.makeText(this, "The bubble is back", Toast.LENGTH_SHORT).show()
+            },
+        )
+        column.addView(snoozeCard)
 
         column.addView(card("Try it", field("Tap here, then use the bubble", lines = 3)))
 
@@ -144,11 +162,23 @@ class MainActivity : Activity() {
                 Toast.makeText(this@MainActivity, "Bubble moved back above the keyboard", Toast.LENGTH_SHORT).show()
             }
         }
+        snoozeChips = Snooze.MINUTES.map { minutes ->
+            minutes to chip(Snooze.label(minutes)) { settings.snoozeMinutes = minutes; refresh() }
+        }
+        val snoozeRow = LinearLayout(this).apply {
+            background = rounded(c.field, dp(14).toFloat())
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            snoozeChips.forEach { (_, chip) -> addView(chip, LinearLayout.LayoutParams(0, dp(40), 1f)) }
+        }
         column.addView(card(
             "Bubble", chips, previewBox, sizeLabel, slider,
             text("Hold to talk, or tap to start and tap again to finish. Drag it anywhere, even onto the keyboard; it remembers the spot.", 14f, c.dim)
                 .apply { setPadding(0, dp(8), 0, 0) },
             reset,
+            label("Snooze for"), snoozeRow,
+            text("Drag the bubble to the bottom of the screen and drop it on the target to hide it for this long.", 14f, c.dim)
+                .apply { setPadding(0, dp(8), 0, 0) },
+            nightRow(),
         ))
 
         keyField = field("", password = true)
@@ -225,6 +255,7 @@ class MainActivity : Activity() {
         styleChip(roundChip, !bar)
         styleChip(barChip, bar)
         showBubblePreview()
+        showSnooze()
 
         keyField.hint = when {
             settings.hasOwnKey -> "Saved. Type to replace"
@@ -320,9 +351,11 @@ class MainActivity : Activity() {
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val poll = Runnable { showEngine() }
+    private val snoozeOver = Runnable { showSnooze() }
 
     override fun onPause() {
         handler.removeCallbacks(poll)
+        handler.removeCallbacks(snoozeOver)
         super.onPause()
     }
 
@@ -351,6 +384,69 @@ class MainActivity : Activity() {
         row.icon.setTextColor(if (done) Color.WHITE else c.accent)
         row.icon.background = rounded(if (done) c.ok else c.field, dp(18).toFloat())
         row.subtitle.text = subtitle
+    }
+
+    private fun showSnooze() {
+        for ((minutes, chip) in snoozeChips) styleChip(chip, minutes == settings.snoozeMinutes)
+        nightSwitch.isChecked = settings.nightSnooze
+        nightTimes.visibility = if (settings.nightSnooze) View.VISIBLE else View.GONE
+        nightFrom.text = clockOfDay(settings.nightStart)
+        nightTo.text = clockOfDay(settings.nightEnd)
+        handler.removeCallbacks(snoozeOver)
+        val now = System.currentTimeMillis()
+        val snoozed = settings.snoozed(now)
+        snoozeCard.visibility = if (snoozed) View.VISIBLE else View.GONE
+        if (!snoozed) return
+        val until = settings.snoozedUntil(now) ?: return
+        val night = settings.nightUntil(now) == until
+        snoozeStatus.text = (if (night) "Night snooze. " else "") + "It comes back at ${clock(until)}."
+        handler.postDelayed(snoozeOver, until - now + 50) // hide this card when it does
+    }
+
+    private fun clock(ms: Long): String = android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date(ms))
+
+    private fun clockOfDay(minute: Int): String =
+        clock(java.time.LocalDate.now().atTime(minute / 60, minute % 60).atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli())
+
+    /** "Snooze every night" with a switch, then From and To times that open a time picker. */
+    private fun nightRow(): View {
+        nightSwitch = android.widget.Switch(this).apply {
+            text = "Snooze every night"
+            textSize = 16f
+            setTextColor(c.text)
+            typeface = Typeface.DEFAULT_BOLD
+            thumbTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(c.accent, c.dim))
+            trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(c.accent, c.field))
+            setOnCheckedChangeListener { _, on -> if (on != settings.nightSnooze) { settings.nightSnooze = on; refresh() } }
+        }
+        fun timeButton(pick: (Int) -> Unit, current: () -> Int) = text("", 16f, c.accent, bold = true).apply {
+            gravity = Gravity.CENTER
+            background = rounded(c.field, dp(12).toFloat())
+            setPadding(dp(12), dp(10), dp(12), dp(10))
+            setOnClickListener {
+                val m = current()
+                android.app.TimePickerDialog(this@MainActivity, { _, h, min -> pick(h * 60 + min); refresh() },
+                    m / 60, m % 60, android.text.format.DateFormat.is24HourFormat(this@MainActivity)).show()
+            }
+        }
+        nightFrom = timeButton({ settings.nightStart = it }) { settings.nightStart }
+        nightTo = timeButton({ settings.nightEnd = it }) { settings.nightEnd }
+        nightTimes = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            setPadding(0, dp(10), 0, 0)
+            addView(text("From", 14f, c.dim).apply { setPadding(0, 0, dp(8), 0) })
+            addView(nightFrom, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            addView(text("to", 14f, c.dim).apply { setPadding(dp(12), 0, dp(8), 0) })
+            addView(nightTo, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        }
+        return LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(0, dp(18), 0, 0)
+            addView(nightSwitch, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
+            addView(text("Hide the bubble at night, every night. End snooze now brings it back until the morning.", 14f, c.dim)
+                .apply { setPadding(0, dp(4), 0, 0) })
+            addView(nightTimes)
+        }
     }
 
     private fun showBubblePreview() {
