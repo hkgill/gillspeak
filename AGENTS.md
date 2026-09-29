@@ -29,4 +29,6 @@ This repo is public. Commit messages, PR titles and descriptions, and tracked fi
 - email addresses other than GitHub noreply addresses, phone numbers, or IP addresses
 - Wi-Fi network names, device serials or pairing codes, or anything about the people testing the app
 
+**Never commit, push, upload or otherwise publish a screenshot, screen recording or UI dump taken from the user's phone without asking the user first, every time.** They can show private chats, notifications and contacts. Save them only in a temporary directory outside the repo, delete them when you're done, and never stage them. This also applies to images for `docs/assets/`: ask before adding one that came from the phone.
+
 If a secret is ever committed, even locally and unpushed: stop and tell the user immediately. The key must be **revoked and replaced**; rewriting git history is not enough once it has left the machine.
