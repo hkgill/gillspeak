@@ -80,7 +80,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         }
         target = SnoozeTargetView(this).apply { visibility = View.INVISIBLE }
         prefsListener = settings.onBubbleChange { if (shown) layout() }
-        if (settings.snoozed()) main.postDelayed(wake, settings.snoozeUntil - System.currentTimeMillis() + 50)
+        scheduleWake()
         Log.i(Dictation.TAG, "bubble service connected")
     }
 
@@ -143,6 +143,14 @@ class BubbleService : AccessibilityService(), MicController.Ui {
                 hide()
             }
         }
+        scheduleWake()
+    }
+
+    /** Runs [refresh] when a snooze ends or the night snooze starts, as no accessibility event may come then. */
+    private fun scheduleWake() {
+        main.removeCallbacks(wake)
+        val now = System.currentTimeMillis()
+        settings.nextSnoozeChange(now)?.let { main.postDelayed(wake, it - now + 50) }
     }
 
     /**
@@ -422,11 +430,9 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     }
 
     private fun snooze() {
-        val now = System.currentTimeMillis()
-        val until = settings.snooze(now)
+        val until = settings.snooze()
         hide()
-        main.removeCallbacks(wake)
-        main.postDelayed(wake, until - now + 50)
+        scheduleWake()
         val time = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(until))
         Toast.makeText(this, "Bubble snoozed until $time. End it early in the ${Settings.APP_NAME} app", Toast.LENGTH_LONG).show()
         Log.i(Dictation.TAG, "bubble snoozed for ${settings.snoozeMinutes} min")
