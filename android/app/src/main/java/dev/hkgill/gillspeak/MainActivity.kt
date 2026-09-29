@@ -55,6 +55,9 @@ class MainActivity : Activity() {
     private lateinit var preview: BubbleView
     private lateinit var sizeLabel: TextView
     private lateinit var log: LinearLayout
+    private lateinit var snoozeCard: View
+    private lateinit var snoozeStatus: TextView
+    private lateinit var snoozeChips: List<Pair<Int, TextView>>
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -94,6 +97,17 @@ class MainActivity : Activity() {
             else startActivity(Intent(ACTION_INPUT_METHOD_SETTINGS))
         }
         column.addView(card("Setup", micRow.view, divider(), bubbleRow.view, divider(), keyboardRow.view))
+
+        snoozeStatus = text("", 15f, c.dim)
+        snoozeCard = card(
+            "Bubble is snoozed", snoozeStatus,
+            primaryButton("End snooze now") {
+                settings.endSnooze()
+                refresh()
+                Toast.makeText(this, "The bubble is back", Toast.LENGTH_SHORT).show()
+            },
+        )
+        column.addView(snoozeCard)
 
         column.addView(card("Try it", field("Tap here, then use the bubble", lines = 3)))
 
@@ -144,11 +158,22 @@ class MainActivity : Activity() {
                 Toast.makeText(this@MainActivity, "Bubble moved back above the keyboard", Toast.LENGTH_SHORT).show()
             }
         }
+        snoozeChips = Snooze.MINUTES.map { minutes ->
+            minutes to chip(Snooze.label(minutes)) { settings.snoozeMinutes = minutes; refresh() }
+        }
+        val snoozeRow = LinearLayout(this).apply {
+            background = rounded(c.field, dp(14).toFloat())
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            snoozeChips.forEach { (_, chip) -> addView(chip, LinearLayout.LayoutParams(0, dp(40), 1f)) }
+        }
         column.addView(card(
             "Bubble", chips, previewBox, sizeLabel, slider,
             text("Hold to talk, or tap to start and tap again to finish. Drag it anywhere, even onto the keyboard; it remembers the spot.", 14f, c.dim)
                 .apply { setPadding(0, dp(8), 0, 0) },
             reset,
+            label("Snooze for"), snoozeRow,
+            text("Drag the bubble to the bottom of the screen and drop it on the target to hide it for this long.", 14f, c.dim)
+                .apply { setPadding(0, dp(8), 0, 0) },
         ))
 
         keyField = field("", password = true)
@@ -225,6 +250,7 @@ class MainActivity : Activity() {
         styleChip(roundChip, !bar)
         styleChip(barChip, bar)
         showBubblePreview()
+        showSnooze()
 
         keyField.hint = when {
             settings.hasOwnKey -> "Saved. Type to replace"
@@ -320,9 +346,11 @@ class MainActivity : Activity() {
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val poll = Runnable { showEngine() }
+    private val snoozeOver = Runnable { showSnooze() }
 
     override fun onPause() {
         handler.removeCallbacks(poll)
+        handler.removeCallbacks(snoozeOver)
         super.onPause()
     }
 
@@ -351,6 +379,18 @@ class MainActivity : Activity() {
         row.icon.setTextColor(if (done) Color.WHITE else c.accent)
         row.icon.background = rounded(if (done) c.ok else c.field, dp(18).toFloat())
         row.subtitle.text = subtitle
+    }
+
+    private fun showSnooze() {
+        for ((minutes, chip) in snoozeChips) styleChip(chip, minutes == settings.snoozeMinutes)
+        handler.removeCallbacks(snoozeOver)
+        val now = System.currentTimeMillis()
+        val snoozed = settings.snoozed(now)
+        snoozeCard.visibility = if (snoozed) View.VISIBLE else View.GONE
+        if (!snoozed) return
+        val time = android.text.format.DateFormat.getTimeFormat(this).format(java.util.Date(settings.snoozeUntil))
+        snoozeStatus.text = "It comes back at $time."
+        handler.postDelayed(snoozeOver, settings.snoozeUntil - now + 50) // hide this card when it does
     }
 
     private fun showBubblePreview() {

@@ -79,6 +79,24 @@ class Settings(context: Context) {
         android.content.SharedPreferences.OnSharedPreferenceChangeListener { _, key -> if (key?.startsWith("bubble_") == true) listener() }
             .also(prefs::registerOnSharedPreferenceChangeListener)
 
+    // Snooze. Not "bubble_" keys: changing them shouldn't re-lay-out a bubble that's showing.
+
+    /** How long dropping the bubble on the snooze target hides it, in minutes. */
+    var snoozeMinutes: Int
+        get() = Snooze.minutesOrDefault(prefs.getInt("snooze_minutes", Snooze.DEFAULT_MINUTES))
+        set(v) = prefs.edit().putInt("snooze_minutes", Snooze.minutesOrDefault(v)).apply()
+
+    /** When the current snooze ends, in wall-clock milliseconds; 0 when not snoozed. */
+    val snoozeUntil get() = prefs.getLong("snooze_until", 0L)
+
+    fun snoozed(now: Long = System.currentTimeMillis()) = Snooze.isActive(now, snoozeUntil)
+
+    /** Starts a snooze of [snoozeMinutes] and returns when it ends. */
+    fun snooze(now: Long = System.currentTimeMillis()): Long =
+        Snooze.until(now, snoozeMinutes).also { prefs.edit().putLong("snooze_until", it).apply() }
+
+    fun endSnooze() = prefs.edit().remove("snooze_until").apply()
+
     /** The desktop clean-up prompt alone, for text-only clean-up (Groq). */
     fun cleanPrompt(): String = assets.open("clean_v2.txt").bufferedReader().use { it.readText() }
 
