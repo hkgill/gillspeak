@@ -16,6 +16,8 @@ class CommandsTest {
 
     @Test fun timers() {
         assertEquals(Command.Timer(600), parse("Set a timer for 10 minutes."))
+        assertEquals(Command.Timer(300), parse("Set up a timer for five minutes."))
+        assertEquals(Command.Timer(300), parse("create a new timer of 5 minutes"))
         assertEquals(Command.Timer(600), parse("set a timer for ten minutes"))
         assertEquals(Command.Timer(600), parse("10 minute timer"))
         assertEquals(Command.Timer(600), parse("Start a 10-minute timer."))
@@ -30,16 +32,31 @@ class CommandsTest {
     }
 
     @Test fun alarms() {
+        assertEquals(Command.Alarm(3, 0, exact = false), parse("Set up an alarm for three o'clock."))
+        assertEquals(Command.Alarm(3, 0, exact = false), parse("Set up an alarm for three o\u2019clock."))
+        assertEquals(Command.Alarm(15, 0), parse("create an alarm at 3 pm"))
+        assertEquals(Command.Alarm(17, 30), parse("alarm for 17:30"))
+        assertEquals(Command.Alarm(6, 0, exact = false), parse("wake me up at six"))
         assertEquals(Command.Alarm(7, 0), parse("Set an alarm for 7 a.m."))
         assertEquals(Command.Alarm(18, 30), parse("set an alarm for 6:30 pm"))
         assertEquals(Command.Alarm(6, 45), parse("Wake me up at six forty five in the morning."))
-        assertEquals(Command.Alarm(7, 5), parse("alarm at seven oh five"))
-        assertEquals(Command.Alarm(6, 30), parse("alarm for half past 6"))
+        assertEquals(Command.Alarm(7, 5, exact = false), parse("alarm at seven oh five"))
+        assertEquals(Command.Alarm(6, 30, exact = false), parse("alarm for half past 6"))
         assertEquals(Command.Alarm(19, 45), parse("alarm for quarter to 8 tonight"))
         assertEquals(Command.Alarm(0, 0), parse("alarm for midnight"))
         assertEquals(Command.Alarm(12, 0), parse("alarm for noon"))
-        assertEquals(Command.Alarm(7, 0), parse("alarm for 7 o'clock"))
+        assertEquals(Command.Alarm(7, 0, exact = false), parse("alarm for 7 o'clock"))
         assertNull(parse("set an alarm for 13 pm"))
+    }
+
+    @Test fun alarmsWithoutAmOrPmGoToTheNextOne() {
+        val at = { h: Int, m: Int -> h * 60 + m }
+        assertEquals(15 to 0, Commands.nextOccurrence(3, 0, at(10, 8))) // "three o'clock" mid-morning: 3 pm
+        assertEquals(3 to 0, Commands.nextOccurrence(3, 0, at(22, 0))) // late evening: 3 am
+        assertEquals(7 to 0, Commands.nextOccurrence(7, 0, at(23, 30)))
+        assertEquals(19 to 0, Commands.nextOccurrence(7, 0, at(7, 0))) // exactly now: the next one
+        assertEquals(12 to 0, Commands.nextOccurrence(12, 0, at(9, 0)))
+        assertEquals(0 to 0, Commands.nextOccurrence(12, 0, at(13, 0)))
     }
 
     @Test fun torchAndMedia() {

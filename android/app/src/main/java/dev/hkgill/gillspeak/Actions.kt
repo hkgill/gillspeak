@@ -62,12 +62,16 @@ class Actions(private val context: Context) {
                 .putExtra(AlarmClock.EXTRA_LENGTH, command.seconds)
                 .putExtra(AlarmClock.EXTRA_SKIP_UI, true))
         })
-        is Command.Alarm -> ready(Plan("Alarm", "Clock", body = timeOfDay(command.hour, command.minute)) {
+        is Command.Alarm -> {
+            val (hour, minute) = if (command.exact) command.hour to command.minute
+            else java.time.LocalTime.now().let { Commands.nextOccurrence(command.hour, command.minute, it.hour * 60 + it.minute) }
+            ready(Plan("Alarm", "Clock", body = timeOfDay(hour, minute)) {
             start(Intent(AlarmClock.ACTION_SET_ALARM)
-                .putExtra(AlarmClock.EXTRA_HOUR, command.hour)
-                .putExtra(AlarmClock.EXTRA_MINUTES, command.minute)
+                .putExtra(AlarmClock.EXTRA_HOUR, hour)
+                .putExtra(AlarmClock.EXTRA_MINUTES, minute)
                 .putExtra(AlarmClock.EXTRA_SKIP_UI, true))
-        })
+            })
+        }
         is Command.Torch -> ready(Plan(if (command.on) "Torch on" else "Torch off", "Flashlight") { torch(command.on) })
         is Command.Media -> {
             val (title, key) = when (command.action) {

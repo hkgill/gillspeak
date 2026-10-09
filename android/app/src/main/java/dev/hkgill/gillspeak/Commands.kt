@@ -9,8 +9,11 @@ import kotlin.math.roundToInt
 sealed interface Command {
     data class OpenApp(val name: String) : Command
     data class Timer(val seconds: Int) : Command
-    /** [hour] is 0..23. */
-    data class Alarm(val hour: Int, val minute: Int) : Command
+    /**
+     * [hour] is 0..23. When no am or pm was said ([exact] false), [hour] is 1..12 as spoken and the alarm goes to
+     * whichever of the two comes next: see [Commands.nextOccurrence].
+     */
+    data class Alarm(val hour: Int, val minute: Int, val exact: Boolean = true) : Command
     data class Torch(val on: Boolean) : Command
     data class Media(val action: MediaAction) : Command
     /** [target] is the recipient and the message together ("Sam I'm running late"); see [Commands.splitRecipient]. */
@@ -31,9 +34,10 @@ object Commands {
     private val PLAY = re("""^(?:play|resume|continue)(?:\s+(?:the\s+)?(?:music|song|playback|podcast|audio))?$""")
     private val NEXT = re("""^(?:next|skip)(?:\s+(?:this\s+)?(?:song|track))?$|^(?:play\s+)?(?:the\s+)?next\s+(?:song|track)$""")
     private val PREVIOUS = re("""^(?:previous|last)(?:\s+(?:song|track))?$|^(?:play\s+)?(?:the\s+)?(?:previous|last)\s+(?:song|track)$|^go\s+back\s+a\s+(?:song|track)$""")
-    private val TIMER_FOR = re("""^(?:(?:set|start|make)\s+)?(?:a\s+|an\s+|me\s+a\s+)?timer\s+(?:for\s+)?(.+)$""")
-    private val TIMER_AFTER = re("""^(?:(?:set|start|make)\s+)?(?:a\s+|an\s+)?(.+?)\s+timer$""")
-    private val ALARM = re("""^(?:(?:set|make)\s+)?(?:an\s+|my\s+|the\s+)?alarm\s+(?:for|at)\s+(.+)$|^wake\s+me(?:\s+up)?\s+at\s+(.+)$""")
+    private const val SET = """(?:(?:set(?:\s+up)?|start|make|create|add|put(?:\s+on)?|give\s+me)\s+)?"""
+    private val TIMER_FOR = re("""^$SET(?:a\s+|an\s+|me\s+a\s+)?(?:new\s+)?timer\s+(?:for\s+|of\s+)?(.+)$""")
+    private val TIMER_AFTER = re("""^$SET(?:a\s+|an\s+)?(.+?)\s+timer$""")
+    private val ALARM = re("""^$SET(?:me\s+)?(?:an\s+|my\s+|the\s+|a\s+)?(?:new\s+)?alarm\s+(?:for|at|to)\s+(.+)$|^wake\s+me(?:\s+up)?\s+(?:at\s+)?(.+)$""")
     private val TEXT = re("""^(?:text|message|sms|send\s+(?:a\s+)?(?:text|message|sms)\s+to|send|tell)\s+(.+)$""")
     private val CALL = re("""^(?:call|phone|ring|dial)\s+(.+)$""")
     private val NAVIGATE = re("""^(?:navigate|directions|get\s+directions|take\s+me|drive|give\s+me\s+directions)\s+(?:to\s+)?(.+)$""")
@@ -56,7 +60,7 @@ object Commands {
             duration(m.groupValues[1])?.let { return Command.Timer(it) }
         }
         ALARM.matchEntire(plain)?.let { m ->
-            clockTime(m.groupValues.drop(1).first { it.isNotEmpty() })?.let { (h, min) -> return Command.Alarm(h, min) }
+            clockTime(m.groupValues.drop(1).first { it.isNotEmpty() })?.let { (h, min, exact) -> return Command.Alarm(h, min, exact) }
         }
         // Messages keep their own punctuation, so these match the text before commas were dropped.
         TEXT.matchEntire(s)?.let { m -> return Command.Text(m.groupValues[1].trim()) }
@@ -215,8 +219,11 @@ object Commands {
     }
 
     /** "7", "7am", "6:30 pm", "seven thirty", "half past 6", "quarter to 8 in the morning": hour (0..23) and minute. */
-    fun clockTime(spoken: String): Pair<Int, Int>? {
-        val norm = spoken.lowercase()
+    data class ClockTime(val hour: Int, val minute: Int, val exact: Boolean)
+
+    /** Hour 0..23 when am/pm (or "tonight", "in the morning", a 24-hour hour) settles it; otherwise 1..12 and not [ClockTime.exact]. */
+    fun clockTime(spoken: String): ClockTime? {
+        val norm = spoken.lowercase().replace('\u2019', '\'')
             .replace(Regex("\\b([ap])\\.\\s?m\\.?"), "$1m")
             .replace(Regex("(\\d{1,2})[:.](\\d{2})"), "$1 $2")
             .replace("o'clock", "").replace("oclock", "")
@@ -272,7 +279,15 @@ object Commands {
             false -> { if (hour !in 1..12) return null; if (hour == 12) hour = 0 }
             null -> if (hour !in 0..23) return null
         }
-        return hour to minute
+        return ClockTime(hour, minute, exact = pm != null || hour == 0 || hour > 12)
+    }
+
+    /** "Three o'clock" at 10:08 am means 3 pm: the next time the clock shows [hour]:[minute], on a 12-hour face. */
+    fun nextOccurrence(hour: Int, minute: Int, nowMinutes: Int): Pair<Int, Int> {
+        val am = hour % 12
+        val candidates = listOf(am, am + 12).map { it * 60 + minute }
+        val next = candidates.minBy { (it - nowMinutes + 24 * 60 - 1) % (24 * 60) } // strictly after now
+        return next / 60 to next % 60
     }
 
     const val MAX_TIMER_S = 24 * 3600
