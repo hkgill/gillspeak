@@ -68,8 +68,6 @@ class ListenActivity : Activity(), MicController.Ui {
 
         window.setDecorFitsSystemWindows(false)
         window.isNavigationBarContrastEnforced = false
-        window.insetsController?.setSystemBarsAppearance(0, android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
-            android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && windowManager.isCrossWindowBlurEnabled) {
             window.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
             window.attributes = window.attributes.apply { blurBehindRadius = dp(18) }
@@ -125,6 +123,9 @@ class ListenActivity : Activity(), MicController.Ui {
             }
         }
         setContentView(root)
+        // Light icons over the dark scrim. Only after setContentView: before it the window has no decor view yet.
+        window.insetsController?.setSystemBarsAppearance(0, android.view.WindowInsetsController.APPEARANCE_LIGHT_STATUS_BARS or
+            android.view.WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS)
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             onBackInvokedDispatcher.registerOnBackInvokedCallback(android.window.OnBackInvokedDispatcher.PRIORITY_DEFAULT) { close() }
