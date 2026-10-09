@@ -7,12 +7,11 @@ plugins {
     id("org.jetbrains.kotlin.android")
 }
 
-// local.properties is git-ignored: sdk.dir, gemini.apiKey and groq.apiKey live there.
+// local.properties is git-ignored: sdk.dir and the release.* signing settings live there.
+// API keys never go in the build: users paste their own into the app.
 val local = Properties().apply {
     rootProject.file("local.properties").takeIf { it.exists() }?.inputStream()?.use { load(it) }
 }
-
-fun quoted(v: String) = "\"" + v.replace("\\", "\\\\").replace("\"", "\\\"") + "\""
 
 // On-device speech recognition: the official sherpa-onnx Android library (same version as the desktop app),
 // fetched from its GitHub release and pinned by SHA256. It's 50 MB, so it's downloaded, not committed.
@@ -53,13 +52,26 @@ android {
         targetSdk = 36
         versionCode = 1
         versionName = "0.1.0"
-        buildConfigField("String", "GEMINI_API_KEY", quoted(local.getProperty("gemini.apiKey", "")))
-        buildConfigField("String", "GROQ_API_KEY", quoted(local.getProperty("groq.apiKey", "")))
         // Every current phone is 64-bit ARM; the other ABIs would add ~70 MB of native code.
         ndk { abiFilters += "arm64-v8a" }
     }
 
-    buildFeatures { buildConfig = true }
+    // Release builds are signed with a keystore kept outside the repo; see README "Release a signed APK".
+    val releaseStore = local.getProperty("release.storeFile")
+    if (releaseStore != null) {
+        signingConfigs.create("release") {
+            storeFile = file(releaseStore)
+            storePassword = local.getProperty("release.storePassword")
+            keyAlias = local.getProperty("release.keyAlias")
+            keyPassword = local.getProperty("release.keyPassword")
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.findByName("release")
+        }
+    }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17

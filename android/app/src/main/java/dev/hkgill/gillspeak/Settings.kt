@@ -13,18 +13,14 @@ class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("gillspeak", Context.MODE_PRIVATE)
     private val assets = context.assets
 
-    /** The key typed in the app wins; otherwise the one baked in from local.properties at build time. */
+    /** Cloud engine keys exist only if the user types their own in the app; none is ever built into the APK. */
     var apiKey: String
-        get() = prefs.getString("api_key", "").orEmpty().ifBlank { BuildConfig.GEMINI_API_KEY }
+        get() = prefs.getString("api_key", "").orEmpty()
         set(v) = prefs.edit().putString("api_key", v.trim()).apply()
 
-    val hasOwnKey get() = !prefs.getString("api_key", "").isNullOrBlank()
-
     var groqKey: String
-        get() = prefs.getString("groq_key", "").orEmpty().ifBlank { BuildConfig.GROQ_API_KEY }
+        get() = prefs.getString("groq_key", "").orEmpty()
         set(v) = prefs.edit().putString("groq_key", v.trim()).apply()
-
-    val hasOwnGroqKey get() = !prefs.getString("groq_key", "").isNullOrBlank()
 
     /** Which speech engine this phone uses: [ENGINE_GEMINI], [ENGINE_GROQ] or [ENGINE_LOCAL]. */
     var engine: String

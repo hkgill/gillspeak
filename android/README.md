@@ -16,25 +16,56 @@ Dictation for Android: hold the mic, talk, let go, and clean text lands in the f
 
 Tested on a Galaxy S25 and a Galaxy Z Fold5 (Android 16). Needs Android 11+.
 
+## Install
+
+Download `gillspeak-*.apk` from the [Releases page](https://github.com/hkgill/gillspeak/releases) on your phone, open it and allow installing from your browser or file manager. Released APKs contain no API keys: Local only works without one, and to use Gemini or Groq you paste your own key into the app (free at [Google AI Studio](https://aistudio.google.com/apikey) or [console.groq.com](https://console.groq.com/keys)). Keys stay on the phone.
+
+Then set it up as described at the end of [Build and install](#build-and-install).
+
 ## Build and install
 
 Needs the Android SDK (platform 36) and a JDK 17–21. Android Studio's bundled JBR works; JDK 25 is too new for the Android Gradle plugin.
 
 ```bash
 cd android
-cat > local.properties <<EOF
-sdk.dir=$HOME/Android/Sdk
-gemini.apiKey=YOUR_KEY    # optional: baked into the APK; or paste it in the app instead
-EOF
+echo "sdk.dir=$HOME/Android/Sdk" > local.properties
 JAVA_HOME=/path/to/jdk21 ./gradlew testDebugUnitTest assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`local.properties` is git-ignored. A key baked into the APK can be extracted by anyone who has the file, so don't share builds that contain one.
+`local.properties` is git-ignored. No API key is ever built into the app; paste yours into the app's settings.
 
 Wireless debugging (Android 11+): Developer options → Wireless debugging → Pair device with pairing code, then `adb pair IP:PAIRPORT CODE` and `adb connect IP:PORT` (the port on the main Wireless debugging screen).
 
 Then open the app and allow the microphone. For the bubble, turn on **gillspeak bubble** under Settings → Accessibility → Installed apps (apps installed from a file rather than adb may first need *App info → ⋮ → Allow restricted settings*). For the keyboard, turn on **gillspeak keyboard** in keyboard settings and switch to it. On Samsung phones, *Settings → General management → Keyboard list and default → Keyboard button on navigation bar* makes switching quicker.
+
+### Release a signed APK
+
+Release builds are signed with a keystore that never goes in the repo. Create it once and back it up: without it you can't publish an update that installs over an earlier release.
+
+```bash
+keytool -genkeypair -v -keystore ~/.android/gillspeak-release.jks -alias gillspeak \
+  -keyalg RSA -keysize 4096 -validity 10000
+```
+
+Add the signing settings to `local.properties`:
+
+```properties
+release.storeFile=/home/YOU/.android/gillspeak-release.jks
+release.storePassword=...
+release.keyAlias=gillspeak
+release.keyPassword=...
+```
+
+Raise `versionCode` and `versionName` in `app/build.gradle.kts`, then build and attach the APK to a GitHub release (never commit it):
+
+```bash
+JAVA_HOME=/path/to/jdk21 ./gradlew testDebugUnitTest assembleRelease
+cp app/build/outputs/apk/release/app-release.apk /tmp/gillspeak-0.1.0.apk
+gh release create android-v0.1.0 /tmp/gillspeak-0.1.0.apk --prerelease --title "Android 0.1.0 (experimental)"
+```
+
+Without the `release.*` settings, `assembleRelease` produces an unsigned `app-release-unsigned.apk` that Android won't install.
 
 ## Develop
 
