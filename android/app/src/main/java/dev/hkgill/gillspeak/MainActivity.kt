@@ -188,7 +188,7 @@ class MainActivity : Activity() {
         val bias = field("Supabase, Fedora").apply { setText(settings.biasText) }
         column.addView(card(
             "Keys and dictionary",
-            label("Gemini API key"), keyField,
+            label("Gemini API key (free at aistudio.google.com/apikey)"), keyField,
             label("Gemini model"), model,
             label("Groq API key (free at console.groq.com)"), groqField,
             label("Dictionary: one per line, spoken = Written"), replace,
@@ -257,16 +257,8 @@ class MainActivity : Activity() {
         showBubblePreview()
         showSnooze()
 
-        keyField.hint = when {
-            settings.hasOwnKey -> "Saved. Type to replace"
-            settings.apiKey.isNotBlank() -> "Using the key built into this app"
-            else -> "Paste your Gemini API key"
-        }
-        groqField.hint = when {
-            settings.hasOwnGroqKey -> "Saved. Type to replace"
-            settings.groqKey.isNotBlank() -> "Using the key built into this app"
-            else -> "Paste your Groq API key"
-        }
+        keyField.hint = if (settings.apiKey.isNotBlank()) "Saved. Type to replace" else "Paste your Gemini API key"
+        groqField.hint = if (settings.groqKey.isNotBlank()) "Saved. Type to replace" else "Paste your Groq API key"
         showEngine()
         showLog()
     }
