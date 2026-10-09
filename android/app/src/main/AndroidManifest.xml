@@ -3,6 +3,18 @@
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Voice commands: timers and alarms go through the Clock app; contacts are looked up on the phone to text or
+         call someone by name (Messages and Phone open filled in, nothing is sent or dialled by gillspeak). -->
+    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+
+    <!-- "Open Spotify": Android 11+ hides other apps unless the app says which ones it needs to see. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <application
         android:allowBackup="false"
@@ -18,6 +30,23 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Voice commands. Handling ASSIST lets gillspeak be chosen as the digital assistant, which the side
+             button's long-press (and the other assistant gestures) then opens. -->
+        <activity
+            android:name=".ListenActivity"
+            android:exported="true"
+            android:label="@string/listen_label"
+            android:theme="@style/Theme.Gillspeak.Listen"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:excludeFromRecents="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden|uiMode">
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 

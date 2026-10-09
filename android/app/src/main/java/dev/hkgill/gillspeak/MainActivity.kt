@@ -45,6 +45,8 @@ class MainActivity : Activity() {
     private lateinit var micRow: SetupRow
     private lateinit var bubbleRow: SetupRow
     private lateinit var keyboardRow: SetupRow
+    private lateinit var assistantRow: SetupRow
+    private lateinit var contactsRow: SetupRow
     private lateinit var keyField: EditText
     private lateinit var groqField: EditText
     private lateinit var engineRows: List<EngineRow>
@@ -101,6 +103,19 @@ class MainActivity : Activity() {
             else startActivity(Intent(ACTION_INPUT_METHOD_SETTINGS))
         }
         column.addView(card("Setup", micRow.view, divider(), bubbleRow.view, divider(), keyboardRow.view))
+
+        // The side button's long-press opens the digital assistant. That role can't be requested from an app, so
+        // this opens the screen where it's chosen.
+        assistantRow = setupRow("Side button") { startActivity(Intent(android.provider.Settings.ACTION_VOICE_INPUT_SETTINGS)) }
+        contactsRow = setupRow("Contacts") { requestPermissions(arrayOf(Manifest.permission.READ_CONTACTS), 2) }
+        column.addView(card(
+            "Voice commands", assistantRow.view, divider(), contactsRow.view,
+            text("Hold the side button and say what you want. It stops listening when you stop talking.", 14f, c.dim)
+                .apply { setPadding(0, dp(10), 0, dp(6)) },
+            text(COMMAND_EXAMPLES, 14f, c.text).apply { setLineSpacing(dp(3).toFloat(), 1f) },
+            text("Commands are understood on this phone. Texts and calls open Messages or Phone filled in; you tap Send or Call there.", 13f, c.dim)
+                .apply { setPadding(0, dp(10), 0, 0) },
+        ))
 
         snoozeStatus = text("", 15f, c.dim)
         snoozeCard = card(
@@ -250,6 +265,11 @@ class MainActivity : Activity() {
 
         val keyboardOn = getSystemService(InputMethodManager::class.java).enabledInputMethodList.any { it.packageName == packageName }
         showRow(keyboardRow, keyboardOn, "3", if (keyboardOn) "On. Tap to switch keyboards" else "Optional: a full-screen mic keyboard")
+
+        val assistant = getSystemService(android.app.role.RoleManager::class.java).isRoleHeld(android.app.role.RoleManager.ROLE_ASSISTANT)
+        showRow(assistantRow, assistant, "4", if (assistant) "On. Hold it to give a command" else "Tap, then choose ${Settings.APP_NAME} as the digital assistant app")
+        val contacts = checkSelfPermission(Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
+        showRow(contactsRow, contacts, "5", if (contacts) "Allowed. Text or call people by name" else "Optional: to text or call people by name")
 
         val bar = settings.bubbleShape == "bar"
         styleChip(roundChip, !bar)
@@ -473,6 +493,11 @@ class MainActivity : Activity() {
                 }
             }
         }
+    }
+
+    private companion object {
+        const val COMMAND_EXAMPLES = "“Open Spotify”\n“Set a timer for 10 minutes”\n“Wake me up at 6:30”\n" +
+            "“Turn on the torch”\n“Pause” · “Next song”\n“Text Sam I'm running late”\n“Call Mum”\n“Navigate to the airport”"
     }
 
     // ---- Building blocks ----

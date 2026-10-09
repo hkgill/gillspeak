@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- The voice-command screen: see-through, edge to edge, and it draws its own opening and closing. -->
+    <style name="Theme.Gillspeak.Listen" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowAnimationStyle">@null</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLayoutInDisplayCutoutMode">always</item>
+    </style>
+</resources>
