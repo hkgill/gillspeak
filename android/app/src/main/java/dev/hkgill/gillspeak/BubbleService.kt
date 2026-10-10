@@ -465,7 +465,12 @@ class BubbleService : AccessibilityService(), MicController.Ui {
 
         override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean {
             if (action == AccessibilityNodeInfo.ACTION_CLICK) {
-                if (mic.toggle()) host.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                when {
+                    // Like a tap: setup that isn't finished opens the app.
+                    !mic.isActive && mic.needsSetup() ->
+                        startActivity(Intent(this@BubbleService, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    mic.toggle() -> host.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                }
                 return true
             }
             if (action != R.id.action_snooze) return super.performAccessibilityAction(host, action, args)
