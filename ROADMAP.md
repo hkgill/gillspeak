@@ -55,7 +55,8 @@ Later:
 ## Voice commands and Gemma: still to do
 
 - [ ] Check the "Gemma on this phone" settings card on a phone
-- [ ] Merge the voice-commands work, then the Gemma work
+- [x] Merge the voice-commands work
+- [ ] Merge the Gemma work
 - [ ] Measure memory, battery and heat with Parakeet and Gemma both loaded
 - [ ] Try Gemma's NPU build for the Snapdragon 8 Elite (`sm8750`) on the Galaxy S25: likely faster and lighter on the battery
 - [ ] Two commands in one sentence ("set an alarm for 7 and turn the torch off"); today only the first runs
