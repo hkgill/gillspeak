@@ -18,9 +18,10 @@ import java.util.Locale
 
 /**
  * Mindful mode. A separate accessibility service from the bubble, receiving events only from
- * YouTube, Instagram and TikTok, so each service's description stays accurate. It spots their short-video feeds from
- * view ids ([Feeds]), times them with [FeedClock], and covers the feed with a [StopCard] at the user's limit and while
- * the feeds are paused. It never reads text or takes screenshots. Debug builds also log what it saw to files/mindful.log.
+ * YouTube, Instagram, TikTok and Facebook, so each service's description stays accurate. It spots their short-video
+ * feeds from view ids, or for Facebook, which hides its ids, a few fixed labels of Facebook's own views ([Feeds]); it
+ * times them with [FeedClock], and covers the feed with a [StopCard] at the user's limit and while the feeds are
+ * paused. It never reads posts, captions or messages, and never takes screenshots. Debug builds also log what it saw to files/mindful.log.
  *
  *     adb shell run-as dev.hkgill.gillspeak cat files/mindful.log
  */
@@ -79,12 +80,21 @@ class FocusService : AccessibilityService() {
             main.postDelayed(look, POLL_MS)
             return
         }
-        val seen = root?.let { r -> Feeds.detect(pkg) { id -> r.findAccessibilityNodeInfosByViewId(id).any { it.isVisibleToUser } } }
+        val seen = root?.let { Feeds.detect(pkg, NodeScreen(it)) }
         if (root != null && pkg in Feeds.PACKAGES && settings.mindfulProbe) probe(root)
         update(System.currentTimeMillis(), seen)
         // While a feed is open, keep looking: a video can play for a minute without an event, and leaving to an app
         // that isn't watched sends none at all.
         if (seen != null) main.postDelayed(look, POLL_MS)
+    }
+
+    /** [Feeds.Screen] over the window in front. Labels are searched by Android, then matched exactly. */
+    private class NodeScreen(private val root: AccessibilityNodeInfo) : Feeds.Screen {
+        override fun hasId(id: String) = root.findAccessibilityNodeInfosByViewId(id).any { it.isVisibleToUser }
+        override fun hasLabel(label: String) =
+            root.findAccessibilityNodeInfosByText(label).any { it.isVisibleToUser && it.contentDescription?.toString() == label }
+        override fun hasSelectedTab(prefix: String) =
+            root.findAccessibilityNodeInfosByText(prefix.trim()).any { it.isVisibleToUser && it.isSelected && it.contentDescription?.startsWith(prefix) == true }
     }
 
     private fun update(now: Long, seen: Feeds.Feed?) {
