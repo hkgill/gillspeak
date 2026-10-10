@@ -3,7 +3,6 @@ package dev.hkgill.gillspeak
 import android.text.InputType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
-import org.junit.Assert.assertThrows
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -38,18 +37,9 @@ class SafetyTest {
         assertFalse(isSafeTestFile("/data/t.wav"))
     }
 
-    private fun chat(content: String, finish: String) =
-        """{"choices":[{"message":{"role":"assistant","content":${org.json.JSONObject.quote(content)}},"finish_reason":"$finish"}]}"""
-
-    @Test fun groqCleanupMustFinishNormally() {
-        assertEquals("Meet on Friday.", Groq.parseChat(chat("Meet on Friday.", "stop"), "meet on thursday sorry friday"))
-        val e = assertThrows(GeminiError::class.java) { Groq.parseChat(chat("Meet on", "length"), "meet on friday at the office") }
-        assertEquals("truncated", e.kind)
-        assertThrows(GeminiError::class.java) { Groq.parseChat("""{"choices":[]}""", "x") }
-    }
-
-    @Test fun groqCleanupStripsEchoedWrappers() {
-        assertEquals("Hello there.", Groq.parseChat(chat("<transcript>\"Hello there.\"</transcript>", "stop"), "hello there"))
+    @Test fun polishStripsEchoedWrappers() {
+        assertEquals("Hello there.", Dictation.stripEcho("<transcript>\"Hello there.\"</transcript>", "hello there"))
+        assertEquals("\"Hi.\"", Dictation.stripEcho("\"Hi.\"", "\"hi.\"")) // quotes the speaker said stay
     }
 
     @Test fun placeholderIsNotTreatedAsTypedText() {

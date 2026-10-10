@@ -32,7 +32,7 @@ import java.util.concurrent.Executors
  * see the side button being let go). The transcript is matched against [Commands], and [Actions] carries it out:
  * apps, timers and the torch straight away, texts and calls only after a tap.
  *
- * Being an activity in front is what lets it use the microphone; the same engine as dictation transcribes it.
+ * Being an activity in front is what lets it use the microphone; Parakeet on the phone transcribes it, as for dictation.
  */
 class ListenActivity : Activity(), MicController.Ui {
     private lateinit var settings: Settings
@@ -482,8 +482,7 @@ class ListenActivity : Activity(), MicController.Ui {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(12), 0, 0)
             addView(View(this@ListenActivity).apply { background = rounded(Look.LIME, dp(3).toFloat()) }, LinearLayout.LayoutParams(dp(6), dp(6)))
-            val understood = if (byModel) "understood by Gemma on this phone" else "understood on this phone"
-            val where = if (settings.engine == Settings.ENGINE_LOCAL) understood.replaceFirstChar { it.uppercase() } else "Transcribed by ${engineName()}, $understood"
+            val where = if (byModel) "Understood by Gemma on this phone" else "Understood on this phone"
             addView(text(where, 11.5f, DIM).apply { setPadding(dp(7), 0, 0, 0) })
         })
         if (card.visibility != View.VISIBLE) {
@@ -493,8 +492,6 @@ class ListenActivity : Activity(), MicController.Ui {
             card.animate().alpha(1f).translationY(0f).setDuration(280).setInterpolator(DecelerateInterpolator(1.6f)).start()
         }
     }
-
-    private fun engineName() = if (settings.engine == Settings.ENGINE_GROQ) "Groq" else "Gemini"
 
     // ---- Closing ----
 

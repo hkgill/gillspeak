@@ -1,6 +1,6 @@
 # Roadmap
 
-What's planned for gillspeak, as a checklist. The rule for everything here: **it runs on the device.** Nothing a person says, types or watches goes to the internet unless they choose a cloud engine.
+What's planned for gillspeak, as a checklist. The rule for everything here: **it runs on the device.** Nothing a person says, types or watches goes to the internet. (The desktop app's Gemini clean-up is the one opt-in exception: off by default, and it sends text, never audio.)
 
 Background, experiments and architecture for the on-device AI work: [docs/android-on-device-ai.md](docs/android-on-device-ai.md).
 
@@ -75,4 +75,4 @@ Later:
 
 ## Open questions
 
-- [ ] The cloud engines (Gemini, Groq) send audio off the phone. They stay as a labelled opt-in for now; revisit against the on-device rule.
+- [x] The cloud engines (Gemini, Groq) sent audio off the phone: removed from the Android app, which is now on-device only

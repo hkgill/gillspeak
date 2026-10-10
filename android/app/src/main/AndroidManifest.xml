@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Only for the one-off model downloads, which go through Android's DownloadManager. Speech, commands and
+         Mindful mode never use the network. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Voice commands: timers and alarms go through the Clock app; contacts are looked up on the phone to text or
          call someone by name (Messages and Phone open filled in, nothing is sent or dialled by gillspeak). -->

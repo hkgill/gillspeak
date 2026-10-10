@@ -202,7 +202,6 @@ class BubbleService : AccessibilityService(), MicController.Ui {
             wm.addView(target, targetParams)
             wm.addView(button, params)
             shown = true
-            mic.warm(models = false) // the local model waits for a press: see MicController.warm
         }
     }
 

@@ -21,8 +21,7 @@ import android.widget.TextView
 
 /**
  * A voice keyboard: hold the mic to talk and release to insert, or tap it to latch and tap again to finish.
- * Audio goes to Gemini, which returns a verbatim transcript and a cleaned version; the cleaned text is used
- * when the validator accepts it, otherwise the rules-cleaned transcript (as in gillspeak's daemon).
+ * Parakeet transcribes on the phone and the desktop's rules clean it up (see [Dictation]).
  */
 class GillspeakIme : InputMethodService(), MicController.Ui {
     private lateinit var mic: MicController

@@ -119,7 +119,7 @@ Parakeet stays the ear. Gemma's audio input remains an option for a later "mixed
 - **Constrained decoding.** Output is limited to the command schema, so it is always valid and never names an action that doesn't exist.
 - **A fixed list of actions.** `Actions` only knows the commands on the list; the model can't add one.
 - **Anything the model chose asks first.** A card shows what it understood ("Alarm 7:00 pm?") and waits for a tap.
-- **Dictation keeps its validator.** Polish goes through the existing `Gate` and `Validate` (as the Groq path does today); if the polished text fails, the rules-cleaned text is used.
+- **Dictation keeps its validator.** Polish goes through the existing `Gate` and `Validate` (as the Groq path did); if the polished text fails, the rules-cleaned text is used.
 
 ### Running both models
 
@@ -142,7 +142,7 @@ Both together fit comfortably on 12 GB phones (Galaxy S25, Z Fold5).
 
 ## Open questions
 
-- **Cloud engines.** The repo's rule is that nothing goes to the internet. The optional Gemini and Groq engines send audio to those services, and model downloads use the network (they send nothing of the user's). Still to decide: remove the cloud engines, go fully offline, or keep them as a labelled opt-in.
+- **Cloud engines.** Decided: removed. The Android app had optional Gemini and Groq engines that sent audio to those services; they're gone, and the network is used only for the model downloads (which send nothing of the user's).
 - **"Contentful mode"** for anti-doomscroll: judging whether what's being watched is worthwhile (needs the model), or the on/off switch for the feature?
 - **Measured on the real path.** The figures above come from the Gallery. Step 1's compare log will measure Parakeet + Gemma inside gillspeak, on real voice input.
 

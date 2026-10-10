@@ -188,7 +188,7 @@ class MainActivity : Activity() {
         BUBBLE -> detail("Bubble", bubblePage())
         SNOOZE -> detail("Snooze", snoozePage())
         MINDFUL -> detail("Mindful mode", mindfulPage())
-        WORDS -> detail("Words and keys", wordsPage())
+        WORDS -> detail("Words", wordsPage())
         RECENT -> detail("Recent dictations", recentPage())
         else -> homePage(asr, gemma)
     }
@@ -206,18 +206,17 @@ class MainActivity : Activity() {
 
     private fun homePage(asr: LocalAsr.Status, gemma: LocalAsr.Status): View {
         val col = column(dp(16), dp(8), dp(16), dp(32), gap = 16)
-        val local = settings.engine == Settings.ENGINE_LOCAL
         val chip = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
             background = rounded(t.accSoft, dp(999).toFloat())
             setPadding(dp(14), dp(8), dp(14), dp(8))
             addView(View(this@MainActivity).apply { background = rounded(t.accT, dp(4).toFloat()) }, LinearLayout.LayoutParams(dp(8), dp(8)))
-            addView(text(if (local) "On this phone" else "Sends audio", 14f, t.accT, f.bold).apply { setPadding(dp(8), 0, 0, 0) })
+            addView(text("On this phone", 14f, t.accT, f.bold).apply { setPadding(dp(8), 0, 0, 0) })
         }
         val chipTarget = FrameLayout(this).apply {
             minimumHeight = dp(48)
             addView(chip, FrameLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT, Gravity.CENTER_VERTICAL))
-            contentDescription = if (local) "Speech engine: on this phone. Change" else "Speech engine: ${engineName()}, sends audio. Change"
+            contentDescription = "Everything runs on this phone. Speech and understanding"
             setOnClickListener { go(ENGINE) }
         }
         col.addView(LinearLayout(this).apply {
@@ -231,19 +230,18 @@ class MainActivity : Activity() {
             addView(chipTarget)
         })
         col.addView(text(
-            "Hold the bubble to talk. Hold the side button to ask. " +
-                if (local) "Nothing leaves your phone." else "${engineName()} gets your audio.",
+            "Hold the bubble to talk. Hold the side button to ask. Nothing leaves your phone.",
             16f, t.ink2,
         ).apply { setPadding(dp(4), 0, dp(4), 0); setLineSpacing(0f, 1.15f) })
 
         col.addView(setupCard())
 
-        val engineExtra = progressOf(gemma) ?: progressOf(asr).takeIf { local }
+        val engineExtra = progressOf(gemma) ?: progressOf(asr)
         col.addView(card(dp(6), dp(6)).apply {
             addView(navRow("Speech and understanding", engineSummary(asr, gemma), ENGINE, engineExtra?.let { bar(it, 4) }))
             addView(navRow("Bubble", bubbleSummary(), BUBBLE))
             addView(navRow("Snooze", snoozeSummary(), SNOOZE, summaryColor = if (settings.snoozed()) t.attT else t.ink2))
-            addView(navRow("Words and keys", wordsSummary(), WORDS))
+            addView(navRow("Words", wordsSummary(), WORDS))
             addView(navRow("Mindful mode", mindfulSummary(), MINDFUL))
         })
 
@@ -410,22 +408,12 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun engineName() = when (settings.engine) {
-        Settings.ENGINE_GEMINI -> "Gemini"
-        Settings.ENGINE_GROQ -> "Groq"
-        else -> "Local only"
-    }
-
-    private fun engineSummary(asr: LocalAsr.Status, gemma: LocalAsr.Status): String {
-        val local = settings.engine == Settings.ENGINE_LOCAL
-        val model = when {
-            local && asr is LocalAsr.Status.Downloading -> "Parakeet downloading, ${percent(asr)}%"
-            local && asr != LocalAsr.Status.Ready -> "Parakeet needs downloading"
-            gemma is LocalAsr.Status.Downloading -> "Gemma downloading, ${percent(gemma)}%"
-            gemma == LocalAsr.Status.Ready -> if (settings.localAi) "Gemma on" else "Gemma off"
-            else -> "No Gemma"
-        }
-        return "${engineName()} · $model"
+    private fun engineSummary(asr: LocalAsr.Status, gemma: LocalAsr.Status): String = when {
+        asr is LocalAsr.Status.Downloading -> "Parakeet downloading, ${percent(asr)}%"
+        asr != LocalAsr.Status.Ready -> "Parakeet needs downloading"
+        gemma is LocalAsr.Status.Downloading -> "Gemma downloading, ${percent(gemma)}%"
+        gemma == LocalAsr.Status.Ready -> if (settings.localAi) "On this phone · Gemma on" else "On this phone · Gemma off"
+        else -> "On this phone · no Gemma"
     }
 
     private fun bubbleSummary() = (if (settings.bubbleShape == "bar") "Wide bar" else "Round bubble") + " · " + sizeWord().lowercase()
@@ -445,12 +433,7 @@ class MainActivity : Activity() {
 
     private fun wordsSummary(): String {
         val words = dictionaryWords().size
-        val keys = listOf(settings.apiKey, settings.groqKey).count { it.isNotBlank() }
-        return "$words ${if (words == 1) "word" else "words"} · " + when (keys) {
-            0 -> "no keys"
-            1 -> "1 key added"
-            else -> "$keys keys added"
-        }
+        return "$words ${if (words == 1) "word" else "words"}"
     }
 
     // ---- Detail pages ----
@@ -478,23 +461,7 @@ class MainActivity : Activity() {
 
     private fun enginePage(asr: LocalAsr.Status, gemma: LocalAsr.Status): View {
         val col = column(dp(16), dp(4), dp(16), dp(32), gap = 12)
-        col.addView(section("Speech engine", top = 8))
-        val group = column(0, 0, 0, 0, gap = 10)
-        group.addView(engineCard(Settings.ENGINE_LOCAL, "Local only", "Default", cloud = false, "Nothing leaves your phone. Works offline. English and 24 European languages."))
-        group.addView(engineCard(Settings.ENGINE_GEMINI, "Gemini", "Sends audio", cloud = true, "Audio goes to Google. Handles Punjabi and mixed languages. Needs your API key."))
-        group.addView(engineCard(Settings.ENGINE_GROQ, "Groq", "Sends audio", cloud = true, "Audio goes to Groq. Fast Whisper transcription. Needs your API key."))
-        col.addView(group)
-        if (settings.engine != Settings.ENGINE_LOCAL) settings.engineProblem(this)?.let { problem ->
-            col.addView(text(problem.removePrefix("Tap here to ").replaceFirstChar { it.uppercase() }, 15f, t.attT, f.bold).apply {
-                background = rounded(t.attSoft, dp(22).toFloat())
-                setPadding(dp(18), dp(14), dp(18), dp(14))
-                minimumHeight = dp(48)
-                ripple(this, 22)
-                setOnClickListener { go(WORDS) }
-            })
-        }
-
-        col.addView(section("On this phone", top = 14))
+        col.addView(section("On this phone", top = 8))
         col.addView(card(dp(6), dp(6)).apply {
             addView(modelRow("Parakeet", "Hears your speech", LocalAsr.TOTAL_BYTES, asr, ::onParakeetButton) {
                 LocalAsr.delete(applicationContext) { runOnUiThread { render(); toast("Parakeet deleted") } }
@@ -505,7 +472,6 @@ class MainActivity : Activity() {
         })
 
         val ready = gemma == LocalAsr.Status.Ready
-        val local = settings.engine == Settings.ENGINE_LOCAL
         col.addView(card(dp(6), dp(6)).apply {
             addView(switchRow(
                 "Understand commands the rules miss",
@@ -514,12 +480,8 @@ class MainActivity : Activity() {
             ) { settings.localAi = it })
             addView(switchRow(
                 "Polish dictation",
-                when {
-                    !ready -> "Download Gemma to turn this on."
-                    !local -> "Works with Local only."
-                    else -> "Tidies punctuation and drops filler words before typing. Adds about a second."
-                },
-                settings.localPolish, ready && local,
+                if (ready) "Tidies punctuation and drops filler words before typing. Adds about a second." else "Download Gemma to turn this on.",
+                settings.localPolish, ready,
             ) { settings.localPolish = it })
         })
 
@@ -530,46 +492,6 @@ class MainActivity : Activity() {
                 .apply { setPadding(dp(20), dp(12), dp(20), 0) })
         })
         return col
-    }
-
-    private fun engineCard(id: String, title: String, tag: String, cloud: Boolean, detail: String): View {
-        val on = settings.engine == id
-        val radio = FrameLayout(this).apply {
-            background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setStroke(dp(2), t.ink) }
-            addView(View(this@MainActivity).apply {
-                background = rounded(t.ink, dp(6).toFloat())
-                alpha = if (on) 1f else 0f
-            }, FrameLayout.LayoutParams(dp(12), dp(12), Gravity.CENTER))
-        }
-        val head = LinearLayout(this).apply {
-            gravity = Gravity.CENTER_VERTICAL
-            addView(text(title, 16f, t.ink, f.bold))
-            addView(text(tag, 12f, if (cloud) t.attT else t.accT, f.bold).apply {
-                background = rounded(if (cloud) t.attSoft else t.accSoft, dp(999).toFloat())
-                setPadding(dp(8), dp(3), dp(8), dp(3))
-            }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginStart = dp(8) })
-        }
-        return LinearLayout(this).apply {
-            background = GradientDrawable().apply {
-                cornerRadius = dp(22).toFloat()
-                setColor(t.card)
-                if (on) setStroke(dp(2), t.ink)
-            }
-            setPadding(dp(18), dp(16), dp(18), dp(16))
-            addView(radio, LinearLayout.LayoutParams(dp(22), dp(22)).apply { topMargin = dp(1) })
-            addView(stack(head, text(detail, 14f, t.ink2).apply { setPadding(0, dp(4), 0, 0); setLineSpacing(0f, 1.1f) })
-                .apply { setPadding(dp(14), 0, 0, 0) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-            accessibilityDelegate = object : View.AccessibilityDelegate() {
-                override fun onInitializeAccessibilityNodeInfo(host: View, info: android.view.accessibility.AccessibilityNodeInfo) {
-                    super.onInitializeAccessibilityNodeInfo(host, info)
-                    info.className = android.widget.RadioButton::class.java.name
-                    info.isCheckable = true
-                    info.isChecked = on
-                }
-            }
-            ripple(this, 22)
-            setOnClickListener { settings.engine = id; render() }
-        }
     }
 
     /** One on-device model: its size and role, then Ready, a Download button, or the download's progress. */
@@ -946,50 +868,7 @@ class MainActivity : Activity() {
             })
         })
 
-        col.addView(section("API keys", top = 14))
-        col.addView(card(dp(6), dp(6)).apply {
-            addView(keyRow("Gemini", settings.apiKey, "aistudio.google.com/apikey") { settings.apiKey = it })
-            addView(keyRow("Groq", settings.groqKey, "console.groq.com") { settings.groqKey = it })
-            addView(settingRow("Gemini model", settings.model, "Change") {
-                ask("Gemini model", settings.model, password = false) { settings.model = it }
-            })
-        })
-        col.addView(note("Keys stay on this phone. They're only used if you pick that engine."))
         return col
-    }
-
-    private fun keyRow(name: String, key: String, where: String, save: (String) -> Unit): View =
-        settingRow(name, if (key.isBlank()) "Not added" else "Ends in ${key.takeLast(4)}", if (key.isBlank()) "Add" else "Change") {
-            ask("$name API key", "", password = true, message = "Get a free key at $where.") { save(it) }
-        }
-
-    private fun settingRow(title: String, value: String, action: String, onClick: () -> Unit): View = LinearLayout(this).apply {
-        gravity = Gravity.CENTER_VERTICAL
-        minimumHeight = dp(64)
-        setPadding(dp(20), dp(12), dp(12), dp(12))
-        addView(stack(text(title, 16f, t.ink, f.semibold), text(value, 14f, t.ink2).apply { fontFeatureSettings = "tnum" }),
-            LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
-        addView(pill(action, false, "$action $title", onClick))
-    }
-
-    /** A small dialog with one text field. Blank input changes nothing. */
-    private fun ask(title: String, current: String, password: Boolean, message: String? = null, save: (String) -> Unit) {
-        val field = EditText(this).apply {
-            setText(current)
-            isSingleLine = true
-            if (password) inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-        }
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .apply { if (message != null) setMessage(message) }
-            .setView(FrameLayout(this).apply { setPadding(dp(20), dp(8), dp(20), 0); addView(field) })
-            .setPositiveButton("Save") { _, _ ->
-                val v = field.text.toString().trim()
-                if (v.isNotEmpty()) { save(v); render(); toast("Saved") }
-            }
-            .setNegativeButton("Cancel", null)
-            .show()
-        field.requestFocus()
     }
 
     private fun recentPage(): View {
