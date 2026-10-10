@@ -130,6 +130,8 @@ class GillspeakIme : InputMethodService(), MicController.Ui {
             addView(micTitle)
             addView(micSub)
             setOnTouchListener(::onMicTouch)
+            // Touches are handled above; this is the click TalkBack and Switch Access send.
+            setOnClickListener { v -> if (mic.toggle()) v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY) }
         }
         root.addView(row(dp(190), micKey to 0))
 
@@ -169,7 +171,8 @@ class GillspeakIme : InputMethodService(), MicController.Ui {
     }
 
     @SuppressLint("ClickableViewAccessibility")
-    private fun repeatingKey(label: String, action: () -> Unit) = key(label) {}.apply {
+    // Touches are handled below; the key's click is the one TalkBack and Switch Access send.
+    private fun repeatingKey(label: String, action: () -> Unit) = key(label) { action() }.apply {
         val repeat = object : Runnable {
             override fun run() {
                 action()

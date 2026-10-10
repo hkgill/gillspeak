@@ -450,12 +450,24 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     private val snoozeAction = object : View.AccessibilityDelegate() {
         override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
             super.onInitializeAccessibilityNodeInfo(host, info)
+            // Holding isn't possible with TalkBack or Switch Access, so a click starts and a second click finishes.
+            info.isClickable = true
+            info.contentDescription = when {
+                mic.state == MicController.State.RECORDING || mic.state == MicController.State.LATCHED -> "Stop dictating"
+                mic.state == MicController.State.WORKING -> "Transcribing"
+                mic.canRetry -> "Retry dictation"
+                else -> "Dictate"
+            }
             if (mic.state == MicController.State.IDLE && !mic.canRetry) {
                 info.addAction(AccessibilityNodeInfo.AccessibilityAction(R.id.action_snooze, "Snooze for ${Snooze.label(settings.snoozeMinutes)}"))
             }
         }
 
         override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean {
+            if (action == AccessibilityNodeInfo.ACTION_CLICK) {
+                if (mic.toggle()) host.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                return true
+            }
             if (action != R.id.action_snooze) return super.performAccessibilityAction(host, action, args)
             if (mic.state != MicController.State.IDLE || mic.canRetry) return false
             snooze()

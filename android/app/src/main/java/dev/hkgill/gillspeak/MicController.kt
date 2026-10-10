@@ -66,6 +66,17 @@ class MicController(private val context: Context, private val ui: Ui) {
         return true
     }
 
+    /**
+     * A click from TalkBack or Switch Access, which can't hold a button down: starts a recording that runs until the
+     * next click, finishes one, or retries a failed one. Returns true when something started or finished.
+     */
+    fun toggle(): Boolean = when {
+        state == State.RECORDING || state == State.LATCHED -> { finish(); true }
+        canRetry -> { retry(); true }
+        state == State.IDLE -> latch()
+        else -> false
+    }
+
     /** Finger up. A short press latches recording on; a long one finishes it. Returns true when it finished. */
     fun release(): Boolean {
         if (state != State.RECORDING) return false
