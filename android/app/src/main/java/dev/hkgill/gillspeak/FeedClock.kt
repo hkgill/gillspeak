@@ -2,13 +2,22 @@ package dev.hkgill.gillspeak
 
 /**
  * Mindful mode's timer: one budget of feed time shared by YouTube Shorts, Instagram Reels and TikTok, so hopping
- * between them doesn't start it again. Time counts only while a feed is on screen; five minutes away from all of them
- * is a real break and starts the budget again. At the limit the stop card offers "5 more minutes" once; leaving
- * pauses the feeds for 30 minutes. Plain arithmetic on wall-clock milliseconds, kept apart from the service so it
- * can be unit tested.
+ * between them doesn't start it again. The budget is the user's choice, from 30 seconds to 30 minutes ([LIMITS_SEC]).
+ * Time counts only while a feed is on screen; five minutes away from all of them is a real break and starts it again.
+ * At the limit the stop card offers "5 more minutes" once; leaving pauses the feeds for 30 minutes. Plain arithmetic
+ * on wall-clock milliseconds, kept apart from the service so it can be unit tested.
  */
 object FeedClock {
-    const val LIMIT_MS = 10 * 60_000L
+    /** The budgets offered in the app's settings, in seconds; 30 seconds is the shortest. */
+    val LIMITS_SEC = listOf(30, 60, 120, 300, 600, 900, 1200, 1800)
+    const val DEFAULT_LIMIT_SEC = 600
+
+    /** A stored budget, or the default if it's missing or no longer one of the choices. */
+    fun limitOrDefault(stored: Int) = if (stored in LIMITS_SEC) stored else DEFAULT_LIMIT_SEC
+
+    /** 30 → "30 sec", 600 → "10 min". */
+    fun limitLabel(sec: Int) = if (sec < 60) "$sec sec" else "${sec / 60} min"
+
     const val EXTRA_MS = 5 * 60_000L
     const val BREAK_MS = 5 * 60_000L
     const val PAUSE_MS = 30 * 60_000L
@@ -28,9 +37,10 @@ object FeedClock {
         val usedMs: Long = 0, val lastAt: Long = 0, val onFeed: Boolean = false,
         val extended: Boolean = false, val pausedUntil: Long = 0,
     ) {
-        val limitMs get() = LIMIT_MS + if (extended) EXTRA_MS else 0
-        val overLimit get() = usedMs >= limitMs
-        val leftMs get() = (limitMs - usedMs).coerceAtLeast(0)
+        /** The budget of [limitSec] seconds, plus "5 more minutes" if it was taken. */
+        fun limitMs(limitSec: Int) = limitSec * 1000L + if (extended) EXTRA_MS else 0
+        fun overLimit(limitSec: Int) = usedMs >= limitMs(limitSec)
+        fun leftMs(limitSec: Int) = (limitMs(limitSec) - usedMs).coerceAtLeast(0)
         fun paused(now: Long) = now < pausedUntil
     }
 

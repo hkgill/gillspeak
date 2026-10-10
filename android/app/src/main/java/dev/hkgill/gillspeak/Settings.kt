@@ -171,6 +171,11 @@ class Settings(context: Context) {
         set(v) = prefs.edit().putLong("mindful_used", v.usedMs).putLong("mindful_last", v.lastAt).putBoolean("mindful_on", v.onFeed)
             .putBoolean("mindful_extended", v.extended).putLong("mindful_paused_until", v.pausedUntil).apply()
 
+    /** How much feed time Mindful mode allows before it stops the user, in seconds: one of [FeedClock.LIMITS_SEC]. */
+    var mindfulLimitSec: Int
+        get() = FeedClock.limitOrDefault(prefs.getInt("mindful_limit_sec", FeedClock.DEFAULT_LIMIT_SEC))
+        set(v) = prefs.edit().putInt("mindful_limit_sec", FeedClock.limitOrDefault(v)).apply()
+
     /** Debug builds: log the view ids [FocusService] sees in the watched apps, to find the feeds' ids. Set over adb only. */
     var mindfulProbe: Boolean
         get() = debuggable && prefs.getBoolean("mindful_probe", false)

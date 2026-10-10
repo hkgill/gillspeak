@@ -16,12 +16,14 @@ import java.io.File
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es polish "so um the meeting is on thursday sorry friday"
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez keep_empty_audio true   # or false
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez mindful_probe true   # or false
+ *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ei mindful_limit 30   # seconds
  *
  * The self-test runs a WAV from the app's files dir through the full pipeline; `engine` overrides the chosen
  * engine for that run only. `command` runs a sentence through the command rules and Gemma and logs both, without
  * doing anything; `compare` turns the rules-versus-Gemma log for spoken commands on or off (it's off by default,
  * as it runs Gemma for every command); `polish` runs a sentence through the rules and Gemma's polish, as if Parakeet had heard it;
- * `mindful_probe` makes [FocusService] log the view ids it sees in the watched apps (to files/mindful.log). Results go to `adb logcat -s gillspeak` and the app's dictation log.
+ * `mindful_probe` makes [FocusService] log the view ids it sees in the watched apps (to files/mindful.log);
+ * `mindful_limit` sets Mindful mode's budget until the app has a setting for it (one of [FeedClock.LIMITS_SEC]). Results go to `adb logcat -s gillspeak` and the app's dictation log.
  */
 class DebugReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -42,6 +44,10 @@ class DebugReceiver : BroadcastReceiver() {
         if (intent.hasExtra("mindful_probe")) {
             Settings(app).mindfulProbe = intent.getBooleanExtra("mindful_probe", false)
             Log.i(Dictation.TAG, "mindful probe ${if (Settings(app).mindfulProbe) "on" else "off"}")
+        }
+        if (intent.hasExtra("mindful_limit")) {
+            Settings(app).mindfulLimitSec = intent.getIntExtra("mindful_limit", FeedClock.DEFAULT_LIMIT_SEC)
+            Log.i(Dictation.TAG, "mindful limit ${FeedClock.limitLabel(Settings(app).mindfulLimitSec)}")
         }
         intent.getStringExtra("command")?.let { text ->
             val pending = goAsync()

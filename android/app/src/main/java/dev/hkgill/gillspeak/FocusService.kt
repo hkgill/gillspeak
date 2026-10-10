@@ -74,19 +74,20 @@ class FocusService : AccessibilityService() {
 
     private fun update(now: Long, seen: Feeds.Feed?) {
         val before = settings.feedClock
+        val limit = settings.mindfulLimitSec
         val after = FeedClock.observe(before, now, seen != null)
         if (after != before) settings.feedClock = after
         if (seen != feed) {
             feed?.let { log("off ${it.name} after ${FeedClock.format(now - since)}, ${FeedClock.format(after.usedMs)} used") }
             if (seen != null) {
                 if (before.usedMs > 0 && after.usedMs == 0L) log("break: the timer starts again")
-                log("on ${seen.name}, ${FeedClock.format(after.usedMs)} of ${FeedClock.format(after.limitMs)} used")
+                log("on ${seen.name}, ${FeedClock.format(after.usedMs)} of ${FeedClock.format(after.limitMs(limit))} used")
                 if (after.paused(now)) log("feeds paused: the stop card would show here")
             }
             feed = seen
             since = now
         }
-        if (!before.overLimit && after.overLimit) log("limit reached in ${seen?.name}: the stop card would show here")
+        if (!before.overLimit(limit) && after.overLimit(limit)) log("limit reached in ${seen?.name}: the stop card would show here")
     }
 
     /** Debug builds: logs each view id seen in the watched apps once, to find the feeds' ids. Ids only, no text. */

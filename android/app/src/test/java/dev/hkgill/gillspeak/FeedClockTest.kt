@@ -9,6 +9,7 @@ class FeedClockTest {
     private val t0 = 1_000_000_000L
     private val sec = 1000L
     private val min = 60_000L
+    private val TEN_MIN = FeedClock.DEFAULT_LIMIT_SEC
 
     /** Watches a feed from [from] for [ms], looking every 5 seconds as the service does, then looks once away. */
     private fun watch(s: FeedClock.State, from: Long, ms: Long, leave: Boolean = true): FeedClock.State {
@@ -32,7 +33,7 @@ class FeedClockTest {
         s = watch(s, t0 + 6 * min, 4 * min, leave = false)
         s = watch(s, t0 + 10 * min, 3 * min) // switching apps is a look that's still on a feed
         assertEquals(11 * min, s.usedMs)
-        assertTrue(s.overLimit)
+        assertTrue(s.overLimit(TEN_MIN))
     }
 
     @Test fun fiveMinutesAwayIsABreak() {
@@ -58,12 +59,12 @@ class FeedClockTest {
 
     @Test fun fiveMoreMinutesOnce() {
         var s = watch(FeedClock.State(), t0, 10 * min, leave = false)
-        assertTrue(s.overLimit)
+        assertTrue(s.overLimit(TEN_MIN))
         s = FeedClock.extend(s)
-        assertFalse(s.overLimit)
-        assertEquals(5 * min, s.leftMs)
+        assertFalse(s.overLimit(TEN_MIN))
+        assertEquals(5 * min, s.leftMs(TEN_MIN))
         s = watch(s, t0 + 10 * min, 5 * min, leave = false)
-        assertTrue(s.overLimit)
+        assertTrue(s.overLimit(TEN_MIN))
         assertTrue(s.extended) // the stop card won't offer it again
     }
 
@@ -85,13 +86,30 @@ class FeedClockTest {
         assertFalse(left.onFeed)
         val back = FeedClock.observe(left, t0 + 41 * min, true)
         assertEquals(0L, back.usedMs)
-        assertFalse(back.overLimit)
+        assertFalse(back.overLimit(TEN_MIN))
     }
 
     @Test fun thePauseOutlastsABreak() {
         val left = FeedClock.leave(watch(FeedClock.State(), t0, 10 * min, leave = false), t0 + 10 * min)
         val back = FeedClock.observe(left, t0 + 20 * min, true) // a break by length, but still inside the pause
         assertTrue(back.paused(t0 + 20 * min))
+    }
+
+    @Test fun theBudgetIsTheUsersChoice() {
+        val s = watch(FeedClock.State(), t0, 35 * sec, leave = false)
+        assertTrue(s.overLimit(30))
+        assertFalse(s.overLimit(60))
+        assertEquals(25 * sec, s.leftMs(60))
+        assertEquals(30 * sec + 5 * min, FeedClock.extend(s).limitMs(30))
+    }
+
+    @Test fun thirtySecondsIsTheShortestBudget() {
+        assertEquals(30, FeedClock.LIMITS_SEC.min())
+        assertEquals(30, FeedClock.limitOrDefault(30))
+        assertEquals(FeedClock.DEFAULT_LIMIT_SEC, FeedClock.limitOrDefault(10)) // not a choice: back to the default
+        assertEquals(FeedClock.DEFAULT_LIMIT_SEC, FeedClock.limitOrDefault(0))
+        assertEquals("30 sec", FeedClock.limitLabel(30))
+        assertEquals("10 min", FeedClock.limitLabel(600))
     }
 
     @Test fun formatsMinutesAndSeconds() {
