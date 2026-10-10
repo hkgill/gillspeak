@@ -285,14 +285,15 @@ fun isPasswordInput(inputType: Int): Boolean {
 /**
  * What the user has actually typed in a field seen through accessibility. An empty field often reports its
  * placeholder as its text (WhatsApp's "Message"), and not every app sets isShowingHintText, so text that
- * equals the hint counts as empty. Otherwise the placeholder would end up in front of the dictation.
+ * equals the hint counts as empty. Otherwise the placeholder would end up in front of the dictation. A cursor after
+ * the start shows the words were really typed, though: then they're kept, even when they match the hint.
  */
 fun realText(
     text: String?, hint: String?, showingHint: Boolean,
     selectionStart: Int = -1, selectionEnd: Int = -1, packageName: String? = null,
 ): String = when {
     showingHint || text == null -> ""
-    !hint.isNullOrEmpty() && text == hint -> ""
+    !hint.isNullOrEmpty() && text == hint && selectionStart <= 0 && selectionEnd <= 0 -> ""
     // These chat fields can expose their placeholder without hint metadata. Real typed text has a cursor;
     // the empty placeholder reports no selection at all.
     text == "Message" && selectionStart == -1 && selectionEnd == -1 &&

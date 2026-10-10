@@ -59,6 +59,9 @@ class SafetyTest {
         assertEquals("", realText(null, "Message", showingHint = false))
         assertEquals("Hello", realText("Hello", "Message", showingHint = false))
         assertEquals("Message", realText("Message", null, showingHint = false)) // no hint: it's real text
+        // Regression (Codex review): typed words that match the hint, with the cursor after them, are real text.
+        assertEquals("Message", realText("Message", "Message", false, 7, 7))
+        assertEquals("", realText("Message", "Message", false, 0, 0))
     }
 
     @Test fun chatPlaceholderWithoutHintOrSelectionIsNotInserted() {
