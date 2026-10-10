@@ -19,26 +19,28 @@ Stop endless scrolling of YouTube Shorts, Instagram Reels and TikTok. Plain rule
 
 Decide first:
 
-- [ ] How strict at the limit: a firm stop with one "5 more minutes", or a nudge that can be dismissed (proposed: firm stop)
-- [ ] One timer shared across all three apps, or one each (proposed: shared)
-- [ ] How long away counts as a real break and resets the timer (proposed: 5 minutes)
-- [ ] The name: "Mindful mode", or something else
+- [x] How strict at the limit: a firm stop with one "5 more minutes" (chosen over a nudge that can be dismissed)
+- [x] One timer shared across all three apps
+- [x] Five minutes away counts as a real break and resets the timer
+- [x] The name: "Mindful mode"
 - [ ] What "contentful mode" means: judging whether what's being watched is worthwhile (needs Gemma), or the on/off switch
 
 Phase 1, detection only:
 
-- [ ] A separate accessibility service ("gillspeak focus") that only watches YouTube, Instagram and TikTok, so the bubble's privacy description stays accurate
-- [ ] Spot the feeds from layout ids, not content: the Shorts player in YouTube, the Reels viewer in Instagram, all of TikTok; normal videos, the feed, search and messages stay free
-- [ ] A debug log of what was detected and for how long, checked against a day of normal use before anything blocks
-- [ ] Unit tests for the timer: shared time across apps, the break that resets it, the extension, the cool-off
+- [x] A separate accessibility service ("gillspeak focus") that only watches YouTube, Instagram and TikTok, so the bubble's privacy description stays accurate
+- [x] Spot the feeds from layout ids, not content: the Shorts player in YouTube, the Reels viewer in Instagram, all of TikTok; normal videos, the feed, search and messages stay free (Reels and TikTok checked on a phone; Shorts still to check)
+- [x] A debug log of what was detected and for how long
+- [ ] Check it against a day of normal use, then take the service out of debug-only builds
+- [x] Unit tests for the timer: shared time across apps, the break that resets it, the extension, the cool-off
 
 Phase 2, the stop:
 
-- [ ] At 10 minutes, a full-screen gillspeak card over the feed: "Leave" goes home; "5 more minutes" allowed once, after a 10-second wait
-- [ ] After leaving, the feeds stay paused for 30 minutes; the rest of each app keeps working
+- [x] At the limit (10 minutes by default), a full-screen gillspeak card over the feed: "Leave" goes home; "5 more minutes" allowed once, after a 10-second wait
+- [x] After leaving, the feeds stay paused for 30 minutes; the rest of each app keeps working
 
 Phase 3, the switch and stats:
 
+- [x] A Mindful mode page with the time limit, from 30 seconds to 30 minutes
 - [ ] A Mindful mode switch in the app (off by default), with friction to turn it off, such as a 30-second wait
 - [ ] Today's minutes per app and how often it stopped you, kept on the phone
 
