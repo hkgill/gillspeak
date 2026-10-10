@@ -244,7 +244,7 @@ class MainActivity : Activity() {
             addView(navRow("Bubble", bubbleSummary(), BUBBLE))
             addView(navRow("Snooze", snoozeSummary(), SNOOZE, summaryColor = if (settings.snoozed()) t.attT else t.ink2))
             addView(navRow("Words and keys", wordsSummary(), WORDS))
-            if (mindfulBuilt()) addView(navRow("Mindful mode", mindfulSummary(), MINDFUL))
+            addView(navRow("Mindful mode", mindfulSummary(), MINDFUL))
         })
 
         col.addView(recentCard())
@@ -434,9 +434,6 @@ class MainActivity : Activity() {
         settings.snoozedUntil()?.let { return "Hidden until ${clock(it)}" }
         return if (settings.nightSnooze) "Night snooze ${clockOfDay(settings.nightStart)} – ${clockOfDay(settings.nightEnd)}" else "Off"
     }
-
-    /** Mindful mode's service is only in debug builds while it is being tried out. */
-    private fun mindfulBuilt() = runCatching { packageManager.getServiceInfo(ComponentName(this, FocusService::class.java), 0) }.isSuccess
 
     private fun mindfulOn(): Boolean {
         val focus = ComponentName(this, FocusService::class.java)

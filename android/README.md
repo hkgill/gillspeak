@@ -11,6 +11,8 @@ Dictation for Android: hold the mic, talk, let go, and clean text lands in the f
 
 - **Voice commands** from the side button: hold it, say what you want, and gillspeak does it. See [Voice commands](#voice-commands).
 
+- **Mindful mode**: a time limit on YouTube Shorts, Instagram Reels and TikTok, shared between them (10 minutes by default, from 30 seconds to 30 minutes). At the limit a full-screen card covers the feed: "Leave" goes home and pauses the feeds for 30 minutes; "5 more minutes" is offered once, after a 10-second wait. A 5-minute break resets the time. It is a separate accessibility service, **gillspeak focus**, that only sees those three apps and only reads which screen is open, never what is on it. Turn it on from the app's **Mindful mode** page.
+
 - **Local only by default: nothing leaves your phone.** Speech recognition is Parakeet TDT 0.6B v3 on the phone (the desktop model, through sherpa-onnx), followed by the desktop clean-up rules. The ~640 MB model is downloaded once by Android's DownloadManager (Wi-Fi only, resumable) and each file is SHA256-checked. English and 24 other European languages.
 - **Optional cloud engines**, chosen in the app: **Gemini** (sends the audio to Google; one request transcribes and cleans with the desktop `clean_v2` prompt; handles Punjabi and mixed languages) and **Groq** (sends the audio to Groq's Whisper, then a text-only clean-up when the gate says it's worth it). The desktop rules, gate and validator are ported to Kotlin; if a cleaned text fails validation, the rules-cleaned transcript is inserted instead.
 - Keyboard: ⌨ goes back to your previous keyboard, ↶ removes the last dictation, and a failed request keeps the audio: tap the status line to retry.

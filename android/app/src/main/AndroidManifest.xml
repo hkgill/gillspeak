@@ -80,6 +80,20 @@
                 android:resource="@xml/bubble_service" />
         </service>
 
+        <!-- Mindful mode: a time limit on Shorts, Reels and TikTok. A separate service, so it can be on without the bubble. -->
+        <service
+            android:name=".FocusService"
+            android:exported="true"
+            android:label="@string/focus_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/focus_service" />
+        </service>
+
         <!-- DownloadManager's completion broadcast for the on-device model; it comes from the system. -->
         <receiver
             android:name=".ModelDownloadReceiver"
