@@ -80,6 +80,30 @@ class CommandsTest {
         assertEquals(Command.Search("parakeet speech model"), parse("Search for parakeet speech model"))
     }
 
+    @Test fun calendarEvents() {
+        assertEquals(Command.Event("", null, null), parse("Add an event to the calendar."))
+        assertEquals(Command.Event("Dentist", "tomorrow", "3"), parse("Add dentist tomorrow at 3 to my calendar"))
+        assertEquals(Command.Event("Meeting with Sam", "friday", "2:30"), parse("Schedule a meeting with Sam on Friday at 2:30"))
+        assertEquals(Command.Event("Appointment", "tomorrow", "9 am"), parse("Book an appointment for tomorrow at 9 am"))
+        assertEquals(Command.Event("Lunch with Mum", null, "noon"), parse("Create an event called lunch with Mum at noon"))
+        assertEquals(Command.Event("Team standup", "monday", null), parse("put team standup in my calendar for next Monday"))
+    }
+
+    @Test fun calendarTimes() {
+        val now = java.time.LocalDateTime.of(2026, 10, 10, 11, 38) // a Saturday
+        fun at(day: String?, time: String?) = Commands.eventStart(day, time, now)
+        assertNull(at(null, null))
+        assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 11, 15, 0), false), at("tomorrow", "3"))
+        assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 16, 14, 30), false), at("friday", "2:30"))
+        assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 11, 9, 0), false), at("tomorrow", "9 am"))
+        assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 10, 12, 0), false), at(null, "noon"))
+        assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 11, 10, 0), false), at(null, "10")) // 10 am has passed today
+        assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 10, 19, 0), false), at("tonight", "7"))
+        assertEquals(Commands.EventTime(java.time.LocalDate.of(2026, 10, 12).atStartOfDay(), true), at("monday", null))
+        assertEquals(Commands.EventTime(java.time.LocalDate.of(2026, 10, 17).atStartOfDay(), true), at("saturday", null)) // next week's
+        assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 16, 14, 30), false), at("Friday", "2:30")) // as Gemma writes it
+    }
+
     @Test fun politePrefixesAreIgnored() {
         assertEquals(Command.OpenApp("camera"), parse("Hey gillspeak, open the camera"))
         assertEquals(Command.Timer(120), parse("Could you please set a timer for 2 minutes?"))

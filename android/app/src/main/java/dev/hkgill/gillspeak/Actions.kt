@@ -34,7 +34,10 @@ class Actions(private val context: Context) {
         val confirm: String? = null,
         val opensApp: Boolean = false,
         val run: () -> Boolean,
-    )
+    ) {
+        /** The same plan, but waiting for a tap on [label] if it would otherwise run straight away. */
+        fun asking(label: String) = Plan(title, detail, body, confirm ?: label, opensApp, run)
+    }
 
     sealed interface Outcome {
         data class Ready(val plan: Plan) : Outcome
@@ -47,8 +50,12 @@ class Actions(private val context: Context) {
 
     fun plan(command: Command): Outcome = when (command) {
         is Command.OpenApp -> {
-            val apps = apps()
-            val i = Commands.bestMatch(command.name, apps.map { it.label })
+            var apps = apps()
+            var i = Commands.bestMatch(command.name, apps.map { it.label })
+            if (i == null) { // installed since the list was read?
+                apps = apps(fresh = true)
+                i = Commands.bestMatch(command.name, apps.map { it.label })
+            }
             if (i == null) Outcome.Problem("No app called “${command.name}”", "Say its name as it appears under its icon")
             else apps[i].let { app ->
                 ready(Plan("Open ${app.label}", "App on this phone", opensApp = true) {
@@ -105,6 +112,33 @@ class Actions(private val context: Context) {
                 start(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(command.place))))
         })
         is Command.Search -> ready(search(command.query))
+        is Command.Event -> {
+            val now = java.time.LocalDateTime.now()
+            val time = Commands.eventStart(command.day, command.time, now)
+            val ms = { t: java.time.LocalDateTime -> t.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() }
+            val whenText = time?.let { t ->
+                val d = t.start.toLocalDate()
+                val dayText = when (d) {
+                    now.toLocalDate() -> "Today"
+                    now.toLocalDate().plusDays(1) -> "Tomorrow"
+                    else -> d.format(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM"))
+                }
+                if (t.allDay) dayText else "$dayText, ${timeOfDay(t.start.hour, t.start.minute)}"
+            }
+            val body = listOfNotNull(command.title.ifEmpty { null }, whenText).joinToString("\n").ifEmpty { null }
+            // Opens the calendar's new-event screen filled in: nothing is saved until the person taps Save there,
+            // and gillspeak needs no calendar permission.
+            ready(Plan("New event", "Calendar · you save it there", body = body, opensApp = true) {
+                val intent = Intent(Intent.ACTION_INSERT, android.provider.CalendarContract.Events.CONTENT_URI)
+                if (command.title.isNotEmpty()) intent.putExtra(android.provider.CalendarContract.Events.TITLE, command.title)
+                time?.let { t ->
+                    intent.putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, ms(t.start))
+                    if (t.allDay) intent.putExtra(android.provider.CalendarContract.EXTRA_EVENT_ALL_DAY, true)
+                    else intent.putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, ms(t.start.plusHours(1)))
+                }
+                start(intent)
+            })
+        }
     }
 
     /** For speech that isn't a command: offered as a web search, never run without a tap. */
@@ -121,12 +155,25 @@ class Actions(private val context: Context) {
 
     // ---- Apps ----
 
-    /** Every app with an icon in the app drawer. Needs the launcher <queries> entry in the manifest (Android 11+). */
-    fun apps(): List<App> {
-        val pm = context.packageManager
-        return pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
-            .filter { it.activityInfo.packageName != context.packageName }
-            .map { App(it.loadLabel(pm).toString(), ComponentName(it.activityInfo.packageName, it.activityInfo.name)) }
+    /**
+     * Every app with an icon in the app drawer. Needs the launcher <queries> entry in the manifest (Android 11+).
+     * Reading each app's name loads that app's resources: about 6 s with a full phone's worth of apps on a
+     * Galaxy S25. So the list is read once, ahead of time ([ListenActivity] starts it when the side button is held),
+     * and kept: the bubble's accessibility service keeps the process alive. Worker thread only.
+     */
+    fun apps(fresh: Boolean = false): List<App> {
+        synchronized(Actions) {
+            cachedApps?.takeIf { !fresh && System.currentTimeMillis() - cachedAt < APPS_TTL_MS }?.let { return it }
+            val t0 = System.nanoTime()
+            val pm = context.packageManager
+            val list = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                .filter { it.activityInfo.packageName != context.packageName }
+                .map { App(it.loadLabel(pm).toString(), ComponentName(it.activityInfo.packageName, it.activityInfo.name)) }
+            Log.i(Dictation.TAG, "command: read ${list.size} app names in ${(System.nanoTime() - t0) / 1_000_000} ms")
+            cachedApps = list
+            cachedAt = System.currentTimeMillis()
+            return list
+        }
     }
 
     private fun start(intent: Intent): Boolean = try {
@@ -194,6 +241,10 @@ class Actions(private val context: Context) {
     }
 
     companion object {
+        private var cachedApps: List<App>? = null
+        private var cachedAt = 0L
+        private const val APPS_TTL_MS = 30 * 60_000L
+
         fun clock(seconds: Int): String {
             val h = seconds / 3600
             val m = seconds % 3600 / 60

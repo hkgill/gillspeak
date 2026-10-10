@@ -38,6 +38,7 @@ Make gillspeak the phone's digital assistant (in the app, *Voice commands → Si
 | "Text Sam I'm running late" | Opens Messages to Sam with the text filled in; you tap Send |
 | "Call Mum" | Opens the dialler with Mum's number; you tap Call |
 | "Navigate to the airport" | Directions in Maps |
+| "Add dentist tomorrow at 3 to my calendar", "schedule a meeting with Sam on Friday at 2:30" | Opens your calendar's new-event screen filled in; you tap Save |
 | "Search for …", or anything else | Offers a web search, only if you tap it |
 
 - **Only these commands ever run.** The transcript is matched by rules in `Commands.kt` on the phone, whichever engine transcribed it; a model never decides what to do. Texts and calls are never sent or dialled by gillspeak.

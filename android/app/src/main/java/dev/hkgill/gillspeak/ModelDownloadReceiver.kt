@@ -14,9 +14,10 @@ class ModelDownloadReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
         val app = context.applicationContext
-        if (!LocalAsr.owns(app, id)) return
-        // Install whichever files have finished; goAsync keeps the process alive while the ~650 MB is checked.
-        val pending = goAsync()
-        LocalAsr.install(app) { pending.finish() }
+        // goAsync keeps the process alive while the download is checked and moved into place.
+        when {
+            LocalAsr.owns(app, id) -> goAsync().let { pending -> LocalAsr.install(app) { pending.finish() } }
+            LocalLlm.owns(app, id) -> goAsync().let { pending -> LocalLlm.install(app) { pending.finish() } }
+        }
     }
 }

@@ -99,6 +99,12 @@ class RulesTest {
         assertEquals("", Validate.check("meet at 9 30 on Friday", "Meet at 9:30 on Friday."))
         assertEquals("missing_number", Validate.check("send 250 dollars to Sam today please", "Send 1250 dollars to Sam today, please."))
         assertEquals("", Validate.check("Thursday sorry Friday at 3", "Friday at 3."))
+        // Gemma 4 E2B on a Galaxy S25 swapped in Hindi mid-sentence.
+        assertEquals("new_script", Validate.check(
+            "can you please leave the back door open because i forgot my keys",
+            "Can you please leave the back door open क्योंकि I forgot my keys?"))
+        assertEquals("", Validate.check("ਮੈਂ ਘਰ ਆ ਰਿਹਾ ਹਾਂ okay", "ਮੈਂ ਘਰ ਆ ਰਿਹਾ ਹਾਂ, okay."))
+        assertEquals("", Validate.check("the cafe is open", "The café is open."))
         assertEquals("preamble", Validate.check("the report is done and sent", "Sure, the report is done and sent."))
         assertEquals("empty", Validate.check("hello", "  "))
         assertTrue(Validate.check("hi there", "Hi there, this is a much longer answer than asked").startsWith("too_long"))
