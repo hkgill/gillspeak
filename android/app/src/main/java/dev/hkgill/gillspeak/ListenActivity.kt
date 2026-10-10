@@ -42,7 +42,11 @@ class ListenActivity : Activity(), MicController.Ui {
     private val worker = Executors.newSingleThreadExecutor()
     // Gemma gets its own thread: loading it takes seconds, and a command the rules understood shouldn't wait.
     private val gemmaWorker = Executors.newSingleThreadExecutor()
-    private val debuggable by lazy { applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 }
+    // Debug builds can log the rules next to Gemma for every command. Off unless switched on over adb (see
+    // DebugReceiver): it runs Gemma a second time for commands the rules already understood, which costs battery.
+    private val comparing by lazy {
+        applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 && settings.compareLog
+    }
 
     private lateinit var scrim: View
     private lateinit var edge: EdgeWaveView
@@ -292,8 +296,8 @@ class ListenActivity : Activity(), MicController.Ui {
         when {
             rules != null -> {
                 plan(rules, model = false)
-                // Debug builds also ask Gemma, only to log what it would have done next to the rules.
-                if (debuggable && gemmaOn()) gemmaWorker.execute { askGemma(text, rules) }
+                // When comparing, also ask Gemma, only to log what it would have done next to the rules.
+                if (comparing && gemmaOn()) gemmaWorker.execute { askGemma(text, rules) }
             }
             gemmaOn() -> gemmaWorker.execute {
                 val command = askGemma(text, null)
@@ -314,12 +318,12 @@ class ListenActivity : Activity(), MicController.Ui {
             .onFailure { Log.e(Dictation.TAG, "gemma: command failed", it) }
         val command = reply.getOrNull()?.let { ModelCommands.toCommand(it.text) }
         Log.i(Dictation.TAG, "command: gemma=${command ?: "none"} raw=${reply.getOrNull()?.text}")
-        if (debuggable) compareLog(text, rules, reply.getOrNull(), command, reply.exceptionOrNull())
+        if (comparing) compareLog(text, rules, reply.getOrNull(), command, reply.exceptionOrNull())
         return command
     }
 
     /**
-     * Debug builds only: one JSON line per command in files/compare.log, to compare the rules with Gemma on real
+     * Debug builds with the compare log on: one JSON line per command in files/compare.log, to compare the rules with Gemma on real
      * speech. Stays on the phone; read it with `adb shell run-as dev.hkgill.gillspeak cat files/compare.log`.
      */
     private fun compareLog(heard: String, rules: Command?, reply: LocalLlm.Reply?, model: Command?, error: Throwable?) {

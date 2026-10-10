@@ -40,6 +40,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("local_polish", false)
         set(v) = prefs.edit().putBoolean("local_polish", v).apply()
 
+    /** Debug builds: log rules versus Gemma for every voice command (files/compare.log). Set over adb only. */
+    var compareLog: Boolean
+        get() = prefs.getBoolean("compare_log", false)
+        set(v) = prefs.edit().putBoolean("compare_log", v).apply()
+
     var model: String
         get() = prefs.getString("model", "").orEmpty().ifBlank { DEFAULT_MODEL }
         set(v) = prefs.edit().putString("model", v.trim()).apply()

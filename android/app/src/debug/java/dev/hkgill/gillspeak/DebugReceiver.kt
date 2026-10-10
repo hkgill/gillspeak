@@ -12,17 +12,23 @@ import java.io.File
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es selftest t.wav [--es engine local]
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez download_model true
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es command "set up an alarm for three o'clock"
+ *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez compare true   # or false
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es polish "so um the meeting is on thursday sorry friday"
  *
  * The self-test runs a WAV from the app's files dir through the full pipeline; `engine` overrides the chosen
  * engine for that run only. `command` runs a sentence through the command rules and Gemma and logs both, without
- * doing anything; `polish` runs a sentence through the rules and Gemma's polish, as if Parakeet had heard it. Results go to `adb logcat -s gillspeak` and the app's dictation log.
+ * doing anything; `compare` turns the rules-versus-Gemma log for spoken commands on or off (it's off by default,
+ * as it runs Gemma for every command); `polish` runs a sentence through the rules and Gemma's polish, as if Parakeet had heard it. Results go to `adb logcat -s gillspeak` and the app's dictation log.
  */
 class DebugReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext
         if (intent.getBooleanExtra("download_model", false)) {
             LocalAsr.download(app)
+        }
+        if (intent.hasExtra("compare")) {
+            Settings(app).compareLog = intent.getBooleanExtra("compare", false)
+            Log.i(Dictation.TAG, "compare log ${if (Settings(app).compareLog) "on" else "off"}")
         }
         intent.getStringExtra("command")?.let { text ->
             val pending = goAsync()
