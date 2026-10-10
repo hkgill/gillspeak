@@ -60,6 +60,9 @@ class StopCard(context: Context, private val onLeave: () -> Unit, private val on
         announceForAccessibility("$heading. $detail")
     }
 
+    /** Lets [FocusService] tell this card apart from gillspeak's other windows. */
+    override fun getAccessibilityClassName(): CharSequence = StopCard::class.java.name
+
     override fun onDetachedFromWindow() {
         removeCallbacks(tick)
         super.onDetachedFromWindow()

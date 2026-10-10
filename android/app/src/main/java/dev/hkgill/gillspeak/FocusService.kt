@@ -72,8 +72,10 @@ class FocusService : AccessibilityService() {
         lastLook = SystemClock.uptimeMillis()
         val root = if (power.isInteractive) runCatching { rootInActiveWindow }.getOrNull() else null
         val pkg = root?.packageName?.toString()
-        if (pkg == packageName) {
-            // Our own stop card is in front: the feed is still under it.
+        if (card != null && root?.className == StopCard::class.java.name) {
+            // The stop card itself is in front: the feed is still under it. Keep the clock going, so a pause that
+            // ends takes the card down. Any other gillspeak screen (settings, the side button) counts as leaving.
+            update(System.currentTimeMillis(), feed)
             main.postDelayed(look, POLL_MS)
             return
         }
@@ -88,7 +90,8 @@ class FocusService : AccessibilityService() {
     private fun update(now: Long, seen: Feeds.Feed?) {
         val before = settings.feedClock
         val limit = settings.mindfulLimitSec
-        val after = FeedClock.observe(before, now, seen != null)
+        // Nothing can be watched behind the stop card, so that time isn't charged.
+        val after = FeedClock.observe(before, now, seen != null, counting = !before.paused(now) && !before.overLimit(limit))
         if (after != before) settings.feedClock = after
         if (seen != feed) {
             feed?.let { log("off ${it.name} after ${FeedClock.format(now - since)}, ${FeedClock.format(after.usedMs)} used") }

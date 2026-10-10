@@ -44,10 +44,13 @@ object FeedClock {
         fun paused(now: Long) = now < pausedUntil
     }
 
-    /** The service looked at the screen at [now], and a feed was on it or wasn't. */
-    fun observe(s: State, now: Long, onFeed: Boolean): State = when {
-        s.onFeed && now - s.lastAt > MAX_GAP_MS -> observe(s.copy(onFeed = false), now, onFeed)
-        s.onFeed -> s.copy(usedMs = s.usedMs + (now - s.lastAt).coerceAtLeast(0), lastAt = now, onFeed = onFeed)
+    /**
+     * The service looked at the screen at [now], and a feed was on it or wasn't. While the stop card covers the feed
+     * ([counting] false) the time since the last look isn't charged: nothing could be watched. It still isn't a break.
+     */
+    fun observe(s: State, now: Long, onFeed: Boolean, counting: Boolean = true): State = when {
+        s.onFeed && now - s.lastAt > MAX_GAP_MS -> observe(s.copy(onFeed = false), now, onFeed, counting)
+        s.onFeed -> s.copy(usedMs = s.usedMs + if (counting) (now - s.lastAt).coerceAtLeast(0) else 0, lastAt = now, onFeed = onFeed)
         !onFeed -> s
         now - s.lastAt >= BREAK_MS -> State(lastAt = now, onFeed = true, pausedUntil = s.pausedUntil)
         else -> s.copy(lastAt = now, onFeed = true)

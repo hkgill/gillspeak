@@ -112,6 +112,28 @@ class FeedClockTest {
         assertEquals("10 min", FeedClock.limitLabel(600))
     }
 
+    @Test fun timeBehindTheStopCardIsNotCharged() {
+        // Five minutes sitting on the limit card leaves "5 more minutes" whole, and isn't a break either.
+        var s = watch(FeedClock.State(), t0, 10 * min, leave = false)
+        var t = t0 + 10 * min
+        repeat(60) { t += 5 * sec; s = FeedClock.observe(s, t, true, counting = false) }
+        assertEquals(10 * min, s.usedMs)
+        s = FeedClock.extend(s)
+        assertEquals(5 * min, s.leftMs(TEN_MIN))
+    }
+
+    @Test fun timeBehindThePauseCardDoesntUseTheNextBudget() {
+        var s = FeedClock.leave(watch(FeedClock.State(), t0, 10 * min, leave = false), t0 + 10 * min)
+        var t = t0 + 25 * min
+        s = FeedClock.observe(s, t, true, counting = false)
+        while (t + 5 * sec < t0 + 40 * min) { t += 5 * sec; s = FeedClock.observe(s, t, true, counting = !s.paused(t)) }
+        assertEquals(0L, s.usedMs) // fifteen minutes behind the pause card, none of it charged
+        t = t0 + 40 * min + 5 * sec
+        s = FeedClock.observe(s, t, true, counting = !s.paused(t))
+        assertFalse(s.paused(t))
+        assertTrue(s.usedMs <= 10 * sec) // the pause is over: only watching from here counts
+    }
+
     @Test fun formatsMinutesAndSeconds() {
         assertEquals("0m 00s", FeedClock.format(0))
         assertEquals("3m 05s", FeedClock.format(185_000))
