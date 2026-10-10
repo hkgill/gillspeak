@@ -34,6 +34,9 @@ class ModelCommandsTest {
         assertEquals(Command.Call("Mum"), cmd("""{"action":"call","contact":"Mum"}"""))
         assertEquals(Command.Navigate("Bondi"), cmd("""{"action":"navigate","place":"Bondi"}"""))
         assertEquals(Command.Search("weather tomorrow"), cmd("""{"action":"search","query":"weather tomorrow"}"""))
+        assertEquals(Command.Event("Dentist", "tomorrow", "3 pm"), cmd("""{"action":"calendar","title":"Dentist","day":"tomorrow","time":"3 pm"}"""))
+        assertEquals(Command.Event("Lunch with Mum", "sunday", "noon"), cmd("""{"action":"calendar","title":"lunch with Mum","day":"Sunday","time":"noon"}"""))
+        assertEquals(Command.Event("", null, null), cmd("""{"action":"calendar","title":"","day":"","time":""}"""))
     }
 
     @Test fun noneAndBrokenAnswersAreNotCommands() {

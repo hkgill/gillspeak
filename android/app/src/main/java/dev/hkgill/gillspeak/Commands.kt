@@ -21,6 +21,8 @@ sealed interface Command {
     data class Call(val who: String) : Command
     data class Navigate(val place: String) : Command
     data class Search(val query: String) : Command
+    /** A new calendar event. [title] may be empty; [day] and [time] are the words said ("tomorrow", "3 pm"), or null. */
+    data class Event(val title: String, val day: String?, val time: String?) : Command
 }
 
 enum class MediaAction { PLAY, PAUSE, NEXT, PREVIOUS }
@@ -41,6 +43,8 @@ object Commands {
     private val TEXT = re("""^(?:text|message|sms|send\s+(?:a\s+)?(?:text|message|sms)\s+to|send|tell)\s+(.+)$""")
     private val CALL = re("""^(?:call|phone|ring|dial)\s+(.+)$""")
     private val NAVIGATE = re("""^(?:navigate|directions|get\s+directions|take\s+me|drive|give\s+me\s+directions)\s+(?:to\s+)?(.+)$""")
+    private val EVENT = re("""^(?:add|create|make|schedule|book|put\s+in|set\s+up|new)\s+(?:me\s+)?(?:an?\s+|new\s+)*(?:calendar\s+)?(event|meeting|appointment|booking)\b\s*(.*)$""")
+    private val TO_CALENDAR = re("""^(?:add|put|schedule)\s+(.+?)\s+(?:to|in|on|into)\s+(?:my\s+|the\s+)?calendar\b\s*(.*)$""")
     private val SEARCH = re("""^(?:search(?:\s+the\s+web|\s+google)?(?:\s+for)?|google|look\s+up)\s+(.+)$""")
     private val OPEN = re("""^(?:open|launch|start|run|show|go\s+to)\s+(?:up\s+)?(?:the\s+|my\s+)?(.+?)(?:\s+app)?$""")
 
@@ -62,6 +66,11 @@ object Commands {
         ALARM.matchEntire(plain)?.let { m ->
             clockTime(m.groupValues.drop(1).first { it.isNotEmpty() })?.let { (h, min, exact) -> return Command.Alarm(h, min, exact) }
         }
+        EVENT.matchEntire(plain)?.let { m ->
+            val noun = m.groupValues[1].lowercase()
+            return event(m.groupValues[2], if (noun == "event") "" else noun.replaceFirstChar { it.uppercase() })
+        }
+        TO_CALENDAR.matchEntire(plain)?.let { m -> return event(m.groupValues[1] + " " + m.groupValues[2], "") }
         // Messages keep their own punctuation, so these match the text before commas were dropped.
         TEXT.matchEntire(s)?.let { m -> return Command.Text(m.groupValues[1].trim()) }
         CALL.matchEntire(plain)?.let { m -> return Command.Call(m.groupValues[1].trim()) }
@@ -69,6 +78,60 @@ object Commands {
         SEARCH.matchEntire(plain)?.let { m -> return Command.Search(m.groupValues[1].trim()) }
         OPEN.matchEntire(plain)?.let { m -> return Command.OpenApp(m.groupValues[1].trim()) }
         return null
+    }
+
+    // ---- Calendar events ----
+
+    private const val WEEKDAY = "monday|tuesday|wednesday|thursday|friday|saturday|sunday"
+    private val EVENT_DAY = re("""\b(?:on\s+|this\s+|next\s+)?(today|tonight|tomorrow|the\s+day\s+after\s+tomorrow|$WEEKDAY)\b""")
+    private val EVENT_TIME = re("""\b(?:at|from|for)\s+(.+?)(?=\s+(?:on|with|called|about|today|tonight|tomorrow|next|this)\b|$)""")
+    private val EVENT_LEAD = re("""^(?:to\s+(?:my\s+|the\s+)?calendar\b|called|named|titled|about|for|:)\s*""")
+
+    /** Splits what followed "add an event" into a title, a day and a time; [kind] ("Meeting") leads the title. */
+    private fun event(rest: String, kind: String): Command.Event {
+        var s = rest.trim().removeSuffix(".")
+        var day: String? = null
+        EVENT_DAY.find(s)?.let { m -> day = m.groupValues[1].lowercase(); s = s.removeRange(m.range) }
+        var time: String? = null
+        EVENT_TIME.findAll(s).firstOrNull { clockTime(it.groupValues[1]) != null }?.let { m ->
+            time = m.groupValues[1].trim().replace(re("""^(?:(?:at|from|for)\s+)+"""), "") // "for at 9 am"
+            s = s.removeRange(m.range)
+        }
+        s = s.replace(Regex("\\s+"), " ").trim()
+        while (true) s = EVENT_LEAD.replace(s, "").trim().takeIf { it != s } ?: break
+        s = s.replace(re("""\s+(?:to|in|on|into)\s+(?:my\s+|the\s+)?calendar$"""), "").trim()
+        s = s.replace(re("""(?:\s+(?:for|on|at|from))+$"""), "").trim() // left over once the day or time was taken out
+        val title = listOf(kind, s).filter { it.isNotEmpty() }.joinToString(" ").replaceFirstChar { it.uppercaseChar() }
+        return Command.Event(title, day, time)
+    }
+
+    data class EventTime(val start: java.time.LocalDateTime, val allDay: Boolean)
+
+    /**
+     * When an event starts, from the [day] and [time] said, relative to [now]; null when neither was said. A time
+     * without am or pm reads as a working day would: 8 to 11 is morning, 12 is noon, 1 to 7 is afternoon or evening.
+     * A weekday is the next one after today. With no day, a time that has passed today means tomorrow.
+     */
+    fun eventStart(spokenDay: String?, time: String?, now: java.time.LocalDateTime): EventTime? {
+        val day = spokenDay?.lowercase()?.trim()?.replace(Regex("\\s+"), " ")?.removePrefix("on ")?.removePrefix("next ")?.removePrefix("this ")
+        val clock = time?.let(::clockTime)
+        if (day == null && clock == null) return null
+        val today = now.toLocalDate()
+        val date = when (day) {
+            null, "today", "tonight" -> today
+            "tomorrow" -> today.plusDays(1)
+            "the day after tomorrow" -> today.plusDays(2)
+            else -> {
+                val wanted = java.time.DayOfWeek.valueOf(day.uppercase())
+                generateSequence(today.plusDays(1)) { it.plusDays(1) }.first { it.dayOfWeek == wanted }
+            }
+        }
+        if (clock == null) return EventTime(date.atStartOfDay(), allDay = true)
+        var hour = clock.hour
+        if (!clock.exact) hour = if (day == "tonight" || hour in 1..7) hour % 12 + 12 else hour
+        var start = date.atTime(hour, clock.minute)
+        if (day == null && start.isBefore(now)) start = start.plusDays(1)
+        return EventTime(start, allDay = false)
     }
 
     // ---- Recipients ----

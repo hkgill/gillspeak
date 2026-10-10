@@ -61,7 +61,8 @@ Later:
 - [ ] Try Gemma's NPU build for the Snapdragon 8 Elite (`sm8750`) on the Galaxy S25: likely faster and lighter on the battery
 - [ ] Two commands in one sentence ("set an alarm for 7 and turn the torch off"); today only the first runs
 - [ ] Better message wording ("say sorry" should make the message apologise), with a better prompt or Gemma 4 E4B
-- [ ] More commands: reminders with a note, calendar events, WhatsApp and email, "play X on Spotify", volume, screenshot and lock, settings panels
+- [x] Calendar events: the new-event screen opens filled in (title, day, time), and you save it
+- [ ] More commands: reminders with a note, WhatsApp and email, "play X on Spotify", volume, screenshot and lock, settings panels
 - [ ] "Send it" while dictating: tap the app's Send button
 - [ ] Your own commands: a phrase that opens an app or a link
 - [ ] Safe commands from the lock screen (timer, torch, alarm, media)

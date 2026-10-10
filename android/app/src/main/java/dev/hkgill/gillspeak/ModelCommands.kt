@@ -13,7 +13,7 @@ import org.json.JSONObject
  * let other shapes through, so the prompt spells the shapes out instead.)
  */
 object ModelCommands {
-    val ACTIONS = listOf("open_app", "timer", "alarm", "torch", "media", "text", "call", "navigate", "search", "none")
+    val ACTIONS = listOf("open_app", "timer", "alarm", "torch", "media", "text", "call", "navigate", "search", "calendar", "none")
 
     val PROMPT = """
         You understand spoken commands for a phone's voice assistant. The person's words were transcribed by speech
@@ -29,6 +29,7 @@ object ModelCommands {
         {"action":"call","contact":"<who>"}
         {"action":"navigate","place":"<where>"}
         {"action":"search","query":"<what to look up>"}
+        {"action":"calendar","title":"<what the event is, or empty>","day":"<the day as said, e.g. tomorrow or Friday, or empty>","time":"<the time as said, or empty>"}
         {"action":"none"}   for anything that is not one of these commands, such as ordinary speech
 
         Copy durations and times exactly as said: never convert them to seconds or a 24-hour clock.
@@ -60,6 +61,7 @@ object ModelCommands {
             "call" -> s("contact")?.let { Command.Call(it) }
             "navigate" -> s("place")?.let { Command.Navigate(it) }
             "search" -> s("query")?.let { Command.Search(it) }
+            "calendar" -> Command.Event(s("title").orEmpty().replaceFirstChar { it.uppercaseChar() }, s("day")?.lowercase(), s("time"))
             else -> null
         }
     }

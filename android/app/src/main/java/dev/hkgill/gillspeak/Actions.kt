@@ -112,6 +112,33 @@ class Actions(private val context: Context) {
                 start(Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(command.place))))
         })
         is Command.Search -> ready(search(command.query))
+        is Command.Event -> {
+            val now = java.time.LocalDateTime.now()
+            val time = Commands.eventStart(command.day, command.time, now)
+            val ms = { t: java.time.LocalDateTime -> t.atZone(java.time.ZoneId.systemDefault()).toInstant().toEpochMilli() }
+            val whenText = time?.let { t ->
+                val d = t.start.toLocalDate()
+                val dayText = when (d) {
+                    now.toLocalDate() -> "Today"
+                    now.toLocalDate().plusDays(1) -> "Tomorrow"
+                    else -> d.format(java.time.format.DateTimeFormatter.ofPattern("EEEE d MMMM"))
+                }
+                if (t.allDay) dayText else "$dayText, ${timeOfDay(t.start.hour, t.start.minute)}"
+            }
+            val body = listOfNotNull(command.title.ifEmpty { null }, whenText).joinToString("\n").ifEmpty { null }
+            // Opens the calendar's new-event screen filled in: nothing is saved until the person taps Save there,
+            // and gillspeak needs no calendar permission.
+            ready(Plan("New event", "Calendar · you save it there", body = body, opensApp = true) {
+                val intent = Intent(Intent.ACTION_INSERT, android.provider.CalendarContract.Events.CONTENT_URI)
+                if (command.title.isNotEmpty()) intent.putExtra(android.provider.CalendarContract.Events.TITLE, command.title)
+                time?.let { t ->
+                    intent.putExtra(android.provider.CalendarContract.EXTRA_EVENT_BEGIN_TIME, ms(t.start))
+                    if (t.allDay) intent.putExtra(android.provider.CalendarContract.EXTRA_EVENT_ALL_DAY, true)
+                    else intent.putExtra(android.provider.CalendarContract.EXTRA_EVENT_END_TIME, ms(t.start.plusHours(1)))
+                }
+                start(intent)
+            })
+        }
     }
 
     /** For speech that isn't a command: offered as a web search, never run without a tap. */
