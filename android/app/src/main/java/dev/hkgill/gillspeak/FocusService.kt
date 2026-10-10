@@ -72,6 +72,11 @@ class FocusService : AccessibilityService() {
         lastLook = SystemClock.uptimeMillis()
         val root = if (power.isInteractive) runCatching { rootInActiveWindow }.getOrNull() else null
         val pkg = root?.packageName?.toString()
+        if (pkg == packageName) {
+            // Our own stop card is in front: the feed is still under it.
+            main.postDelayed(look, POLL_MS)
+            return
+        }
         val seen = root?.let { r -> Feeds.detect(pkg) { id -> r.findAccessibilityNodeInfosByViewId(id).any { it.isVisibleToUser } } }
         if (root != null && pkg in Feeds.PACKAGES && settings.mindfulProbe) probe(root)
         update(System.currentTimeMillis(), seen)
@@ -108,7 +113,10 @@ class FocusService : AccessibilityService() {
             wm.addView(it, WindowManager.LayoutParams(
                 WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
                 WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                // Not focusable, so the feed's app stays the active window and leaving it can still be seen; the card
+                // still takes every touch.
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                    WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT,
             ))
             card = it
