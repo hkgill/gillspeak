@@ -1,12 +1,12 @@
-<p align="center"><img src="../docs/assets/icon.png" width="96" height="96" alt="gillspeak mark: a speech bubble holding a g"></p>
+<p align="center"><img src="../docs/assets/icon.png" width="96" height="96" alt="gillspeak icon: a g whose middle is three lime sound bars"></p>
 
 # gillspeak for Android (experimental)
 
 Dictation for Android: hold the mic, talk, let go, and clean text lands in the focused field. Two ways in:
 
-<p align="center"><img src="../docs/assets/bubble-states.png" width="640" alt="the floating bubble's states: idle, listening, transcribing, retry"></p>
+<p align="center"><img src="../docs/assets/bubble-states.png" width="720" alt="The bubble's states: the round g when ready; a night pill with a red dot, lime sound bars and a timer while listening; three lime dots while typing; amber 'Tap to retry' after a failure; and the wide bar, ready and listening"></p>
 
-- **Floating bubble** (recommended): keep your usual keyboard; a small "G" appears over it whenever you type. Hold it to talk, or tap to start and tap again to finish. While recording it stretches into a red pill with a live waveform and timer. Drag it anywhere, including onto the keyboard; size and shape (square or a wide bar) are set in the app. It uses an accessibility service to see when a keyboard and a text field are on screen and to type into that field; it skips password fields.
+- **Floating bubble** (recommended): keep your usual keyboard; a small round **g** appears over it whenever you type. Hold it to talk, or tap to start and tap again to finish. While recording it stretches into a night pill with a red dot, lime sound bars that follow your voice, and a timer. Drag it anywhere, including onto the keyboard; size and shape (round bubble or a wide bar) are set in the app. It uses an accessibility service to see when a keyboard and a text field are on screen and to type into that field; it skips password fields.
 - **gillspeak keyboard**: a full-screen mic keyboard, for when you'd rather switch keyboards.
 
 - **Voice commands** from the side button: hold it, say what you want, and gillspeak does it. See [Voice commands](#voice-commands).
@@ -14,9 +14,9 @@ Dictation for Android: hold the mic, talk, let go, and clean text lands in the f
 - **Local only by default: nothing leaves your phone.** Speech recognition is Parakeet TDT 0.6B v3 on the phone (the desktop model, through sherpa-onnx), followed by the desktop clean-up rules. The ~640 MB model is downloaded once by Android's DownloadManager (Wi-Fi only, resumable) and each file is SHA256-checked. English and 24 other European languages.
 - **Optional cloud engines**, chosen in the app: **Gemini** (sends the audio to Google; one request transcribes and cleans with the desktop `clean_v2` prompt; handles Punjabi and mixed languages) and **Groq** (sends the audio to Groq's Whisper, then a text-only clean-up when the gate says it's worth it). The desktop rules, gate and validator are ported to Kotlin; if a cleaned text fails validation, the rules-cleaned transcript is inserted instead.
 - Keyboard: ⌨ goes back to your previous keyboard, ↶ removes the last dictation, and a failed request keeps the audio: tap the status line to retry.
-- The app screen holds setup, the API key, model, dictionary and the last 30 dictations (kept only on the phone).
+- The app's home screen shows what still needs setting up, then one row per section with its current value: speech and understanding, bubble, snooze, words and keys, and recent dictations (the last 30, kept only on the phone). Light and dark; on a foldable's inner screen the list and the open section sit side by side.
 
-Tested on a Galaxy S25 and a Galaxy Z Fold5 (Android 16). Needs Android 11+.
+Tested on a Galaxy S25 (Android 17, One UI 9) and a Galaxy Z Fold5 (Android 16). Needs Android 11+.
 
 ## Install
 
@@ -26,7 +26,7 @@ Then set it up as described at the end of [Build and install](#build-and-install
 
 ## Voice commands
 
-Make gillspeak the phone's digital assistant (in the app, *Voice commands → Side button*, or *Settings → Apps → Choose default apps → Digital assistant app*). Holding the side button then opens a see-through gillspeak screen instead of Gemini: the screen dims, a teal wave runs out of the side button round the edge, and the bubble drops in and listens. It stops when you stop talking (or tap the pill), shows a card saying what it understood, and does it.
+Make gillspeak the phone's digital assistant (in the app, the **Side button** step in *Setup*, or *Settings → Apps → Choose default apps → Digital assistant app*). Holding the side button then opens a see-through gillspeak screen instead of Gemini: the screen dims, a lime wave runs out of the side button round the edge, and the bubble drops in and listens. It stops when you stop talking (or tap the pill), shows a card saying what it understood, and does it.
 
 | Say | What happens |
 | --- | --- |
