@@ -56,14 +56,14 @@ class ListenActivity : Activity(), MicController.Ui {
     private lateinit var pill: BubbleView
 
     private var started = false
-    private var closing = false
+    @Volatile private var closing = false
     private var handled = false // the transcript arrived; later status lines from the controller are not ours
     private var askingContacts = false
     private var pending: Command? = null // waiting for contacts access
     private var byModel = false // the command on screen was understood by Gemma, not the rules
     // Bumped on every listen: Gemma and planning answer later, and an answer for an earlier listen must not show
     // (or act) once the person has started another.
-    private var listen = 0
+    @Volatile private var listen = 0
     private var pendingAct: Runnable? = null
     private var heard = ""
 
@@ -311,6 +311,7 @@ class ListenActivity : Activity(), MicController.Ui {
             gemmaOn() -> {
                 val asked = listen
                 gemmaWorker.execute {
+                    if (closing || asked != listen) return@execute // dismissed or replaced while queued
                     val command = askGemma(text, null)
                     main.post { if (!closing && asked == listen) plan(command, model = command != null) }
                 }
