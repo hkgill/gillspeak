@@ -171,6 +171,7 @@ class MicController(private val context: Context, private val ui: Ui) {
 
     private fun finish() {
         val peak = recorder.peak
+        val blocked = recorder.blocked
         val error = recorder.error
         val wav = recorder.stop()
         val ms = Recorder.durationMs(wav)
@@ -186,6 +187,13 @@ class MicController(private val context: Context, private val ui: Ui) {
                 set(State.IDLE)
                 settings.log("FAILED silent: the microphone returned only silence (blocked in the background?)")
                 ui.status("The microphone was blocked (silent audio)")
+            }
+            // Another app holds the microphone: Android sent zeros after the tap's click. Say so, rather than
+            // "No speech heard", which sounds like the user's fault.
+            blocked -> {
+                set(State.IDLE)
+                settings.log("FAILED mic busy: the recording was digital silence (another app using the microphone?)")
+                ui.status("The microphone is busy in another app")
             }
             // A tap with nothing said: don't transcribe near-silence, which only ever comes back empty.
             tooQuiet(peak) -> {
