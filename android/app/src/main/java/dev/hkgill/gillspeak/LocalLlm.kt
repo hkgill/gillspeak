@@ -8,6 +8,7 @@ import android.util.Log
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
+import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
@@ -183,7 +184,17 @@ object LocalLlm {
      * conversation is nearly free (under 10 ms); answering a command takes about 0.4 s on a Galaxy S25's GPU.
      * Worker thread only.
      */
-    fun ask(context: Context, system: String, user: String, maxTokens: Int = 256): Reply {
+    // The answer being written and who asked for it, so [cancel] stops only that caller's. Set and cleared under
+    // [askingLock], and cleared before the conversation closes, so a cancel never reaches a closed conversation.
+    private val askingLock = Any()
+    private var asking: Pair<Conversation, Any>? = null
+
+    /** Stops [owner]'s answer if one is being written (the side-button screen was dismissed); [ask] then throws. */
+    fun cancel(owner: Any) = synchronized(askingLock) {
+        asking?.takeIf { it.second === owner }?.let { runCatching { it.first.cancelProcess() } }
+    }
+
+    fun ask(context: Context, system: String, user: String, maxTokens: Int = 256, owner: Any? = null): Reply {
         val t0 = SystemClock.uptimeMillis()
         val text: String
         val loadMs: Long
@@ -199,7 +210,12 @@ object LocalLlm {
                     thinkingConfig = ThinkingConfig(false),
                 )
                 text = e.createConversation(config).use { c ->
-                    c.sendMessage(user).contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.trim()
+                    if (owner != null) synchronized(askingLock) { asking = c to owner }
+                    try {
+                        c.sendMessage(user).contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.trim()
+                    } finally {
+                        synchronized(askingLock) { asking = null }
+                    }
                 }
             }
         } finally {

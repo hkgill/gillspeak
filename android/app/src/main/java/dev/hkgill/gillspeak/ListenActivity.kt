@@ -172,7 +172,8 @@ class ListenActivity : Activity(), MicController.Ui {
         main.removeCallbacksAndMessages(null)
         mic.shutdown()
         worker.shutdownNow()
-        gemmaWorker.shutdown() // let a reply in flight finish writing the compare log
+        LocalLlm.cancel(this) // an answer nobody will see: stop the GPU work now
+        gemmaWorker.shutdown() // queued questions see `closing` and skip
         super.onDestroy()
     }
 
@@ -214,6 +215,7 @@ class ListenActivity : Activity(), MicController.Ui {
 
     private fun startListening() {
         listen++
+        LocalLlm.cancel(this) // an answer for the previous listen won't be shown
         pendingAct?.let(main::removeCallbacks)
         pendingAct = null
         handled = false
@@ -323,7 +325,7 @@ class ListenActivity : Activity(), MicController.Ui {
 
     /** Asks Gemma what [text] means. Runs on [gemmaWorker]; null when it's not a command or Gemma failed. */
     private fun askGemma(text: String, rules: Command?): Command? {
-        val reply = runCatching { LocalLlm.ask(applicationContext, ModelCommands.PROMPT, text) }
+        val reply = runCatching { LocalLlm.ask(applicationContext, ModelCommands.PROMPT, text, owner = this) }
             .onFailure { Log.e(Dictation.TAG, "gemma: command failed", it) }
         val command = reply.getOrNull()?.let { ModelCommands.toCommand(it.text) }
         Log.i(Dictation.TAG, "command: gemma=${kind(command)}")
