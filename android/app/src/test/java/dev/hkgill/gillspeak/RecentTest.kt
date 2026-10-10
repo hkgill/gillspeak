@@ -10,6 +10,13 @@ class RecentTest {
         assertEquals("Groq", Recent.parse("Oct 9 09:00:00  Groq 640 ms (whisper 300 ms, ok)\n  heard: a\n  typed: A.").source)
     }
 
+    @Test fun multilineDictations() {
+        // Regression (Codex review): only the first line of a dictation with "new paragraph" was kept.
+        val r = Recent.parse("Oct 10 14:02:11  Local 812 ms\n  heard: hi new paragraph bye\n  typed: Hi.\n\nBye.")
+        assertEquals("Hi.\n\nBye.", r.result)
+        assertEquals("hi new paragraph bye", r.heard)
+    }
+
     @Test fun commands() {
         val r = Recent.parse("Oct 10 14:05:00  Command: open spotify\n  did: Open Spotify")
         assertEquals(Recent("Oct 10 14:05:00", Recent.SIDE_BUTTON, "open spotify", "Open Spotify", "", false), r)

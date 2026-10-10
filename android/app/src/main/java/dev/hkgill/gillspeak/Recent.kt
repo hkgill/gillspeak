@@ -10,6 +10,7 @@ data class Recent(val stamp: String, val source: String, val heard: String, val 
     companion object {
         const val SIDE_BUTTON = "Side button"
         private val ENGINES = listOf("Local", "Gemini", "Groq")
+        private val FIELD_RE = Regex("""^ {2}(heard|typed|did): (.*)$""")
 
         /** "Oct 10 14:02:11  Local 812 ms\n  heard: …\n  typed: …" → its parts. */
         fun parse(entry: String): Recent {
@@ -18,8 +19,19 @@ data class Recent(val stamp: String, val source: String, val heard: String, val 
             val split = first.indexOf("  ")
             val stamp = if (split > 0) first.substring(0, split) else ""
             val head = if (split > 0) first.substring(split + 2).trim() else first.trim()
-            val fields = lines.drop(1).map { it.trim() }
-            fun field(name: String) = fields.firstOrNull { it.startsWith("$name: ") }?.removePrefix("$name: ").orEmpty()
+            // "  heard: …" starts a field; a dictation with "new paragraph" goes on over the following lines.
+            val fields = mutableMapOf<String, String>()
+            var current: String? = null
+            for (line in lines.drop(1)) {
+                val m = FIELD_RE.find(line)
+                if (m != null) {
+                    current = m.groupValues[1]
+                    fields[current] = m.groupValues[2]
+                } else if (current != null) {
+                    fields[current] = fields[current] + "\n" + line
+                }
+            }
+            fun field(name: String) = fields[name].orEmpty()
             return when {
                 head.startsWith("Command: ") -> Recent(stamp, SIDE_BUTTON, head.removePrefix("Command: "), field("did"), "", false)
                 ENGINES.any { head.startsWith("$it ") } ->
