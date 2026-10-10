@@ -68,9 +68,7 @@ class ListenActivity : Activity(), MicController.Ui {
     private var heard = ""
 
     // Silence detection.
-    private var listenSince = 0L
-    private var lastLoud = 0L
-    private var spoke = false
+    private var ear = EndOfSpeech(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -221,9 +219,7 @@ class ListenActivity : Activity(), MicController.Ui {
         handled = false
         heard = ""
         if (!mic.latch()) return // the controller has said why, through status()
-        listenSince = SystemClock.uptimeMillis()
-        lastLoud = listenSince
-        spoke = false
+        ear = EndOfSpeech(SystemClock.uptimeMillis())
         main.post(watch)
     }
 
@@ -238,20 +234,14 @@ class ListenActivity : Activity(), MicController.Ui {
     private val watch = object : Runnable {
         override fun run() {
             if (mic.state != MicController.State.LATCHED && mic.state != MicController.State.RECORDING) return
-            val now = SystemClock.uptimeMillis()
-            if (mic.level > SPEECH_LEVEL) {
-                spoke = true
-                lastLoud = now
-            }
-            when {
-                spoke && now - lastLoud > SILENCE_MS -> mic.press()
-                !spoke && now - listenSince > NOTHING_SAID_MS -> {
+            when (ear.feed(mic.level, SystemClock.uptimeMillis())) {
+                EndOfSpeech.Verdict.FINISHED, EndOfSpeech.Verdict.TOO_LONG -> mic.press()
+                EndOfSpeech.Verdict.NOTHING_SAID -> {
                     mic.cancel(null)
                     message("No speech heard")
                     closeIn(1600)
                 }
-                now - listenSince > MAX_LISTEN_MS -> mic.press()
-                else -> main.postDelayed(this, 50)
+                EndOfSpeech.Verdict.LISTENING -> main.postDelayed(this, 50)
             }
         }
     }
@@ -549,10 +539,6 @@ class ListenActivity : Activity(), MicController.Ui {
         private const val REQ_CONTACTS = 7
         private const val DIM = 0xFFA9ADB6.toInt()
         /** Recorder.level is the last 100 ms peak over 12,000: speech sits well above this, a quiet room well below. */
-        private const val SPEECH_LEVEL = 0.06f
-        private const val SILENCE_MS = 900L
-        private const val NOTHING_SAID_MS = 7000L
-        private const val MAX_LISTEN_MS = 30_000L
         /** Long enough to read the card before the app opens or the timer starts. */
         private const val ACT_DELAY_MS = 650L
     }
