@@ -33,6 +33,10 @@ IN = "The invoice for the Henderson job is $4,250 and due on 12/10 at 3:30."
         # Regression (Codex review): the joined-digits fallback ignored decimal points.
         ("Pay 1.50 now.", "Pay 150 now.", "default", False, "missing_number"),
         ("Pay 150 now.", "Pay 1.50 now.", "default", False, "missing_number"),
+        # Regression (CodeRabbit): a decimal next to spaced digits that came back joined.
+        ("Item 1.50 code 4 8 2 now.", "Item 1.50 code 482 now.", "default", True, ""),
+        ("Item 1.50 4 8 2 now.", "Item 1.50 482 now.", "default", True, ""),
+        ("Item 1.50 4 8 2 now.", "Item 150 482 now.", "default", False, "missing_number"),
     ],
 )
 def test_check(inp, out, mode, ok, reason):
