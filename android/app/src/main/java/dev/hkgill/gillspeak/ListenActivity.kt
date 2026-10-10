@@ -27,7 +27,7 @@ import java.util.concurrent.Executors
 
 /**
  * What the side button's long-press opens once gillspeak is the phone's digital assistant (it handles ACTION_ASSIST).
- * A see-through screen over whatever was open: the screen dims, a teal wave runs out of the side button round the
+ * A see-through screen over whatever was open: the screen dims, a lime wave runs out of the side button round the
  * edge, and the bubble drops in and listens. Listening ends after a short silence or a tap on the pill (apps never
  * see the side button being let go). The transcript is matched against [Commands], and [Actions] carries it out:
  * apps, timers and the torch straight away, texts and calls only after a tap.
@@ -89,7 +89,7 @@ class ListenActivity : Activity(), MicController.Ui {
         edge = EdgeWaveView(this) { if (mic.state == MicController.State.RECORDING || mic.state == MicController.State.LATCHED) mic.level else 0f }
         transcript = TextView(this).apply {
             textSize = 23f
-            setTextColor(Brand.PAPER)
+            setTextColor(Look.LOGO_INK)
             gravity = Gravity.CENTER
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.NORMAL)
             setLineSpacing(0f, 1.15f)
@@ -99,7 +99,7 @@ class ListenActivity : Activity(), MicController.Ui {
             orientation = LinearLayout.VERTICAL
             background = GradientDrawable().apply {
                 cornerRadius = dp(24).toFloat()
-                setColor(Brand.NIGHT_SURFACE)
+                setColor(0xFF_1B1E24.toInt())
                 setStroke(dp(1), 0x14_FFFFFF)
             }
             elevation = dp(8).toFloat()
@@ -423,7 +423,7 @@ class ListenActivity : Activity(), MicController.Ui {
         transcript.text = text
         transcript.alpha = 0f
         transcript.translationY = dp(8).toFloat()
-        transcript.setTextColor(Brand.PAPER)
+        transcript.setTextColor(Look.LOGO_INK)
         transcript.animate().alpha(1f).translationY(0f).setDuration(220).start()
     }
 
@@ -436,17 +436,17 @@ class ListenActivity : Activity(), MicController.Ui {
 
     private fun showCard(title: String, detail: String, body: String?, big: Boolean, buttons: List<Pair<String, () -> Unit>>) {
         card.removeAllViews()
-        card.addView(text(title, 17f, Brand.PAPER, bold = true))
+        card.addView(text(title, 17f, Look.LOGO_INK, bold = true))
         card.addView(text(detail, 13f, DIM).apply { setPadding(0, dp(2), 0, 0) })
         if (body != null) {
-            card.addView(if (big) text(body, 44f, Brand.PAPER).apply {
+            card.addView(if (big) text(body, 44f, Look.LOGO_INK).apply {
                 typeface = Typeface.create("sans-serif-light", Typeface.NORMAL)
                 fontFeatureSettings = "tnum"
                 setPadding(0, dp(8), 0, 0)
             } else text(body, 16f, Brand.INK).apply {
                 background = GradientDrawable().apply {
                     cornerRadii = floatArrayOf(18f, 18f, 18f, 18f, 6f, 6f, 18f, 18f).map { it * resources.displayMetrics.density }.toFloatArray()
-                    setColor(Brand.TEAL)
+                    setColor(Look.LIME)
                 }
                 setPadding(dp(14), dp(9), dp(14), dp(9))
                 layoutParams = LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply {
@@ -460,9 +460,9 @@ class ListenActivity : Activity(), MicController.Ui {
                 setPadding(0, dp(14), 0, 0)
                 buttons.forEachIndexed { i, (label, onClick) ->
                     val primary = i == buttons.lastIndex
-                    addView(text(label, 14f, if (primary) Brand.INK else Brand.PAPER, bold = true).apply {
+                    addView(text(label, 14f, if (primary) Brand.INK else Look.LOGO_INK, bold = true).apply {
                         gravity = Gravity.CENTER
-                        background = rounded(if (primary) Brand.TEAL else 0x1A_FFFFFF, dp(22).toFloat())
+                        background = rounded(if (primary) Look.LIME else 0x1A_FFFFFF, dp(22).toFloat())
                         setOnClickListener { onClick() }
                     }, LinearLayout.LayoutParams(0, dp(44), 1f).apply { if (i > 0) marginStart = dp(10) })
                 }
@@ -471,7 +471,7 @@ class ListenActivity : Activity(), MicController.Ui {
         card.addView(LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(12), 0, 0)
-            addView(View(this@ListenActivity).apply { background = rounded(Brand.TEAL, dp(3).toFloat()) }, LinearLayout.LayoutParams(dp(6), dp(6)))
+            addView(View(this@ListenActivity).apply { background = rounded(Look.LIME, dp(3).toFloat()) }, LinearLayout.LayoutParams(dp(6), dp(6)))
             val understood = if (byModel) "understood by Gemma on this phone" else "understood on this phone"
             val where = if (settings.engine == Settings.ENGINE_LOCAL) understood.replaceFirstChar { it.uppercase() } else "Transcribed by ${engineName()}, $understood"
             addView(text(where, 11.5f, DIM).apply { setPadding(dp(7), 0, 0, 0) })

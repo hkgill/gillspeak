@@ -19,7 +19,7 @@ import kotlin.math.exp
 import kotlin.math.sin
 
 /**
- * The listening overlay's teal wave: a line just inside the screen's rounded edge that runs out from the side
+ * The listening overlay's lime wave: a line just inside the screen's rounded edge that runs out from the side
  * button both ways round, swells with the voice ([level]), and while [working] carries two lights round the edge.
  * The corners follow the display's real corner radius, which Android 12+ reports.
  */
@@ -44,9 +44,9 @@ class EdgeWaveView(context: Context, private val level: () -> Float) : View(cont
 
     init {
         glow.color = 0x29_14A394
-        line.color = Brand.TEAL
+        line.color = Look.LIME
         core.color = 0xD9_DDF1EE.toInt()
-        comet.color = Brand.TEAL_SOFT
+        comet.color = 0xFF_E2FA9E.toInt()
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
     }
 
@@ -154,7 +154,7 @@ class EdgeWaveView(context: Context, private val level: () -> Float) : View(cont
         point(s0)
         val gr = dp(140f)
         val a = (0.26f * (0.7f + 0.7f * smoothed) * reveal * 255).toInt().coerceIn(0, 255)
-        fill.shader = RadialGradient(pt[0], pt[1], gr, (a shl 24) or 0x14A394, 0x0014A394, Shader.TileMode.CLAMP)
+        fill.shader = RadialGradient(pt[0], pt[1], gr, (a shl 24) or 0xC8F25A, 0x0014A394, Shader.TileMode.CLAMP)
         canvas.drawCircle(pt[0], pt[1], gr, fill)
 
         val half = reveal * perimeter / 2
@@ -164,7 +164,7 @@ class EdgeWaveView(context: Context, private val level: () -> Float) : View(cont
         glow.strokeWidth = dp(22f)
         canvas.drawPath(path, glow)
         line.strokeWidth = dp(3f)
-        line.setShadowLayer(dp(10f), 0f, 0f, Brand.TEAL)
+        line.setShadowLayer(dp(10f), 0f, 0f, Look.LIME)
         canvas.drawPath(path, line)
         core.strokeWidth = dp(1.2f)
         canvas.drawPath(path, core)
@@ -173,7 +173,7 @@ class EdgeWaveView(context: Context, private val level: () -> Float) : View(cont
         if (working) {
             val run = ((t - workingSince) * dp(0.85f) / 1f) % perimeter
             comet.strokeWidth = dp(4f)
-            comet.setShadowLayer(dp(14f), 0f, 0f, Brand.TEAL)
+            comet.setShadowLayer(dp(14f), 0f, 0f, Look.LIME)
             trace(cometPath, run - dp(90f), run, t, amp, half)
             canvas.drawPath(cometPath, comet)
             trace(cometPath, -run, -run + dp(90f), t, amp, half)
