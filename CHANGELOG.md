@@ -18,6 +18,7 @@ All notable changes to gillspeak (called Murmur up to 0.5.1). The format follows
 - **Signed Android release APKs.** `assembleRelease` signs with a keystore configured in the git-ignored `local.properties`; APKs are attached to GitHub releases, never committed. See "Release a signed APK" in [android/README.md](android/README.md).
 
 ### Fixed
+- **Android: "The microphone is busy in another app"** instead of "No speech heard" when another app holds the microphone (Android records zeros then).
 - **Android: opening an app by voice no longer waits ~6 s** while every installed app's name is read; the list is read ahead of time and kept.
 - **Android: the validator rejects output in a writing system the input didn't use** (Gemma once swapped an English word for Hindi mid-sentence).
 
