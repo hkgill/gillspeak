@@ -88,8 +88,8 @@ Raise `versionCode` and `versionName` in `app/build.gradle.kts`, then build and 
 
 ```bash
 JAVA_HOME=/path/to/jdk21 ./gradlew testDebugUnitTest assembleRelease
-cp app/build/outputs/apk/release/app-release.apk /tmp/gillspeak-0.1.0.apk
-gh release create android-v0.1.0 /tmp/gillspeak-0.1.0.apk --prerelease --title "Android 0.1.0 (experimental)"
+cp app/build/outputs/apk/release/app-release.apk /tmp/gillspeak-0.2.0.apk
+gh release create android-v0.2.0 /tmp/gillspeak-0.2.0.apk --prerelease --title "Android 0.2.0 (experimental)"
 ```
 
 Without the `release.*` settings, `assembleRelease` produces an unsigned `app-release-unsigned.apk` that Android won't install.
