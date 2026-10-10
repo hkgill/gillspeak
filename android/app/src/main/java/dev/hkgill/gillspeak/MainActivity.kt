@@ -52,6 +52,10 @@ class MainActivity : Activity() {
     private lateinit var engineRows: List<EngineRow>
     private lateinit var modelStatus: TextView
     private lateinit var modelButton: TextView
+    private lateinit var gemmaStatus: TextView
+    private lateinit var gemmaButton: TextView
+    private lateinit var gemmaCommands: android.widget.Switch
+    private lateinit var gemmaPolish: android.widget.Switch
     private lateinit var roundChip: TextView
     private lateinit var barChip: TextView
     private lateinit var preview: BubbleView
@@ -141,6 +145,20 @@ class MainActivity : Activity() {
             setOnClickListener { onModelButton() }
         }
         column.addView(card("Speech engine", *engineRows.map { it.view }.toTypedArray(), modelStatus, modelButton))
+
+        gemmaStatus = text("", 14f, c.dim).apply { setPadding(0, 0, 0, dp(4)) }
+        gemmaButton = text("", 15f, c.accent, bold = true).apply {
+            setPadding(0, dp(4), 0, dp(8))
+            setOnClickListener { onGemmaButton() }
+        }
+        gemmaCommands = switch("Understand commands the rules miss") { settings.localAi = it }
+        gemmaPolish = switch("Polish Local dictation (adds about a second)") { settings.localPolish = it }
+        column.addView(card(
+            "Gemma on this phone",
+            text("Google's Gemma 4 E2B, running on the phone: nothing leaves it. Commands it understands wait for your tap.", 14f, c.dim)
+                .apply { setPadding(0, 0, 0, dp(8)) },
+            gemmaStatus, gemmaButton, gemmaCommands, gemmaPolish,
+        ))
 
         roundChip = chip("Square") { settings.bubbleShape = "circle"; refresh() }
         barChip = chip("Wide bar") { settings.bubbleShape = "bar"; refresh() }
@@ -356,9 +374,58 @@ class MainActivity : Activity() {
                 modelButton.text = "Try again"
             }
         }
+        val gemma = showGemma()
         // Keep the progress moving while this screen is open.
         handler.removeCallbacks(poll)
-        if (local && (status is LocalAsr.Status.Downloading || status == LocalAsr.Status.Installing)) handler.postDelayed(poll, 1000)
+        val busy = { s: LocalAsr.Status -> s is LocalAsr.Status.Downloading || s == LocalAsr.Status.Installing }
+        if ((local && busy(status)) || busy(gemma)) handler.postDelayed(poll, 1000)
+    }
+
+    private fun showGemma(): LocalAsr.Status {
+        val gb = "%.1f GB".format(LocalLlm.SIZE / 1e9)
+        val status = LocalLlm.refresh(this)
+        when (status) {
+            LocalAsr.Status.Ready -> { gemmaStatus.text = "Gemma 4 E2B ready ✓ ($gb)"; gemmaButton.text = "Delete Gemma" }
+            LocalAsr.Status.Missing -> { gemmaStatus.text = "Needs a one-time $gb download over Wi-Fi."; gemmaButton.text = "Download Gemma" }
+            is LocalAsr.Status.Downloading -> {
+                gemmaStatus.text = if (status.waitingForWifi) "Waiting for Wi-Fi to download ($gb)."
+                else "Downloading… ${status.done * 100 / status.total}% of $gb. You can leave the app; it carries on."
+                gemmaButton.text = "Cancel download"
+            }
+            LocalAsr.Status.Installing -> { gemmaStatus.text = "Checking and installing Gemma…"; gemmaButton.text = "" }
+            is LocalAsr.Status.Failed -> { gemmaStatus.text = "Download failed: ${status.reason}"; gemmaButton.text = "Try again" }
+        }
+        val ready = status == LocalAsr.Status.Ready
+        gemmaCommands.isChecked = settings.localAi
+        gemmaPolish.isChecked = settings.localPolish
+        gemmaCommands.isEnabled = ready
+        gemmaPolish.isEnabled = ready && settings.engine == Settings.ENGINE_LOCAL
+        return status
+    }
+
+    private fun onGemmaButton() {
+        when (LocalLlm.refresh(this)) {
+            LocalAsr.Status.Ready -> {
+                gemmaButton.text = ""
+                gemmaStatus.text = "Deleting…"
+                LocalLlm.delete(applicationContext) { runOnUiThread { showEngine() } }
+                return
+            }
+            is LocalAsr.Status.Downloading -> LocalLlm.cancelDownload(applicationContext)
+            LocalAsr.Status.Installing -> Unit
+            else -> LocalLlm.download(applicationContext)
+        }
+        showEngine()
+    }
+
+    private fun switch(label: String, onChange: (Boolean) -> Unit) = android.widget.Switch(this).apply {
+        text = label
+        textSize = 15f
+        setTextColor(c.text)
+        setPadding(0, dp(6), 0, dp(6))
+        thumbTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(c.accent, c.dim))
+        trackTintList = ColorStateList(arrayOf(intArrayOf(android.R.attr.state_checked), intArrayOf()), intArrayOf(c.accent, c.field))
+        setOnCheckedChangeListener { _, on -> onChange(on) }
     }
 
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
