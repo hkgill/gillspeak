@@ -14,19 +14,10 @@ class Settings(context: Context) {
     private val assets = context.assets
     private val debuggable = context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
 
-    /** Cloud engine keys exist only if the user types their own in the app; none is ever built into the APK. */
-    var apiKey: String
-        get() = prefs.getString("api_key", "").orEmpty()
-        set(v) = prefs.edit().putString("api_key", v.trim()).apply()
-
-    var groqKey: String
-        get() = prefs.getString("groq_key", "").orEmpty()
-        set(v) = prefs.edit().putString("groq_key", v.trim()).apply()
-
-    /** Which speech engine this phone uses: [ENGINE_GEMINI], [ENGINE_GROQ] or [ENGINE_LOCAL]. */
-    var engine: String
-        get() = prefs.getString("engine", ENGINE_LOCAL) ?: ENGINE_LOCAL // local only unless the user opts in
-        set(v) = prefs.edit().putString("engine", v).apply()
+    init {
+        // Earlier builds had optional cloud engines (Gemini, Groq). Forget their API keys and choice on this phone.
+        if (CLOUD_PREFS.any(prefs::contains)) prefs.edit().apply { CLOUD_PREFS.forEach(::remove) }.apply()
+    }
 
     /** Use Gemma ([LocalLlm]) on this phone when its model is installed: commands the rules miss, and polish. */
     var localAi: Boolean
@@ -34,7 +25,7 @@ class Settings(context: Context) {
         set(v) = prefs.edit().putBoolean("local_ai", v).apply()
 
     /**
-     * Polish Local dictation with Gemma, like the cloud engines' clean-up but on the phone. Off by default: it adds
+     * Polish dictation with Gemma, the desktop's clean-up but on the phone. Off by default: it adds
      * about a second per 25 words, and only runs when [Gate] says the dictation is worth it.
      */
     var localPolish: Boolean
@@ -53,10 +44,6 @@ class Settings(context: Context) {
     var keepEmptyAudio: Boolean
         get() = debuggable && prefs.getBoolean("keep_empty_audio", false)
         set(v) = prefs.edit().putBoolean("keep_empty_audio", v).apply()
-
-    var model: String
-        get() = prefs.getString("model", "").orEmpty().ifBlank { DEFAULT_MODEL }
-        set(v) = prefs.edit().putString("model", v.trim()).apply()
 
     var replaceText: String
         get() = prefs.getString("replace", null) ?: DEFAULT_REPLACE
@@ -184,19 +171,12 @@ class Settings(context: Context) {
         get() = debuggable && prefs.getBoolean("mindful_probe", false)
         set(v) = prefs.edit().putBoolean("mindful_probe", v).apply()
 
-    /** The desktop clean-up prompt alone, for text-only clean-up (Groq). */
+    /** The desktop clean-up prompt, for Gemma's polish. */
     fun cleanPrompt(): String = assets.open("clean_v2.txt").bufferedReader().use { it.readText() }
 
-    /** Can this phone dictate with its chosen engine? Returns null when ready, otherwise what's missing. */
-    fun engineProblem(context: Context): String? = when (engine) {
-        ENGINE_GROQ -> if (groqKey.isBlank()) "Tap here to add a Groq API key" else null
-        ENGINE_LOCAL -> if (!LocalAsr.isReady(context)) "Tap here to download the on-device model" else null
-        else -> if (apiKey.isBlank()) "Tap here to add a Gemini API key" else null
-    }
-
-    /** The Gemini prompt: audio instructions + the desktop clean-up prompt. */
-    fun systemPrompt(): String =
-        listOf("audio_preface.txt", "clean_v2.txt").joinToString("") { name -> assets.open(name).bufferedReader().use { it.readText() } }
+    /** Can this phone dictate? Returns null when ready, otherwise what's missing. */
+    fun speechProblem(context: Context): String? =
+        if (!LocalAsr.isReady(context)) "Tap here to download the on-device model" else null
 
     fun log(line: String) {
         val stamp = SimpleDateFormat("MMM d HH:mm:ss", Locale.getDefault()).format(Date())
@@ -211,15 +191,12 @@ class Settings(context: Context) {
     companion object {
         /** The name people see. The package id stays dev.hkgill.gillspeak so installs upgrade in place. */
         const val APP_NAME = "gillspeak"
-        const val ENGINE_GEMINI = "gemini"
-        const val ENGINE_GROQ = "groq"
-        const val ENGINE_LOCAL = "local"
-        const val DEFAULT_MODEL = "gemini-3.5-flash-lite"
         const val DEFAULT_REPLACE = "super base = Supabase\nget hub = GitHub\ncube control = kubectl"
         const val DEFAULT_BIAS = "Supabase, Fedora, Parakeet"
         const val BUBBLE_MIN = 40
         const val BUBBLE_MAX = 200
         private const val MAX_LOG = 30
+        private val CLOUD_PREFS = listOf("api_key", "groq_key", "engine", "model")
         private const val SEP = "\u001e"
     }
 }

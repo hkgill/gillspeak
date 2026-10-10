@@ -13,8 +13,8 @@ Dictation for Android: hold the mic, talk, let go, and clean text lands in the f
 
 - **Mindful mode**: a time limit on YouTube Shorts, Instagram Reels and TikTok, shared between them (10 minutes by default, from 30 seconds to 30 minutes). At the limit a full-screen card covers the feed: "Leave" goes home and pauses the feeds for 30 minutes; "5 more minutes" is offered once, after a 10-second wait. A 5-minute break resets the time. It is a separate accessibility service, **gillspeak focus**, that only sees those three apps and only reads which screen is open, never what is on it. Turn it on from the app's **Mindful mode** page.
 
-- **Local only by default: nothing leaves your phone.** Speech recognition is Parakeet TDT 0.6B v3 on the phone (the desktop model, through sherpa-onnx), followed by the desktop clean-up rules. The ~640 MB model is downloaded once by Android's DownloadManager (Wi-Fi only, resumable) and each file is SHA256-checked. English and 24 other European languages.
-- **Optional cloud engines**, chosen in the app: **Gemini** (sends the audio to Google; one request transcribes and cleans with the desktop `clean_v2` prompt; handles Punjabi and mixed languages) and **Groq** (sends the audio to Groq's Whisper, then a text-only clean-up when the gate says it's worth it). The desktop rules, gate and validator are ported to Kotlin; if a cleaned text fails validation, the rules-cleaned transcript is inserted instead.
+- **Nothing leaves your phone.** There are no cloud options. Speech recognition is Parakeet TDT 0.6B v3 on the phone (the desktop model, through sherpa-onnx), followed by the desktop clean-up rules. The ~640 MB model is downloaded once by Android's DownloadManager (Wi-Fi only, resumable) and each file is SHA256-checked. English and 24 other European languages. The models' downloads are the only time the app uses the network.
+- **Optional polish with Gemma 4 E2B** on the phone: the desktop's clean-up prompt, gate and validator, ported to Kotlin. If a polished text fails validation, the rules-cleaned transcript is inserted instead.
 - Keyboard: ⌨ goes back to your previous keyboard, ↶ removes the last dictation, and a failed request keeps the audio: tap the status line to retry.
 - The app's home screen shows what still needs setting up, then one row per section with its current value: speech and understanding, bubble, snooze, words and keys, and recent dictations (the last 30, kept only on the phone). Light and dark; on a foldable's inner screen the list and the open section sit side by side.
 
@@ -22,7 +22,7 @@ Tested on a Galaxy S25 (Android 17, One UI 9) and a Galaxy Z Fold5 (Android 16).
 
 ## Install
 
-Download `gillspeak-*.apk` from the [Releases page](https://github.com/hkgill/gillspeak/releases) on your phone, open it and allow installing from your browser or file manager. Released APKs contain no API keys: Local only works without one, and to use Gemini or Groq you paste your own key into the app (free at [Google AI Studio](https://aistudio.google.com/apikey) or [console.groq.com](https://console.groq.com/keys)). Keys stay on the phone.
+Download `gillspeak-*.apk` from the [Releases page](https://github.com/hkgill/gillspeak/releases) on your phone, open it and allow installing from your browser or file manager. No account or API key is needed.
 
 Then set it up as described at the end of [Build and install](#build-and-install).
 
@@ -43,10 +43,10 @@ Make gillspeak the phone's digital assistant (in the app, the **Side button** st
 | "Add dentist tomorrow at 3 to my calendar", "schedule a meeting with Sam on Friday at 2:30" | Opens your calendar's new-event screen filled in; you tap Save |
 | "Search for …", or anything else | Offers a web search, only if you tap it |
 
-- **Only these commands ever run.** The transcript is matched by rules in `Commands.kt` on the phone, whichever engine transcribed it; a model never decides what to do. Texts and calls are never sent or dialled by gillspeak.
+- **Only these commands ever run.** The transcript is matched by rules in `Commands.kt` on the phone; a model never decides what to do. Texts and calls are never sent or dialled by gillspeak.
 - **Texting and calling by name** need the contacts permission; contacts are read on the phone when you ask and never stored.
 - Giving gillspeak the assistant role turns off "Hey Google" and Gemini's overlay; the Gemini app still opens from its icon.
-- The words appear after you stop talking: none of the engines stream.
+- The words appear after you stop talking: Parakeet doesn't stream.
 - The wave starts 40% of the way down the right edge, where the side button is on Galaxy S-series phones.
 
 ## Build and install
@@ -60,7 +60,7 @@ JAVA_HOME=/path/to/jdk21 ./gradlew testDebugUnitTest assembleDebug
 adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-`local.properties` is git-ignored. No API key is ever built into the app; paste yours into the app's settings.
+`local.properties` is git-ignored.
 
 Wireless debugging (Android 11+): Developer options → Wireless debugging → Pair device with pairing code, then `adb pair IP:PAIRPORT CODE` and `adb connect IP:PORT` (the port on the main Wireless debugging screen).
 
@@ -96,16 +96,16 @@ Without the `release.*` settings, `assembleRelease` produces an unsigned `app-re
 
 ## Develop
 
-- `app/src/main/assets/clean_v2.txt` is a copy of `gillspeak/prompts/clean_v2.txt`; `PromptSyncTest` fails if they drift. `audio_preface.txt` adds the audio-specific instructions (return a verbatim `transcript` and a cleaned `text` as JSON).
+- `app/src/main/assets/clean_v2.txt` is a copy of `gillspeak/prompts/clean_v2.txt`; `PromptSyncTest` fails if they drift. Gemma's polish uses it.
 - `RulesTest` holds cases copied from `tests/test_rules.py` and `tests/test_validate.py`. Android's regex engine is ICU, not the JVM's: don't use `(?U)` (ICU rejects it at load time, which JVM tests won't catch).
 - `MicController` is the mic state machine (hold, latch, retry) shared by the keyboard and the bubble. The bubble waits 150 ms before starting the mic so a drag never starts a recording, and refuses to send all-silent audio (what Android returns when it blocks background recording).
-- Logs: `adb logcat -s gillspeak` shows why the bubble is or isn't shown, where each Gemini request spent its time (upload, wait, thinking tokens), and how text was inserted.
+- Logs: `adb logcat -s gillspeak` shows why the bubble is or isn't shown, how long Parakeet and Gemma took, and how text was inserted.
 - Debug builds have test hooks, reachable from adb only (a debug-only receiver that requires `DUMP`):
 
   ```bash
   adb push clip.wav /data/local/tmp/t.wav
   adb shell run-as dev.hkgill.gillspeak sh -c 'mkdir -p files && cp /data/local/tmp/t.wav files/t.wav'
-  adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es selftest t.wav   # optional: --es engine local|groq|gemini
+  adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es selftest t.wav
   adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez download_model true
   adb logcat -s gillspeak
   ```

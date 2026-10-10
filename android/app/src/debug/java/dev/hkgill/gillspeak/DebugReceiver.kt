@@ -9,7 +9,7 @@ import java.io.File
 /**
  * Test hooks for debug builds, from adb only (the receiver requires DUMP, which apps can't hold):
  *
- *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es selftest t.wav [--es engine local]
+ *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es selftest t.wav
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez download_model true
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es command "set up an alarm for three o'clock"
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez compare true   # or false
@@ -18,8 +18,7 @@ import java.io.File
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez mindful_probe true   # or false
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ei mindful_limit 30   # seconds
  *
- * The self-test runs a WAV from the app's files dir through the full pipeline; `engine` overrides the chosen
- * engine for that run only. `command` runs a sentence through the command rules and Gemma and logs both, without
+ * The self-test runs a WAV from the app's files dir through the full pipeline. `command` runs a sentence through the command rules and Gemma and logs both, without
  * doing anything; `compare` turns the rules-versus-Gemma log for spoken commands on or off (it's off by default,
  * as it runs Gemma for every command); `polish` runs a sentence through the rules and Gemma's polish, as if Parakeet had heard it;
  * `mindful_probe` makes [FocusService] log the view ids it sees in the watched apps (to files/mindful.log);
@@ -86,14 +85,13 @@ class DebugReceiver : BroadcastReceiver() {
             Log.w(Dictation.TAG, "selftest: refusing '$name' (a plain name ending in .wav, no paths)")
             return
         }
-        val engine = intent.getStringExtra("engine")?.takeIf { it in ENGINES }
         val settings = Settings(app)
         val pending = goAsync()
         Thread {
             try {
                 val wav = File(app.filesDir, name).readBytes()
                 require(wav.size > 44 && String(wav, 0, 4) == "RIFF" && String(wav, 8, 4) == "WAVE") { "not a WAV file" }
-                val out = Dictation.run(app, settings, wav, engine ?: settings.engine)
+                val out = Dictation.run(app, settings, wav)
                 Log.i(Dictation.TAG, "selftest ok: $out")
             } catch (e: Exception) {
                 Dictation.logFailure(settings, e)
@@ -101,9 +99,5 @@ class DebugReceiver : BroadcastReceiver() {
                 pending.finish()
             }
         }.start()
-    }
-
-    private companion object {
-        val ENGINES = setOf(Settings.ENGINE_GEMINI, Settings.ENGINE_GROQ, Settings.ENGINE_LOCAL)
     }
 }

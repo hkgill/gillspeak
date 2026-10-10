@@ -9,7 +9,7 @@ data class Recent(val stamp: String, val source: String, val heard: String, val 
 
     companion object {
         const val SIDE_BUTTON = "Side button"
-        private val ENGINES = listOf("Local", "Gemini", "Groq")
+        private val ENGINES = listOf("Local", "Gemini", "Groq") // the cloud engines are gone, but their entries can remain
         private val FIELD_RE = Regex("""^ {2}(heard|typed|did): (.*)$""")
 
         /** "Oct 10 14:02:11  Local 812 ms\n  heard: …\n  typed: …" → its parts. */

@@ -4,74 +4,20 @@ import android.content.Context
 import android.util.Log
 
 /**
- * The pipeline after recording, for the engine this phone uses. Runs on a worker thread; the keyboard, the bubble
- * and the debug self-test share it.
- *
- * - Gemini: one request with the audio returns a verbatim transcript and a cleaned version; the cleaned text is
- *   used when the validator accepts it, otherwise the rules-cleaned transcript. Audio goes to Google.
- * - Groq: Whisper transcribes (audio goes to Groq), then the desktop pipeline: rules, the gate, a text-only
- *   clean-up when it's worth it, the validator. Any clean-up failure falls back to the rules text.
- * - Local: Parakeet on the phone, then the rules, then (if turned on) Gemma's polish behind the same gate and
- *   validator as Groq's. Nothing leaves the phone.
+ * The pipeline after recording: Parakeet on the phone, then the rules, then (if turned on) Gemma's polish behind the
+ * desktop's gate and validator. Nothing leaves the phone. Runs on a worker thread; the keyboard, the bubble and the
+ * debug self-test share it.
  */
 object Dictation {
     const val TAG = "gillspeak"
 
+    /** The desktop's default [llm] instructions. */
+    private const val STYLE = "Australian English spelling. Never use em dashes."
+    private val TAG_RE = Regex("</?transcript>", RegexOption.IGNORE_CASE)
+
     data class Outcome(val text: String, val reason: String, val ms: Long)
 
-    fun run(context: Context, settings: Settings, wav: ByteArray, engine: String = settings.engine): Outcome = when (engine) {
-        Settings.ENGINE_GROQ -> groq(settings, wav)
-        Settings.ENGINE_LOCAL -> local(context, settings, wav)
-        else -> gemini(settings, wav)
-    }
-
-    private fun gemini(settings: Settings, wav: ByteArray): Outcome {
-        val dictionary = settings.dictionary()
-        val res = Gemini(settings.apiKey, settings.model, settings.systemPrompt()).transcribe(wav, dictionary.bias)
-        val fallback = Rules(dictionary).apply(res.transcript)
-        val why = when {
-            res.transcript.isBlank() && res.text.isBlank() -> ""
-            res.text.isBlank() -> "empty"
-            else -> Validate.check(fallback, res.text)
-        }
-        val text = if (why.isEmpty()) dictionary.apply(res.text) else fallback
-        Log.i(TAG, "gemini ${res.ms} ms: ${res.timing}")
-        if (res.transcript.isNotBlank() || res.text.isNotBlank()) settings.log("Gemini ${res.ms} ms ${why.ifEmpty { "ok" }} (${res.timing})\n  heard: ${res.transcript}\n  typed: $text")
-        return Outcome(text, why, res.ms)
-    }
-
-    private fun groq(settings: Settings, wav: ByteArray): Outcome {
-        val t0 = System.nanoTime()
-        val dictionary = settings.dictionary()
-        val groq = Groq(settings.groqKey)
-        val raw = groq.transcribe(wav, dictionary.bias)
-        val sttMs = ms(t0)
-        val rules = Rules(dictionary).apply(raw)
-        val (useLlm, gate) = Gate.decide(rules)
-        var text = rules
-        var reason = gate
-        if (useLlm) {
-            val t1 = System.nanoTime()
-            reason = try {
-                val cleaned = groq.clean(settings.cleanPrompt(), rules, dictionary.bias)
-                val why = Validate.check(rules, cleaned)
-                if (why.isEmpty()) text = dictionary.apply(cleaned)
-                why.ifEmpty { "cleaned" }
-            } catch (e: Exception) {
-                Log.w(TAG, "groq clean-up failed; using the rules text", e)
-                "cleanup_failed:${(e as? GeminiError)?.kind ?: e.javaClass.simpleName}"
-            }
-            reason += " in ${ms(t1)} ms"
-        }
-        val total = ms(t0)
-        Log.i(TAG, "groq $total ms: whisper $sttMs ms, $reason")
-        if (raw.isNotBlank()) settings.log("Groq $total ms (whisper $sttMs ms, $reason)\n  heard: $raw\n  typed: $text")
-        // Only a failed or rejected clean-up counts as a fallback in the status line.
-        val shown = if (reason.startsWith("cleaned") || !useLlm) "" else reason.substringBefore(" in ")
-        return Outcome(text, shown, total)
-    }
-
-    private fun local(context: Context, settings: Settings, wav: ByteArray): Outcome {
+    fun run(context: Context, settings: Settings, wav: ByteArray): Outcome {
         val t0 = System.nanoTime()
         val raw = LocalAsr.transcribe(context, wav)
         val sttMs = ms(t0)
@@ -101,8 +47,8 @@ object Dictation {
         val dictionary = settings.dictionary()
         var text = rules
         val reason = try {
-            val reply = LocalLlm.ask(context, settings.cleanPrompt(), Groq.cleanPayload(rules, dictionary.bias), maxTokens = 1024)
-            val cleaned = Groq.stripEcho(reply.text, rules)
+            val reply = LocalLlm.ask(context, settings.cleanPrompt(), cleanPayload(rules, dictionary.bias), maxTokens = 1024)
+            val cleaned = stripEcho(reply.text, rules)
             val why = Validate.check(rules, cleaned)
             if (why.isEmpty()) text = dictionary.apply(cleaned)
             why.ifEmpty { "polished" }
@@ -113,12 +59,27 @@ object Dictation {
         return text to "$reason by Gemma in ${ms(t0)} ms"
     }
 
+    /** The user message for a text-only clean-up, as the desktop sends it. */
+    fun cleanPayload(text: String, bias: List<String>) = "Mode: default (Keep the speaker's tone.)\nStyle instructions: $STYLE\n" +
+        "Preferred spellings: ${bias.joinToString(", ")}\n\n<transcript>\n$text\n</transcript>"
+
+    /** Removes wrappers a model sometimes adds: transcript tags and surrounding quotes (as cleaner.py does). */
+    fun stripEcho(out: String, original: String): String {
+        var s = TAG_RE.replace(out, "").trim()
+        for ((open, close) in listOf("\"" to "\"", "“" to "”", "'" to "'", "`" to "`")) {
+            if (s.length >= 2 && s.startsWith(open) && s.endsWith(close) && !original.trim().startsWith(open)) {
+                s = s.substring(open.length, s.length - close.length).trim()
+            }
+        }
+        return s
+    }
+
     private fun ms(since: Long) = (System.nanoTime() - since) / 1_000_000
 
     /** Records a failure with its exception class, so "null" messages still say what went wrong. */
     fun logFailure(settings: Settings, e: Throwable): String {
         Log.e(TAG, "dictation failed", e)
-        val kind = (e as? GeminiError)?.kind ?: e.javaClass.simpleName
+        val kind = e.javaClass.simpleName
         val cause = generateSequence(e) { it.cause }.last()
         settings.log("FAILED $kind: ${e.message ?: cause.message ?: cause.javaClass.simpleName}")
         return kind

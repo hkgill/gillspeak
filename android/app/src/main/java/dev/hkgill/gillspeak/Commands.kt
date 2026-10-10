@@ -3,8 +3,8 @@ package dev.hkgill.gillspeak
 import kotlin.math.roundToInt
 
 /**
- * What a spoken command asks for. Parsing is plain rules on the transcript, on the phone, whichever speech engine
- * transcribed it: only commands on this list ever run, never anything a model makes up.
+ * What a spoken command asks for. Parsing is plain rules on the transcript, on the phone: only commands on this
+ * list ever run, never anything a model makes up.
  */
 sealed interface Command {
     data class OpenApp(val name: String) : Command

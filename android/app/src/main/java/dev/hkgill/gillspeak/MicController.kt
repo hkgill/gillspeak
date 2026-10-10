@@ -118,21 +118,17 @@ class MicController(private val context: Context, private val ui: Ui) {
     fun needsSetup() = idleHint().second
 
     /**
-     * Opens the TLS connection or loads the local model ahead of time, at most once a minute. [models] false skips
-     * the local models: they take about 700 MB and a few seconds of CPU, too much to load for every keyboard that
-     * opens, so the bubble loads them when it's pressed instead, while the user is still speaking.
+     * Loads the local models ahead of time, at most once a minute. They take about 700 MB and a few seconds of CPU,
+     * too much to load for every keyboard that opens, so the bubble loads them when it's pressed instead, while the
+     * user is still speaking.
      */
-    fun warm(models: Boolean = true) {
+    fun warm() {
         val now = SystemClock.uptimeMillis()
-        if (settings.engineProblem(context) != null || now - lastWarm < 60_000) return
-        if (settings.engine == Settings.ENGINE_LOCAL && !models) return
+        if (settings.speechProblem(context) != null || now - lastWarm < 60_000) return
         lastWarm = now
-        when (settings.engine) {
-            Settings.ENGINE_LOCAL -> worker.execute {
-                runCatching { LocalAsr.warm(context) }
-                if (settings.localPolish) runCatching { LocalLlm.warm(context) }
-            }
-            Settings.ENGINE_GEMINI -> Gemini(settings.apiKey, settings.model, "").let { worker.execute { it.warm() } }
+        worker.execute {
+            runCatching { LocalAsr.warm(context) }
+            if (settings.localPolish) runCatching { LocalLlm.warm(context) }
         }
     }
 
@@ -145,7 +141,7 @@ class MicController(private val context: Context, private val ui: Ui) {
     /** What to show when nothing is happening, and whether tapping it should open the app. */
     fun idleHint(): Pair<String, Boolean> {
         if (!hasMicPermission()) return "Tap here to allow the microphone" to true
-        settings.engineProblem(context)?.let { return it to true }
+        settings.speechProblem(context)?.let { return it to true }
         return Settings.APP_NAME to false
     }
 

@@ -10,7 +10,7 @@
 
 **Talk to your Android phone. Hold the bubble to dictate into any app, or hold the side button to give a command. It all runs on the phone.**
 
-> 🔒 **Nothing leaves your phone.** Speech recognition (Parakeet) and understanding (Gemma 4 E2B) run on the device. There's no account and no server, and it works with Wi-Fi off. Cloud engines (Gemini, Groq) are there only if you pick them, and the app labels them "Sends audio".
+> 🔒 **Nothing leaves your phone.** Speech recognition (Parakeet) and understanding (Gemma 4 E2B) run on the device. There's no account and no server, and it works with Wi-Fi off. The app has no cloud options at all: the network is used only to download the models once.
 
 <p align="center"><img src="docs/assets/android-screens.png" width="880" alt="The gillspeak Android app's settings: the home screen with setup progress and one row per section, the speech and understanding page with Local only selected and Gemma downloading, and the bubble page in dark mode with a live preview of the round bubble"></p>
 
