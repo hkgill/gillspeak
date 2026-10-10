@@ -301,7 +301,7 @@ class ListenActivity : Activity(), MicController.Ui {
         pill.label = "Thinking"
         edge.working = true
         val rules = Commands.parse(text)
-        Log.i(Dictation.TAG, "command: rules=${rules ?: "none"}")
+        Log.i(Dictation.TAG, "command: rules=${kind(rules)}")
         when {
             rules != null -> {
                 plan(rules, model = false)
@@ -322,6 +322,12 @@ class ListenActivity : Activity(), MicController.Ui {
 
     // ---- Gemma ----
 
+    /**
+     * What kind of command, for logcat: never its contents (names, message text, places), which other apps with log
+     * access could read. The debug compare log, on the phone only, has the details.
+     */
+    private fun kind(command: Command?) = command?.javaClass?.simpleName ?: "none"
+
     /** Gemma is used when its model is on the phone and the setting is on. */
     private fun gemmaOn() = settings.localAi && LocalLlm.isReady(this)
 
@@ -330,7 +336,7 @@ class ListenActivity : Activity(), MicController.Ui {
         val reply = runCatching { LocalLlm.ask(applicationContext, ModelCommands.PROMPT, text) }
             .onFailure { Log.e(Dictation.TAG, "gemma: command failed", it) }
         val command = reply.getOrNull()?.let { ModelCommands.toCommand(it.text) }
-        Log.i(Dictation.TAG, "command: gemma=${command ?: "none"} raw=${reply.getOrNull()?.text}")
+        Log.i(Dictation.TAG, "command: gemma=${kind(command)}")
         if (comparing) compareLog(text, rules, reply.getOrNull(), command, reply.exceptionOrNull())
         return command
     }
