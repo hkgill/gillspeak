@@ -50,8 +50,12 @@ class Actions(private val context: Context) {
 
     fun plan(command: Command): Outcome = when (command) {
         is Command.OpenApp -> {
-            val apps = apps()
-            val i = Commands.bestMatch(command.name, apps.map { it.label })
+            var apps = apps()
+            var i = Commands.bestMatch(command.name, apps.map { it.label })
+            if (i == null) { // installed since the list was read?
+                apps = apps(fresh = true)
+                i = Commands.bestMatch(command.name, apps.map { it.label })
+            }
             if (i == null) Outcome.Problem("No app called “${command.name}”", "Say its name as it appears under its icon")
             else apps[i].let { app ->
                 ready(Plan("Open ${app.label}", "App on this phone", opensApp = true) {
@@ -124,12 +128,25 @@ class Actions(private val context: Context) {
 
     // ---- Apps ----
 
-    /** Every app with an icon in the app drawer. Needs the launcher <queries> entry in the manifest (Android 11+). */
-    fun apps(): List<App> {
-        val pm = context.packageManager
-        return pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
-            .filter { it.activityInfo.packageName != context.packageName }
-            .map { App(it.loadLabel(pm).toString(), ComponentName(it.activityInfo.packageName, it.activityInfo.name)) }
+    /**
+     * Every app with an icon in the app drawer. Needs the launcher <queries> entry in the manifest (Android 11+).
+     * Reading each app's name loads that app's resources: about 6 s with a full phone's worth of apps on a
+     * Galaxy S25. So the list is read once, ahead of time ([ListenActivity] starts it when the side button is held),
+     * and kept: the bubble's accessibility service keeps the process alive. Worker thread only.
+     */
+    fun apps(fresh: Boolean = false): List<App> {
+        synchronized(Actions) {
+            cachedApps?.takeIf { !fresh && System.currentTimeMillis() - cachedAt < APPS_TTL_MS }?.let { return it }
+            val t0 = System.nanoTime()
+            val pm = context.packageManager
+            val list = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+                .filter { it.activityInfo.packageName != context.packageName }
+                .map { App(it.loadLabel(pm).toString(), ComponentName(it.activityInfo.packageName, it.activityInfo.name)) }
+            Log.i(Dictation.TAG, "command: read ${list.size} app names in ${(System.nanoTime() - t0) / 1_000_000} ms")
+            cachedApps = list
+            cachedAt = System.currentTimeMillis()
+            return list
+        }
     }
 
     private fun start(intent: Intent): Boolean = try {
@@ -197,6 +214,10 @@ class Actions(private val context: Context) {
     }
 
     companion object {
+        private var cachedApps: List<App>? = null
+        private var cachedAt = 0L
+        private const val APPS_TTL_MS = 30 * 60_000L
+
         fun clock(seconds: Int): String {
             val h = seconds / 3600
             val m = seconds % 3600 / 60

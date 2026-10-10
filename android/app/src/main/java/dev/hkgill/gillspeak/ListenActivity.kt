@@ -184,6 +184,7 @@ class ListenActivity : Activity(), MicController.Ui {
         edge.open()
         flyIn()
         mic.warm()
+        worker.execute { runCatching { actions.apps() } } // read app names while the person is still talking
         if (gemmaOn()) gemmaWorker.execute { runCatching { LocalLlm.warm(applicationContext) }.onFailure { Log.e(Dictation.TAG, "gemma: warm-up failed", it) } }
         startListening()
     }

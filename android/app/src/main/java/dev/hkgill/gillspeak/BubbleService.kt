@@ -81,6 +81,8 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         target = SnoozeTargetView(this).apply { visibility = View.INVISIBLE }
         prefsListener = settings.onBubbleChange { if (shown) layout() }
         scheduleWake()
+        // Read app names now, in the background, so the first voice command doesn't wait ~5 s for them.
+        Thread({ runCatching { Actions(applicationContext).apps() } }, "gillspeak-apps").apply { priority = Thread.MIN_PRIORITY }.start()
         Log.i(Dictation.TAG, "bubble service connected")
     }
 
