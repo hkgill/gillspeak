@@ -43,6 +43,12 @@ class CommandsTest {
         assertEquals(Command.Alarm(7, 5, exact = false), parse("alarm at seven oh five"))
         assertEquals(Command.Alarm(6, 30, exact = false), parse("alarm for half past 6"))
         assertEquals(Command.Alarm(19, 45), parse("alarm for quarter to 8 tonight"))
+        // Regression (Codex review): am/pm belongs to the hour named, before stepping back an hour.
+        assertEquals(Command.Alarm(11, 45), parse("alarm for quarter to 12 pm"))
+        assertEquals(Command.Alarm(23, 45), parse("alarm for quarter to 12 am"))
+        assertEquals(Command.Alarm(0, 45), parse("alarm for quarter to 1 am"))
+        assertEquals(Command.Alarm(12, 45), parse("alarm for quarter to 1 pm"))
+        assertEquals(Command.Alarm(0, 45, exact = false), parse("alarm for quarter to 1")) // 12:45, am or pm: the next one
         assertEquals(Command.Alarm(0, 0), parse("alarm for midnight"))
         assertEquals(Command.Alarm(12, 0), parse("alarm for noon"))
         assertEquals(Command.Alarm(7, 0, exact = false), parse("alarm for 7 o'clock"))
