@@ -105,6 +105,8 @@ class CommandsTest {
         assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 10, 12, 0), false), at(null, "noon"))
         assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 11, 10, 0), false), at(null, "10")) // 10 am has passed today
         assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 10, 19, 0), false), at("tonight", "7"))
+        // Regression (CodeRabbit): "quarter to 1" with no am/pm booked 00:45.
+        assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 11, 12, 45), false), at("tomorrow", "quarter to 1"))
         assertEquals(Commands.EventTime(java.time.LocalDate.of(2026, 10, 12).atStartOfDay(), true), at("monday", null))
         assertEquals(Commands.EventTime(java.time.LocalDate.of(2026, 10, 17).atStartOfDay(), true), at("saturday", null)) // next week's
         assertEquals(Commands.EventTime(java.time.LocalDateTime.of(2026, 10, 16, 14, 30), false), at("Friday", "2:30")) // as Gemma writes it

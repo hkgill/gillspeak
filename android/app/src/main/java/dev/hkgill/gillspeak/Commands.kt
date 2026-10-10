@@ -128,7 +128,8 @@ object Commands {
         }
         if (clock == null) return EventTime(date.atStartOfDay(), allDay = true)
         var hour = clock.hour
-        if (!clock.exact) hour = if (day == "tonight" || hour in 1..7) hour % 12 + 12 else hour
+        // An unspecified hour reads as working hours: "at 3" is 15:00, and "quarter to 1" (hour 0 here) is 12:45.
+        if (!clock.exact) hour = if (day == "tonight" || hour in 1..7) hour % 12 + 12 else if (hour == 0) 12 else hour
         var start = date.atTime(hour, clock.minute)
         if (day == null && start.isBefore(now)) start = start.plusDays(1)
         return EventTime(start, allDay = false)
