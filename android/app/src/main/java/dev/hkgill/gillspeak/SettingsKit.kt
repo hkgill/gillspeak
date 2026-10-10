@@ -141,12 +141,38 @@ class IconView(context: Context, private val kind: Kind, var color: Int, private
     }
 }
 
-/** The settings header's app tile: a night square holding a round g whose middle is three lime sound bars. */
-class LogoView(context: Context) : View(context) {
+/** The new mark's glyph: a round g whose middle is three lime sound bars, on a 120-unit square. */
+object Glyph {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE
         strokeCap = Paint.Cap.ROUND
     }
+    private val tail = Path().apply {
+        moveTo(82f, 26f); lineTo(82f, 84f)
+        cubicTo(82f, 102f, 68f, 108f, 56f, 108f)
+        cubicTo(47f, 108f, 41f, 105f, 36f, 100f)
+    }
+
+    /** Draws the glyph [size] across, centred on ([cx], [cy]). */
+    fun draw(canvas: Canvas, cx: Float, cy: Float, size: Float, stroke: Float = 10f) {
+        canvas.save()
+        canvas.translate(cx - size / 2, cy - size / 2)
+        canvas.scale(size / 120f, size / 120f)
+        paint.color = Look.LOGO_INK
+        paint.strokeWidth = stroke
+        canvas.drawCircle(54f, 52f, 28f, paint)
+        canvas.drawPath(tail, paint)
+        paint.color = Look.LIME
+        paint.strokeWidth = stroke - 2
+        canvas.drawLine(42f, 46f, 42f, 58f, paint)
+        canvas.drawLine(54f, 38f, 54f, 66f, paint)
+        canvas.drawLine(66f, 46f, 66f, 58f, paint)
+        canvas.restore()
+    }
+}
+
+/** The settings header's app tile: the [Glyph] on a night rounded square. */
+class LogoView(context: Context) : View(context) {
     private val fill = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Look.LOGO_BG }
     private val box = RectF()
 
@@ -158,24 +184,6 @@ class LogoView(context: Context) : View(context) {
         val side = minOf(width, height).toFloat()
         box.set(0f, 0f, side, side)
         canvas.drawRoundRect(box, side * 14 / 44, side * 14 / 44, fill)
-        // The glyph is drawn on a 120-unit square, 32/44 of the tile, centred.
-        val g = side * 32 / 44
-        canvas.save()
-        canvas.translate((side - g) / 2, (side - g) / 2)
-        canvas.scale(g / 120f, g / 120f)
-        paint.color = Look.LOGO_INK
-        paint.strokeWidth = 11f
-        canvas.drawCircle(54f, 52f, 28f, paint)
-        canvas.drawPath(Path().apply {
-            moveTo(82f, 26f); lineTo(82f, 84f)
-            cubicTo(82f, 102f, 68f, 108f, 56f, 108f)
-            cubicTo(47f, 108f, 41f, 105f, 36f, 100f)
-        }, paint)
-        paint.color = Look.LIME
-        paint.strokeWidth = 9f
-        canvas.drawLine(42f, 46f, 42f, 58f, paint)
-        canvas.drawLine(54f, 38f, 54f, 66f, paint)
-        canvas.drawLine(66f, 46f, 66f, 58f, paint)
-        canvas.restore()
+        Glyph.draw(canvas, side / 2, side / 2, side * 32 / 44, stroke = 11f)
     }
 }
