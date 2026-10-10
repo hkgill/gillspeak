@@ -183,21 +183,24 @@ object LocalLlm {
         val t0 = SystemClock.uptimeMillis()
         val text: String
         val loadMs: Long
-        synchronized(lock) {
-            val tl = SystemClock.uptimeMillis()
-            val e = load(context)
-            loadMs = SystemClock.uptimeMillis() - tl
-            val config = ConversationConfig(
-                systemInstruction = Contents.of(system),
-                samplerConfig = SamplerConfig(1, 1.0, 0.0, 0), // greedy: the same words always get the same answer
-                maxOutputToken = maxTokens,
-                thinkingConfig = ThinkingConfig(false),
-            )
-            text = e.createConversation(config).use { c ->
-                c.sendMessage(user).contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.trim()
+        try {
+            synchronized(lock) {
+                val tl = SystemClock.uptimeMillis()
+                val e = load(context)
+                loadMs = SystemClock.uptimeMillis() - tl
+                val config = ConversationConfig(
+                    systemInstruction = Contents.of(system),
+                    samplerConfig = SamplerConfig(1, 1.0, 0.0, 0), // greedy: the same words always get the same answer
+                    maxOutputToken = maxTokens,
+                    thinkingConfig = ThinkingConfig(false),
+                )
+                text = e.createConversation(config).use { c ->
+                    c.sendMessage(user).contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.trim()
+                }
             }
+        } finally {
+            scheduleRelease() // a failed answer must not keep 2.6 GB loaded for good
         }
-        scheduleRelease()
         val ms = SystemClock.uptimeMillis() - t0
         Log.i(Dictation.TAG, "gemma ($backend) ${ms - loadMs} ms${if (loadMs > 50) " + load $loadMs ms" else ""}")
         return Reply(text, ms, loadMs)
