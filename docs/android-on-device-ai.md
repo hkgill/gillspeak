@@ -127,7 +127,7 @@ Parakeet stays the ear. Gemma's audio input remains an option for a later "mixed
 | --- | --- | --- |
 | Storage | 640 MB | 2.6 GB, optional download with a SHA256 check like Parakeet's |
 | Memory when loaded | ~0.7 GB | ~2–3 GB |
-| Loaded | while dictating or listening | on first need, unloaded after a minute or two idle (as `LocalAsr.scheduleRelease` does) |
+| Loaded | while dictating or listening | only when the rules miss a command (or polish is on), unloaded after ten idle minutes (as `LocalAsr.scheduleRelease` does) |
 | Runs on | CPU (sherpa-onnx) | GPU (LiteRT-LM) |
 
 Both together fit comfortably on 12 GB phones (Galaxy S25, Z Fold5).

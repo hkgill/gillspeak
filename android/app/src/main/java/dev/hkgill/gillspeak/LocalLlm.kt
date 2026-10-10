@@ -24,14 +24,16 @@ import java.util.concurrent.TimeUnit
  *
  * The model (2.6 GB, from Google's litert-community on Hugging Face, pinned to one revision) is fetched by Android's
  * DownloadManager over Wi-Fi and checked against its SHA256 before it's used. It holds 2-3 GB of memory while
- * loaded, so it loads on first use and is released after a couple of idle minutes. Calls are serialised: one
+ * loaded, so it loads on first use and is released after ten idle minutes. Calls are serialised: one
  * conversation at a time.
  */
 object LocalLlm {
     const val FILE = "gemma-4-E2B-it.litertlm"
     const val SIZE = 2_588_147_712L
     const val SHA256 = "181938105e0eefd105961417e8da75903eacda102c4fce9ce90f50b97139a63c"
-    private const val IDLE_RELEASE_MS = 2 * 60_000L
+    // Loading takes 4-7 s of GPU work, so a loaded model is kept for the next command a while; holding memory costs
+    // next to no battery.
+    private const val IDLE_RELEASE_MS = 10 * 60_000L
     private const val URL = "https://huggingface.co/litert-community/gemma-4-E2B-it-litert-lm/resolve/" +
         "b3ca0d2f076785a8f4b2219ddbd2bdb99954eae1/$FILE"
     private const val DOWNLOAD_DIR = "gemma-download"

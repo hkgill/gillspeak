@@ -189,7 +189,9 @@ class ListenActivity : Activity(), MicController.Ui {
         flyIn()
         mic.warm()
         worker.execute { runCatching { actions.apps() } } // read app names while the person is still talking
-        if (gemmaOn()) gemmaWorker.execute { runCatching { LocalLlm.warm(applicationContext) }.onFailure { Log.e(Dictation.TAG, "gemma: warm-up failed", it) } }
+        // Gemma isn't loaded here: most commands match the rules, and loading it is 4-7 s of GPU work. It loads
+        // only when the rules miss (or for the compare log), then stays for a while for the next one.
+        if (comparing && gemmaOn()) gemmaWorker.execute { runCatching { LocalLlm.warm(applicationContext) } }
         startListening()
     }
 
