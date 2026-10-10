@@ -432,7 +432,7 @@ class MainActivity : Activity() {
         return if (settings.nightSnooze) "Night snooze ${clockOfDay(settings.nightStart)} – ${clockOfDay(settings.nightEnd)}" else "Off"
     }
 
-    /** Mindful mode's service is only in debug builds until it stops anything (phase 2). */
+    /** Mindful mode's service is only in debug builds while it is being tried out. */
     private fun mindfulBuilt() = runCatching { packageManager.getServiceInfo(ComponentName(this, FocusService::class.java), 0) }.isSuccess
 
     private fun mindfulOn(): Boolean {
@@ -806,7 +806,7 @@ class MainActivity : Activity() {
             background = rounded(if (on) t.accSoft else t.card, dp(22).toFloat())
             setPadding(dp(18), dp(16), dp(12), dp(16))
             val sub = if (on) "${FeedClock.format(minOf(clock.usedMs, clock.limitMs(limit)))} of ${FeedClock.limitLabel(limit)} used. " +
-                "For now it only keeps a log; it doesn't stop you yet." else "Turn on ${getString(R.string.focus_label)} in Accessibility."
+                "Then a stop card covers the feed." else "Turn on ${getString(R.string.focus_label)} in Accessibility."
             addView(stack(
                 text(if (on) "Watching Shorts, Reels and TikTok" else "Mindful mode is off", 16f, if (on) t.accT else t.ink, f.bold),
                 text(sub, 14f, t.ink2).apply { setPadding(0, dp(2), 0, 0); setLineSpacing(0f, 1.1f) },

@@ -160,7 +160,7 @@ class Settings(context: Context) {
         prefs.edit().remove("snooze_until").apply { if (night != null) putLong("night_skip_until", night) }.apply()
     }
 
-    // Mindful mode. Phase 1 only times the feeds and logs it; nothing stops yet.
+    // Mindful mode.
 
     /** Mindful mode's timer, kept so a restart of [FocusService] doesn't start the budget again. */
     var feedClock: FeedClock.State

@@ -1,6 +1,9 @@
 package dev.hkgill.gillspeak
 
 import android.accessibilityservice.AccessibilityService
+import android.graphics.PixelFormat
+import android.text.format.DateFormat
+import android.view.WindowManager
 import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
@@ -14,10 +17,10 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * Mindful mode, phase 1: detection only. A separate accessibility service from the bubble, receiving events only from
+ * Mindful mode. A separate accessibility service from the bubble, receiving events only from
  * YouTube, Instagram and TikTok, so each service's description stays accurate. It spots their short-video feeds from
- * view ids ([Feeds]), times them with [FeedClock], and writes what it saw to files/mindful.log, to check detection
- * against a day of real use before anything stops the user. It never reads text or takes screenshots.
+ * view ids ([Feeds]), times them with [FeedClock], and covers the feed with a [StopCard] at the user's limit and while
+ * the feeds are paused. It never reads text or takes screenshots. Debug builds also log what it saw to files/mindful.log.
  *
  *     adb shell run-as dev.hkgill.gillspeak cat files/mindful.log
  */
@@ -30,10 +33,14 @@ class FocusService : AccessibilityService() {
     private var lastLook = 0L
     private val look = Runnable { look() }
     private val probed = HashSet<String>()
+    private lateinit var wm: WindowManager
+    private var card: StopCard? = null
+    private var cardPaused: Boolean? = null // which card is showing: the pause, the limit, or none
 
     override fun onServiceConnected() {
         settings = Settings(this)
         power = getSystemService(PowerManager::class.java)
+        wm = getSystemService(WindowManager::class.java)
         log("service on (${FeedClock.format(settings.feedClock.usedMs)} used)")
         main.post(look)
     }
@@ -52,6 +59,7 @@ class FocusService : AccessibilityService() {
 
     override fun onDestroy() {
         main.removeCallbacksAndMessages(null)
+        hideCard()
         if (::settings.isInitialized) {
             update(System.currentTimeMillis(), null)
             log("service off")
@@ -82,12 +90,60 @@ class FocusService : AccessibilityService() {
             if (seen != null) {
                 if (before.usedMs > 0 && after.usedMs == 0L) log("break: the timer starts again")
                 log("on ${seen.name}, ${FeedClock.format(after.usedMs)} of ${FeedClock.format(after.limitMs(limit))} used")
-                if (after.paused(now)) log("feeds paused: the stop card would show here")
             }
             feed = seen
             since = now
         }
-        if (!before.overLimit(limit) && after.overLimit(limit)) log("limit reached in ${seen?.name}: the stop card would show here")
+        if (!before.overLimit(limit) && after.overLimit(limit)) log("limit reached in ${seen?.name}")
+        when {
+            seen != null && after.paused(now) -> showCard(paused = true, after, limit)
+            seen != null && after.overLimit(limit) -> showCard(paused = false, after, limit)
+            else -> hideCard()
+        }
+    }
+
+    private fun showCard(paused: Boolean, state: FeedClock.State, limit: Int) {
+        if (cardPaused == paused) return
+        val view = card ?: StopCard(this, ::leave, ::more).also {
+            wm.addView(it, WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                PixelFormat.TRANSLUCENT,
+            ))
+            card = it
+        }
+        if (paused) {
+            view.show("Feeds are paused", "Shorts, Reels and TikTok are back at ${DateFormat.getTimeFormat(this).format(state.pausedUntil)}.", offerMore = false)
+        } else {
+            view.show(
+                "That's your ${FeedClock.limitLabel(limit)}",
+                "Shorts, Reels and TikTok share one timer. Leave now and they pause for 30 minutes.",
+                offerMore = !state.extended,
+            )
+        }
+        cardPaused = paused
+        log(if (paused) "stop card: paused" else "stop card: limit")
+    }
+
+    private fun hideCard() {
+        card?.let { runCatching { wm.removeView(it) } }
+        card = null
+        cardPaused = null
+    }
+
+    /** "Leave": home, and at the limit the feeds pause. Leaving the pause card leaves the pause as it was. */
+    private fun leave() {
+        if (cardPaused == false) settings.feedClock = FeedClock.leave(settings.feedClock, System.currentTimeMillis())
+        log("left")
+        hideCard()
+        performGlobalAction(GLOBAL_ACTION_HOME)
+    }
+
+    private fun more() {
+        settings.feedClock = FeedClock.extend(settings.feedClock)
+        log("5 more minutes")
+        hideCard()
     }
 
     /** Debug builds: logs each view id seen in the watched apps once, to find the feeds' ids. Ids only, no text. */
