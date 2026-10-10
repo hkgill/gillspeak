@@ -8,6 +8,7 @@ import android.util.Log
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
 import com.google.ai.edge.litertlm.Contents
+import com.google.ai.edge.litertlm.Conversation
 import com.google.ai.edge.litertlm.ConversationConfig
 import com.google.ai.edge.litertlm.Engine
 import com.google.ai.edge.litertlm.EngineConfig
@@ -119,7 +120,7 @@ object LocalLlm {
         background.execute {
             try {
                 val src = downloaded(context)
-                val part = File(file(context).path + ".part").also { it.parentFile?.mkdirs() }
+                val part = partFile(context).also { it.parentFile?.mkdirs() }
                 val md = java.security.MessageDigest.getInstance("SHA-256")
                 src.inputStream().use { input ->
                     part.outputStream().use { out ->
@@ -144,6 +145,7 @@ object LocalLlm {
                 }
             } catch (e: Exception) {
                 Log.e(Dictation.TAG, "gemma install failed", e)
+                partFile(context).delete() // a full disk can stop the copy part way: don't leave gigabytes behind
                 fail(context, e.message ?: e.javaClass.simpleName)
             } finally {
                 installing = false
@@ -161,11 +163,14 @@ object LocalLlm {
                 engine = null
                 cancelDownload(context)
                 file(context).delete()
+                partFile(context).delete()
                 failure = null
             }
             onDone()
         }
     }
+
+    private fun partFile(context: Context) = File(file(context).path + ".part")
 
     /** Loads the model ahead of time (a few seconds), so the first command doesn't wait for it. Worker thread only. */
     fun warm(context: Context) {
@@ -179,25 +184,43 @@ object LocalLlm {
      * conversation is nearly free (under 10 ms); answering a command takes about 0.4 s on a Galaxy S25's GPU.
      * Worker thread only.
      */
-    fun ask(context: Context, system: String, user: String, maxTokens: Int = 256): Reply {
+    // The answer being written and who asked for it, so [cancel] stops only that caller's. Set and cleared under
+    // [askingLock], and cleared before the conversation closes, so a cancel never reaches a closed conversation.
+    private val askingLock = Any()
+    private var asking: Pair<Conversation, Any>? = null
+
+    /** Stops [owner]'s answer if one is being written (the side-button screen was dismissed); [ask] then throws. */
+    fun cancel(owner: Any) = synchronized(askingLock) {
+        asking?.takeIf { it.second === owner }?.let { runCatching { it.first.cancelProcess() } }
+    }
+
+    fun ask(context: Context, system: String, user: String, maxTokens: Int = 256, owner: Any? = null): Reply {
         val t0 = SystemClock.uptimeMillis()
         val text: String
         val loadMs: Long
-        synchronized(lock) {
-            val tl = SystemClock.uptimeMillis()
-            val e = load(context)
-            loadMs = SystemClock.uptimeMillis() - tl
-            val config = ConversationConfig(
-                systemInstruction = Contents.of(system),
-                samplerConfig = SamplerConfig(1, 1.0, 0.0, 0), // greedy: the same words always get the same answer
-                maxOutputToken = maxTokens,
-                thinkingConfig = ThinkingConfig(false),
-            )
-            text = e.createConversation(config).use { c ->
-                c.sendMessage(user).contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.trim()
+        try {
+            synchronized(lock) {
+                val tl = SystemClock.uptimeMillis()
+                val e = load(context)
+                loadMs = SystemClock.uptimeMillis() - tl
+                val config = ConversationConfig(
+                    systemInstruction = Contents.of(system),
+                    samplerConfig = SamplerConfig(1, 1.0, 0.0, 0), // greedy: the same words always get the same answer
+                    maxOutputToken = maxTokens,
+                    thinkingConfig = ThinkingConfig(false),
+                )
+                text = e.createConversation(config).use { c ->
+                    if (owner != null) synchronized(askingLock) { asking = c to owner }
+                    try {
+                        c.sendMessage(user).contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.trim()
+                    } finally {
+                        synchronized(askingLock) { asking = null }
+                    }
+                }
             }
+        } finally {
+            scheduleRelease() // a failed answer must not keep 2.6 GB loaded for good
         }
-        scheduleRelease()
         val ms = SystemClock.uptimeMillis() - t0
         Log.i(Dictation.TAG, "gemma ($backend) ${ms - loadMs} ms${if (loadMs > 50) " + load $loadMs ms" else ""}")
         return Reply(text, ms, loadMs)

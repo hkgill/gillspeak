@@ -56,17 +56,19 @@ class ListenActivity : Activity(), MicController.Ui {
     private lateinit var pill: BubbleView
 
     private var started = false
-    private var closing = false
+    @Volatile private var closing = false
     private var handled = false // the transcript arrived; later status lines from the controller are not ours
     private var askingContacts = false
     private var pending: Command? = null // waiting for contacts access
     private var byModel = false // the command on screen was understood by Gemma, not the rules
+    // Bumped on every listen: Gemma and planning answer later, and an answer for an earlier listen must not show
+    // (or act) once the person has started another.
+    @Volatile private var listen = 0
+    private var pendingAct: Runnable? = null
     private var heard = ""
 
     // Silence detection.
-    private var listenSince = 0L
-    private var lastLoud = 0L
-    private var spoke = false
+    private var ear = EndOfSpeech(0)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -170,7 +172,8 @@ class ListenActivity : Activity(), MicController.Ui {
         main.removeCallbacksAndMessages(null)
         mic.shutdown()
         worker.shutdownNow()
-        gemmaWorker.shutdown() // let a reply in flight finish writing the compare log
+        LocalLlm.cancel(this) // an answer nobody will see: stop the GPU work now
+        gemmaWorker.shutdown() // queued questions see `closing` and skip
         super.onDestroy()
     }
 
@@ -189,9 +192,9 @@ class ListenActivity : Activity(), MicController.Ui {
         flyIn()
         mic.warm()
         worker.execute { runCatching { actions.apps() } } // read app names while the person is still talking
-        // Gemma isn't loaded here: most commands match the rules, and loading it is 4-7 s of GPU work. It loads
-        // only when the rules miss (or for the compare log), then stays for a while for the next one.
-        if (comparing && gemmaOn()) gemmaWorker.execute { runCatching { LocalLlm.warm(applicationContext) } }
+        // Gemma loads while the person speaks (4-7 s of GPU work, then it stays ten minutes for the next command).
+        // Loading it only once the rules missed made those commands wait 5-6 s after speaking.
+        if (gemmaOn()) gemmaWorker.execute { if (!closing) runCatching { LocalLlm.warm(applicationContext) } }
         startListening()
     }
 
@@ -211,12 +214,14 @@ class ListenActivity : Activity(), MicController.Ui {
     }
 
     private fun startListening() {
+        listen++
+        LocalLlm.cancel(this) // an answer for the previous listen won't be shown
+        pendingAct?.let(main::removeCallbacks)
+        pendingAct = null
         handled = false
         heard = ""
         if (!mic.latch()) return // the controller has said why, through status()
-        listenSince = SystemClock.uptimeMillis()
-        lastLoud = listenSince
-        spoke = false
+        ear = EndOfSpeech(SystemClock.uptimeMillis())
         main.post(watch)
     }
 
@@ -231,20 +236,14 @@ class ListenActivity : Activity(), MicController.Ui {
     private val watch = object : Runnable {
         override fun run() {
             if (mic.state != MicController.State.LATCHED && mic.state != MicController.State.RECORDING) return
-            val now = SystemClock.uptimeMillis()
-            if (mic.level > SPEECH_LEVEL) {
-                spoke = true
-                lastLoud = now
-            }
-            when {
-                spoke && now - lastLoud > SILENCE_MS -> mic.press()
-                !spoke && now - listenSince > NOTHING_SAID_MS -> {
+            when (ear.feed(mic.level, SystemClock.uptimeMillis(), mic.heard)) {
+                EndOfSpeech.Verdict.FINISHED, EndOfSpeech.Verdict.TOO_LONG -> mic.press()
+                EndOfSpeech.Verdict.NOTHING_SAID -> {
                     mic.cancel(null)
                     message("No speech heard")
                     closeIn(1600)
                 }
-                now - listenSince > MAX_LISTEN_MS -> mic.press()
-                else -> main.postDelayed(this, 50)
+                EndOfSpeech.Verdict.LISTENING -> main.postDelayed(this, 50)
             }
         }
     }
@@ -294,16 +293,20 @@ class ListenActivity : Activity(), MicController.Ui {
         pill.label = "Thinking"
         edge.working = true
         val rules = Commands.parse(text)
-        Log.i(Dictation.TAG, "command: rules=${rules ?: "none"}")
+        Log.i(Dictation.TAG, "command: rules=${kind(rules)}")
         when {
             rules != null -> {
                 plan(rules, model = false)
                 // When comparing, also ask Gemma, only to log what it would have done next to the rules.
                 if (comparing && gemmaOn()) gemmaWorker.execute { askGemma(text, rules) }
             }
-            gemmaOn() -> gemmaWorker.execute {
-                val command = askGemma(text, null)
-                main.post { if (!closing) plan(command, model = command != null) }
+            gemmaOn() -> {
+                val asked = listen
+                gemmaWorker.execute {
+                    if (closing || asked != listen) return@execute // dismissed or replaced while queued
+                    val command = askGemma(text, null)
+                    main.post { if (!closing && asked == listen) plan(command, model = command != null) }
+                }
             }
             else -> plan(null, model = false)
         }
@@ -311,15 +314,21 @@ class ListenActivity : Activity(), MicController.Ui {
 
     // ---- Gemma ----
 
+    /**
+     * What kind of command, for logcat: never its contents (names, message text, places), which other apps with log
+     * access could read. The debug compare log, on the phone only, has the details.
+     */
+    private fun kind(command: Command?) = command?.javaClass?.simpleName ?: "none"
+
     /** Gemma is used when its model is on the phone and the setting is on. */
     private fun gemmaOn() = settings.localAi && LocalLlm.isReady(this)
 
     /** Asks Gemma what [text] means. Runs on [gemmaWorker]; null when it's not a command or Gemma failed. */
     private fun askGemma(text: String, rules: Command?): Command? {
-        val reply = runCatching { LocalLlm.ask(applicationContext, ModelCommands.PROMPT, text) }
+        val reply = runCatching { LocalLlm.ask(applicationContext, ModelCommands.PROMPT, text, owner = this) }
             .onFailure { Log.e(Dictation.TAG, "gemma: command failed", it) }
         val command = reply.getOrNull()?.let { ModelCommands.toCommand(it.text) }
-        Log.i(Dictation.TAG, "command: gemma=${command ?: "none"} raw=${reply.getOrNull()?.text}")
+        Log.i(Dictation.TAG, "command: gemma=${kind(command)}")
         if (comparing) compareLog(text, rules, reply.getOrNull(), command, reply.exceptionOrNull())
         return command
     }
@@ -344,7 +353,7 @@ class ListenActivity : Activity(), MicController.Ui {
     // ---- Planning and acting ----
 
     private fun plan(command: Command?, model: Boolean) {
-        byModel = model
+        val asked = listen
         worker.execute {
             val outcome = runCatching {
                 if (command == null) Actions.Outcome.Ready(actions.searchInstead(heard)) else actions.plan(command)
@@ -352,11 +361,12 @@ class ListenActivity : Activity(), MicController.Ui {
                 Log.e(Dictation.TAG, "command: planning failed", it)
                 Actions.Outcome.Problem("Something went wrong", it.javaClass.simpleName)
             }
-            main.post { if (!closing) show(command, outcome) }
+            main.post { if (!closing && asked == listen) show(command, outcome, model) }
         }
     }
 
-    private fun show(command: Command?, outcome: Actions.Outcome) {
+    private fun show(command: Command?, outcome: Actions.Outcome, model: Boolean) {
+        byModel = model
         edge.working = false
         when (outcome) {
             is Actions.Outcome.Problem -> {
@@ -375,7 +385,7 @@ class ListenActivity : Activity(), MicController.Ui {
                 if (plan.confirm == null) {
                     showCard(plan.title, plan.detail, plan.body, big, buttons = emptyList())
                     pill.label = plan.title
-                    main.postDelayed({ act(plan) }, ACT_DELAY_MS)
+                    pendingAct = Runnable { act(plan) }.also { main.postDelayed(it, ACT_DELAY_MS) }
                 } else {
                     pill.label = if (command == null) "Not a command" else if (byModel) "Is this right?" else "Waiting for you"
                     showCard(plan.title, plan.detail, plan.body, big = big && byModel, buttons = listOf("Cancel" to { close() }, plan.confirm to { act(plan) }))
@@ -531,10 +541,6 @@ class ListenActivity : Activity(), MicController.Ui {
         private const val REQ_CONTACTS = 7
         private const val DIM = 0xFFA9ADB6.toInt()
         /** Recorder.level is the last 100 ms peak over 12,000: speech sits well above this, a quiet room well below. */
-        private const val SPEECH_LEVEL = 0.06f
-        private const val SILENCE_MS = 900L
-        private const val NOTHING_SAID_MS = 7000L
-        private const val MAX_LISTEN_MS = 30_000L
         /** Long enough to read the card before the app opens or the timer starts. */
         private const val ACT_DELAY_MS = 650L
     }

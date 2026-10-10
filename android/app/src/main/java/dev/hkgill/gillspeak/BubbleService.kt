@@ -98,7 +98,10 @@ class BubbleService : AccessibilityService(), MicController.Ui {
 
     override fun onDestroy() {
         if (::mic.isInitialized) mic.shutdown()
-        main.removeCallbacks(wake)
+        // Everything: a refresh still queued would schedule the next snooze wake-up, which schedules the next, and
+        // keep this destroyed service alive.
+        main.removeCallbacksAndMessages(null)
+        prefsListener?.let { settings.stopListening(it) }
         hide()
         super.onDestroy()
     }
@@ -120,8 +123,12 @@ class BubbleService : AccessibilityService(), MicController.Ui {
             lastSummary = summary
         }
         when {
-            // Snoozed: stay hidden whatever is on screen. Snoozing needs an idle bubble, so nothing is in flight.
-            snoozed && mic.state != MicController.State.WORKING -> hide()
+            // Snoozed: stay hidden whatever is on screen. Dragging to snooze needs an idle bubble, but night snooze or
+            // the app's snooze can start mid-recording: never leave a hidden mic running.
+            snoozed && mic.state != MicController.State.WORKING -> {
+                mic.cancel(null)
+                hide()
+            }
             // A keyboard still sliding in reaches past the bottom of the screen. Placing the bubble against it
             // made the bubble jump up as the keyboard settled, so wait for it (but not forever).
             keyboard != null && !shown && keyboard.bottom > screen().second && settleChecks < MAX_SETTLE_CHECKS -> {
@@ -195,7 +202,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
             wm.addView(target, targetParams)
             wm.addView(button, params)
             shown = true
-            mic.warm()
+            mic.warm(models = false) // the local model waits for a press: see MicController.warm
         }
     }
 
@@ -443,12 +450,29 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     private val snoozeAction = object : View.AccessibilityDelegate() {
         override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
             super.onInitializeAccessibilityNodeInfo(host, info)
+            // Holding isn't possible with TalkBack or Switch Access, so a click starts and a second click finishes.
+            info.isClickable = true
+            info.contentDescription = when {
+                mic.state == MicController.State.RECORDING || mic.state == MicController.State.LATCHED -> "Stop dictating"
+                mic.state == MicController.State.WORKING -> "Transcribing"
+                mic.canRetry -> "Retry dictation"
+                else -> "Dictate"
+            }
             if (mic.state == MicController.State.IDLE && !mic.canRetry) {
                 info.addAction(AccessibilityNodeInfo.AccessibilityAction(R.id.action_snooze, "Snooze for ${Snooze.label(settings.snoozeMinutes)}"))
             }
         }
 
         override fun performAccessibilityAction(host: View, action: Int, args: Bundle?): Boolean {
+            if (action == AccessibilityNodeInfo.ACTION_CLICK) {
+                when {
+                    // Like a tap: setup that isn't finished opens the app.
+                    !mic.isActive && mic.needsSetup() ->
+                        startActivity(Intent(this@BubbleService, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                    mic.toggle() -> host.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                }
+                return true
+            }
             if (action != R.id.action_snooze) return super.performAccessibilityAction(host, action, args)
             if (mic.state != MicController.State.IDLE || mic.canRetry) return false
             snooze()

@@ -50,6 +50,7 @@ class MicController(private val context: Context, private val ui: Ui) {
     /** A tap now retries a failed request, or inserts text that couldn't be delivered. */
     val canRetry get() = (failedAudio != null || pendingText != null) && state == State.IDLE
     val level get() = recorder.level
+    val heard get() = recorder.heard
     val isActive get() = state != State.IDLE
 
     /** Finger down on the mic. Returns true when something started or finished (worth a haptic tick). */
@@ -64,6 +65,17 @@ class MicController(private val context: Context, private val ui: Ui) {
         if (state != State.IDLE || !start()) return false
         set(State.LATCHED)
         return true
+    }
+
+    /**
+     * A click from TalkBack or Switch Access, which can't hold a button down: starts a recording that runs until the
+     * next click, finishes one, or retries a failed one. Returns true when something started or finished.
+     */
+    fun toggle(): Boolean = when {
+        state == State.RECORDING || state == State.LATCHED -> { finish(); true }
+        canRetry -> { retry(); true }
+        state == State.IDLE -> latch()
+        else -> false
     }
 
     /** Finger up. A short press latches recording on; a long one finishes it. Returns true when it finished. */
@@ -105,13 +117,17 @@ class MicController(private val context: Context, private val ui: Ui) {
     /** True when tapping should open the app to finish setup. Checked fresh each time, never remembered. */
     fun needsSetup() = idleHint().second
 
-    /** Opens the TLS connection or loads the local model ahead of time, at most once a minute. */
-    fun warm() {
+    /**
+     * Opens the TLS connection or loads the local model ahead of time, at most once a minute. [models] false skips
+     * the local models: they take about 700 MB and a few seconds of CPU, too much to load for every keyboard that
+     * opens, so the bubble loads them when it's pressed instead, while the user is still speaking.
+     */
+    fun warm(models: Boolean = true) {
         val now = SystemClock.uptimeMillis()
         if (settings.engineProblem(context) != null || now - lastWarm < 60_000) return
+        if (settings.engine == Settings.ENGINE_LOCAL && !models) return
         lastWarm = now
         when (settings.engine) {
-            // Loading the on-device model takes a few seconds; do it while the keyboard is up, not after speaking.
             Settings.ENGINE_LOCAL -> worker.execute {
                 runCatching { LocalAsr.warm(context) }
                 if (settings.localPolish) runCatching { LocalLlm.warm(context) }
@@ -155,6 +171,7 @@ class MicController(private val context: Context, private val ui: Ui) {
         recordingSince = SystemClock.uptimeMillis()
         set(State.RECORDING)
         tick()
+        warm() // the local model loads while the user speaks, if it isn't loaded already
         return true
     }
 

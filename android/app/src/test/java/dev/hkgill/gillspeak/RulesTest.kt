@@ -99,6 +99,11 @@ class RulesTest {
         assertEquals("", Validate.check("meet at 9 30 on Friday", "Meet at 9:30 on Friday."))
         assertEquals("missing_number", Validate.check("send 250 dollars to Sam today please", "Send 1250 dollars to Sam today, please."))
         assertEquals("", Validate.check("Thursday sorry Friday at 3", "Friday at 3."))
+        assertEquals("missing_number", Validate.check("Pay 1.50 now.", "Pay 150 now."))
+        assertEquals("missing_number", Validate.check("Pay 150 now.", "Pay 1.50 now."))
+        assertEquals("", Validate.check("Item 1.50 4 8 2 now.", "Item 1.50 482 now."))
+        assertEquals("missing_number", Validate.check("Item 1.50 4 8 2 now.", "Item 150 482 now."))
+        assertEquals("", Validate.check("Total 1,299.95 today.", "Total 1,299.95 today."))
         // Gemma 4 E2B on a Galaxy S25 swapped in Hindi mid-sentence.
         assertEquals("new_script", Validate.check(
             "can you please leave the back door open because i forgot my keys",

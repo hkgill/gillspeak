@@ -128,7 +128,8 @@ object Commands {
         }
         if (clock == null) return EventTime(date.atStartOfDay(), allDay = true)
         var hour = clock.hour
-        if (!clock.exact) hour = if (day == "tonight" || hour in 1..7) hour % 12 + 12 else hour
+        // An unspecified hour reads as working hours: "at 3" is 15:00, and "quarter to 1" (hour 0 here) is 12:45.
+        if (!clock.exact) hour = if (day == "tonight" || hour in 1..7) hour % 12 + 12 else if (hour == 0) 12 else hour
         var start = date.atTime(hour, clock.minute)
         if (day == null && start.isBefore(now)) start = start.plusDays(1)
         return EventTime(start, allDay = false)
@@ -307,6 +308,7 @@ object Commands {
 
         var hour: Int
         var minute = 0
+        var hourBefore = false // "quarter to 12": the hour named is the one after; am/pm belongs to that hour
         val rel = t.indexOf("past").takeIf { it > 0 } ?: t.indexOf("to").takeIf { it > 0 }
         if (rel != null) { // "half past 6", "quarter to 8", "20 past 7"
             val before = t.subList(0, rel).filter { it != "a" }
@@ -318,8 +320,7 @@ object Commands {
             val (h, end) = number(t, rel + 1) ?: return null
             if (end != t.size) return null
             hour = h.toInt()
-            if (t[rel] == "past") minute = mins else { hour -= 1; minute = 60 - mins }
-            if (hour < 0) hour += 12
+            if (t[rel] == "past") minute = mins else { minute = 60 - mins; hourBefore = true }
         } else {
             val (h, next) = number(t, 0) ?: return null
             hour = h.toInt()
@@ -342,7 +343,9 @@ object Commands {
             false -> { if (hour !in 1..12) return null; if (hour == 12) hour = 0 }
             null -> if (hour !in 0..23) return null
         }
-        return ClockTime(hour, minute, exact = pm != null || hour == 0 || hour > 12)
+        val exact = pm != null || hour == 0 || hour > 12
+        if (hourBefore) hour = (hour + 23) % 24 // "quarter to 12 pm" is 11:45, "quarter to 1 am" is 00:45
+        return ClockTime(hour, minute, exact)
     }
 
     /** "Three o'clock" at 10:08 am means 3 pm: the next time the clock shows [hour]:[minute], on a 12-hour face. */

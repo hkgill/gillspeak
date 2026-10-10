@@ -59,7 +59,15 @@ object LocalAsr {
     /** Frees the ~1 GB recognizer after [IDLE_RELEASE_MS] without use (restarts the countdown). */
     private fun scheduleRelease() {
         releaseTask?.cancel(false)
-        releaseTask = background.schedule({ synchronized(lock) { recognizer?.release(); recognizer = null } }, IDLE_RELEASE_MS, TimeUnit.MILLISECONDS)
+        releaseTask = background.schedule({
+            synchronized(lock) {
+                recognizer?.let {
+                    it.release()
+                    Log.i(Dictation.TAG, "local model released")
+                }
+                recognizer = null
+            }
+        }, IDLE_RELEASE_MS, TimeUnit.MILLISECONDS)
     }
 
     private fun dir(context: Context) = File(context.filesDir, "models/parakeet-tdt-0.6b-v3-int8")
@@ -203,6 +211,7 @@ object LocalAsr {
                 if (isReady(context)) Log.i(Dictation.TAG, "model download complete and verified")
             } catch (e: Exception) {
                 Log.e(Dictation.TAG, "model install failed", e)
+                FILES.forEach { File(dir(context), it.name + ".part").delete() } // don't leave a part-copied file behind
                 fail(context, e.message ?: e.javaClass.simpleName)
             } finally {
                 val waiters = synchronized(installWaiters) {

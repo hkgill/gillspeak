@@ -37,6 +37,9 @@ class Recorder {
      */
     val blocked get() = mostlyZero(chunks, zeroChunks)
 
+    /** Audio has been read since [start]; until then [level] is only a placeholder. */
+    val heard get() = chunks > 0
+
     val isRecording get() = running
 
     /** Caller checks RECORD_AUDIO first. Throws if the microphone can't be opened. */

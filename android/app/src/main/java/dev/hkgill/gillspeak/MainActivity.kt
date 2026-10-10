@@ -79,6 +79,7 @@ class MainActivity : Activity() {
 
     private val handler = Handler(Looper.getMainLooper())
     private val poll = Runnable { render(fromPoll = true) }
+    private var resumed = false // a model deleted in the background can call render() after onPause
     private val snoozeOver = Runnable { render() }
     private var backRegistered = false
     private val back = if (Build.VERSION.SDK_INT >= 33) OnBackInvokedCallback { go(HOME) } else null
@@ -124,10 +125,12 @@ class MainActivity : Activity() {
 
     override fun onResume() {
         super.onResume()
+        resumed = true
         render()
     }
 
     override fun onPause() {
+        resumed = false
         handler.removeCallbacks(poll)
         handler.removeCallbacks(snoozeOver)
         super.onPause()
@@ -167,7 +170,7 @@ class MainActivity : Activity() {
         }
         updateBack()
         val busy = { s: LocalAsr.Status -> s is LocalAsr.Status.Downloading || s == LocalAsr.Status.Installing }
-        if (busy(asr) || busy(gemma)) handler.postDelayed(poll, 1000)
+        if (resumed && (busy(asr) || busy(gemma))) handler.postDelayed(poll, 1000)
         settings.snoozedUntil()?.let { handler.postDelayed(snoozeOver, it - System.currentTimeMillis() + 50) }
     }
 
