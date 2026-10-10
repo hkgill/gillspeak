@@ -160,6 +160,22 @@ class Settings(context: Context) {
         prefs.edit().remove("snooze_until").apply { if (night != null) putLong("night_skip_until", night) }.apply()
     }
 
+    // Mindful mode. Phase 1 only times the feeds and logs it; nothing stops yet.
+
+    /** Mindful mode's timer, kept so a restart of [FocusService] doesn't start the budget again. */
+    var feedClock: FeedClock.State
+        get() = FeedClock.State(
+            prefs.getLong("mindful_used", 0L), prefs.getLong("mindful_last", 0L), prefs.getBoolean("mindful_on", false),
+            prefs.getBoolean("mindful_extended", false), prefs.getLong("mindful_paused_until", 0L),
+        )
+        set(v) = prefs.edit().putLong("mindful_used", v.usedMs).putLong("mindful_last", v.lastAt).putBoolean("mindful_on", v.onFeed)
+            .putBoolean("mindful_extended", v.extended).putLong("mindful_paused_until", v.pausedUntil).apply()
+
+    /** Debug builds: log the view ids [FocusService] sees in the watched apps, to find the feeds' ids. Set over adb only. */
+    var mindfulProbe: Boolean
+        get() = debuggable && prefs.getBoolean("mindful_probe", false)
+        set(v) = prefs.edit().putBoolean("mindful_probe", v).apply()
+
     /** The desktop clean-up prompt alone, for text-only clean-up (Groq). */
     fun cleanPrompt(): String = assets.open("clean_v2.txt").bufferedReader().use { it.readText() }
 
