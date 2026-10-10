@@ -13,6 +13,9 @@ NUMBER_RE = re.compile(r"\d[\d,.:/-]*")
 # A run of numbers separated by single spaces, spoken digit by digit or as a time: "4 8 2", "6 45".
 GROUP_RE = re.compile(r"\d[\d,.:/-]*(?: \d[\d,.:/-]*)*")
 
+# A decimal point between digits: "1.50" must never come back as "150", or the other way round.
+DECIMAL_RE = re.compile(r"\d\.\d")
+
 
 def _numbers(text: str) -> set[str]:
     return {m.group(0).rstrip(",.:/-").replace(",", "") for m in NUMBER_RE.finditer(text)}
@@ -27,12 +30,13 @@ def _missing_numbers(inp: str, out: str) -> bool:
     or a spaced group may come back joined/reformatted as a whole ("4 8 2" -> "482", "6 45" -> "6:45").
     Never a substring match: "250" must not be found inside "1250"."""
     out_tokens = _numbers(out)
-    out_joined = {_digits(m.group(0)) for m in GROUP_RE.finditer(out)} | {_digits(t) for t in out_tokens}
+    joined = [m.group(0) for m in GROUP_RE.finditer(out)] + list(out_tokens)
+    out_joined = {_digits(g) for g in joined if not DECIMAL_RE.search(g)}
     for m in GROUP_RE.finditer(inp):
         group = m.group(0)
         if all(n in out_tokens for n in _numbers(group)):
             continue
-        if _digits(group) in out_joined:
+        if not DECIMAL_RE.search(group) and _digits(group) in out_joined:
             continue
         return True
     return False

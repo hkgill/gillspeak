@@ -15,6 +15,9 @@ object Validate {
     // A run of numbers separated by single spaces, spoken digit by digit or as a time: "4 8 2", "6 45".
     private val GROUP_RE = Regex("""\d[\d,.:/-]*(?: \d[\d,.:/-]*)*""")
 
+    // A decimal point between digits: "1.50" must never come back as "150", or the other way round.
+    private val DECIMAL_RE = Regex("""\d\.\d""")
+
     private fun numbers(text: String): Set<String> =
         NUMBER_RE.findAll(text).map { it.value.trimEnd(',', '.', ':', '/', '-').replace(",", "") }.toSet()
 
@@ -23,10 +26,11 @@ object Validate {
     /** True if a number from the input is gone or changed. Never a substring match: "250" is not in "1250". */
     private fun missingNumbers(inp: String, out: String): Boolean {
         val outTokens = numbers(out)
-        val outJoined = GROUP_RE.findAll(out).map { digits(it.value) }.toSet() + outTokens.map(::digits)
+        val outJoined = (GROUP_RE.findAll(out).map { it.value } + outTokens)
+            .filterNot { DECIMAL_RE.containsMatchIn(it) }.map(::digits).toSet()
         for (m in GROUP_RE.findAll(inp)) {
             if (numbers(m.value).all { it in outTokens }) continue
-            if (digits(m.value) in outJoined) continue
+            if (!DECIMAL_RE.containsMatchIn(m.value) && digits(m.value) in outJoined) continue
             return true
         }
         return false

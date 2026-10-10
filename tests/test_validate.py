@@ -30,6 +30,9 @@ IN = "The invoice for the Henderson job is $4,250 and due on 12/10 at 3:30."
         ("Call 0412 345 678 today.", "Call 0412345678 today.", "default", True, ""),
         ("Total $1,299.95 today.", "Total $1,299.95 today.", "default", True, ""),
         ("Standup at 9 30.", "Standup at 9:30.", "default", True, ""),
+        # Regression (Codex review): the joined-digits fallback ignored decimal points.
+        ("Pay 1.50 now.", "Pay 150 now.", "default", False, "missing_number"),
+        ("Pay 150 now.", "Pay 1.50 now.", "default", False, "missing_number"),
     ],
 )
 def test_check(inp, out, mode, ok, reason):
