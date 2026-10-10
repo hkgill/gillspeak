@@ -11,6 +11,7 @@ All notable changes to gillspeak (called Murmur up to 0.5.1). The format follows
 
 ### Added
 - **Android voice keyboard (experimental)** in `android/`: hold or tap the mic, and Gemini transcribes and cleans the audio in one request with the `clean_v2` prompt. The rules and validator are ported to Kotlin, with the rules-cleaned transcript as the fallback. Audio leaves the device on Android; there is no on-device speech recognition yet. A floating "G" bubble works over any keyboard (accessibility service): hold or tap to dictate, a red pill with a live waveform while recording, draggable and resizable. See [android/README.md](android/README.md).
+- **Android voice commands from the side button.** Choose gillspeak as the digital assistant app and holding the side button opens it over whatever is on screen: the screen dims, a teal wave runs out of the side button round the edge, and the bubble listens until you stop talking. It opens apps, sets timers and alarms, turns the torch on or off, controls media, gets directions and searches the web; texts and calls open Messages or Phone filled in for you to send. Commands are matched by rules on the phone (only a fixed list ever runs), with whichever speech engine you chose. See "Voice commands" in [android/README.md](android/README.md).
 - **Signed Android release APKs.** `assembleRelease` signs with a keystore configured in the git-ignored `local.properties`; APKs are attached to GitHub releases, never committed. See "Release a signed APK" in [android/README.md](android/README.md).
 
 ### Removed

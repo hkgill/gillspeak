@@ -59,6 +59,13 @@ class MicController(private val context: Context, private val ui: Ui) {
         else -> false
     }
 
+    /** Starts a recording that runs until [press] finishes it or [cancel] drops it: the side-button listener. */
+    fun latch(): Boolean {
+        if (state != State.IDLE || !start()) return false
+        set(State.LATCHED)
+        return true
+    }
+
     /** Finger up. A short press latches recording on; a long one finishes it. Returns true when it finished. */
     fun release(): Boolean {
         if (state != State.RECORDING) return false
