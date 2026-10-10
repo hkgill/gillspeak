@@ -136,7 +136,7 @@ Both together fit comfortably on 12 GB phones (Galaxy S25, Z Fold5).
 
 1. **Command fallback.** Add LiteRT-LM and a `LocalLlm.kt` (download, warm-up, release; reuse `LocalAsr`'s download code). During development the model is pushed with adb. A debug compare log records, for each spoken command: Parakeet's text, the rules result, Gemma's result, and timings.
 2. **Local dictation polish.** Gemma with the desktop `clean_v2` prompt, behind `Gate` and `Validate`.
-3. **Anti-doomscroll, rules only.** A separate accessibility service spots YouTube Shorts, Instagram Reels and TikTok, counts real scrolling, and stops it at 10 minutes. No model needed.
+3. **Anti-doomscroll, rules only.** A separate accessibility service spots YouTube Shorts, Instagram Reels, TikTok and Facebook Reels, counts real scrolling, and stops it at 10 minutes. No model needed.
 4. **Anti-doomscroll, with the model.** On each new video, one screenshot and the caption go to Gemma to judge worthwhile versus mindless (log-only first, then counting); a spoken intention check for "5 more minutes"; a stop card that fits the moment. Screenshots are checked and discarded, never stored or sent.
 5. **Maybe:** Gemma's audio input for mixed Punjabi and English speech.
 

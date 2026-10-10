@@ -759,7 +759,7 @@ class MainActivity : Activity() {
             }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = -dp(8) })
         }
         col.addView(note(
-            "One timer for YouTube Shorts, Instagram Reels and TikTok together. It counts only while a feed is on screen, " +
+            "One timer for YouTube Shorts, Instagram and Facebook Reels, and TikTok together. It counts only while a feed is on screen, " +
                 "and starts again after 5 minutes away. Normal videos, search and messages stay free."
         ))
         col.addView(note(

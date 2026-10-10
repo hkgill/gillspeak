@@ -15,7 +15,7 @@ Background, experiments and architecture for the on-device AI work: [docs/androi
 
 ## Next: anti-doomscroll ("Mindful mode")
 
-Stop endless scrolling of YouTube Shorts, Instagram Reels and TikTok. Plain rules on accessibility events: no model needed for the core, and nothing leaves the phone.
+Stop endless scrolling of YouTube Shorts, Instagram Reels, TikTok and Facebook Reels. Plain rules on accessibility events: no model needed for the core, and nothing leaves the phone.
 
 Decide first:
 
@@ -27,8 +27,9 @@ Decide first:
 
 Phase 1, detection only:
 
-- [x] A separate accessibility service ("gillspeak focus") that only watches YouTube, Instagram and TikTok, so the bubble's privacy description stays accurate
+- [x] A separate accessibility service ("gillspeak focus") that only watches YouTube, Instagram, TikTok and Facebook, so the bubble's privacy description stays accurate
 - [x] Spot the feeds from layout ids, not content: the Shorts player in YouTube, the Reels viewer in Instagram, all of TikTok; normal videos, the feed, search and messages stay free (Reels and TikTok checked on a phone; Shorts still to check)
+- [x] Facebook Reels: the Reels tab and a reel opened full screen, from Facebook's own labels as its view ids are hidden; the rest of Facebook stays free (English only)
 - [x] A debug log of what was detected and for how long
 - [x] Check it against a day of normal use, then take the service out of debug-only builds
 - [x] Unit tests for the timer: shared time across apps, the break that resets it, the extension, the cool-off

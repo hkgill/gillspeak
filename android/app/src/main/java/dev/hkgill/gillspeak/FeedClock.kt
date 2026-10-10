@@ -1,8 +1,8 @@
 package dev.hkgill.gillspeak
 
 /**
- * Mindful mode's timer: one budget of feed time shared by YouTube Shorts, Instagram Reels and TikTok, so hopping
- * between them doesn't start it again. The budget is the user's choice, from 30 seconds to 30 minutes ([LIMITS_SEC]).
+ * Mindful mode's timer: one budget of feed time shared by YouTube Shorts, Instagram Reels, TikTok and Facebook
+ * Reels, so hopping between them doesn't start it again. The budget is the user's choice, from 30 seconds to 30 minutes ([LIMITS_SEC]).
  * Time counts only while a feed is on screen; five minutes away from all of them is a real break and starts it again.
  * At the limit the stop card offers "5 more minutes" once; leaving pauses the feeds for 30 minutes. Plain arithmetic
  * on wall-clock milliseconds, kept apart from the service so it can be unit tested.
