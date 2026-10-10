@@ -32,7 +32,20 @@ object Validate {
         return false
     }
 
-    /** Returns "" when ok, otherwise a reason. Reasons never include dictated values. */
+    /** The writing systems (Latin, Devanagari, Gurmukhi...) of the letters in [text]. */
+    private fun scripts(text: String): Set<Character.UnicodeScript> = text.codePoints().toArray()
+        .filter { Character.isLetter(it) }
+        .map { Character.UnicodeScript.of(it) }
+        .filter { it != Character.UnicodeScript.COMMON && it != Character.UnicodeScript.INHERITED }
+        .toSet()
+
+    /**
+     * Returns "" when ok, otherwise a reason. Reasons never include dictated values.
+     *
+     * Android only, so far: "new_script" rejects output with letters from a writing system the input didn't use.
+     * Gemma on the phone once swapped "because" for the Hindi क्योंकि mid-sentence; a Punjabi dictation still keeps
+     * its Gurmukhi.
+     */
     fun check(inp: String, out: String, mode: String = "default"): String {
         val o = out.trim()
         if (o.isEmpty()) return "empty"
@@ -42,6 +55,7 @@ object Validate {
         if (ratio > maxRatio) return "too_long:%.2f".format(ratio)
         if (PREAMBLE_RE.containsMatchIn(o) && !PREAMBLE_RE.containsMatchIn(inp.trim())) return "preamble"
         if (!CORRECTION_RE.containsMatchIn(inp) && missingNumbers(inp, o)) return "missing_number"
+        if (!scripts(inp).containsAll(scripts(o))) return "new_script"
         return ""
     }
 }

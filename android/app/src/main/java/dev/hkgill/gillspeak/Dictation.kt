@@ -11,7 +11,8 @@ import android.util.Log
  *   used when the validator accepts it, otherwise the rules-cleaned transcript. Audio goes to Google.
  * - Groq: Whisper transcribes (audio goes to Groq), then the desktop pipeline: rules, the gate, a text-only
  *   clean-up when it's worth it, the validator. Any clean-up failure falls back to the rules text.
- * - Local: Parakeet on the phone, then the rules. Nothing leaves the phone.
+ * - Local: Parakeet on the phone, then the rules, then (if turned on) Gemma's polish behind the same gate and
+ *   validator as Groq's. Nothing leaves the phone.
  */
 object Dictation {
     const val TAG = "gillspeak"
@@ -73,11 +74,39 @@ object Dictation {
     private fun local(context: Context, settings: Settings, wav: ByteArray): Outcome {
         val t0 = System.nanoTime()
         val raw = LocalAsr.transcribe(context, wav)
-        val text = Rules(settings.dictionary()).apply(raw)
+        val sttMs = ms(t0)
+        val dictionary = settings.dictionary()
+        val rules = Rules(dictionary).apply(raw)
+        val (text, reason) = if (settings.localPolish && LocalLlm.isReady(context)) polish(context, settings, rules) else rules to ""
         val total = ms(t0)
-        Log.i(TAG, "local $total ms for ${Recorder.durationMs(wav)} ms of audio")
-        if (raw.isNotBlank()) settings.log("Local $total ms\n  heard: $raw\n  typed: $text")
-        return Outcome(text, "", total)
+        Log.i(TAG, "local $total ms for ${Recorder.durationMs(wav)} ms of audio (parakeet $sttMs ms${if (reason.isEmpty()) "" else ", $reason"})")
+        if (raw.isNotBlank()) settings.log("Local $total ms${if (reason.isEmpty()) "" else " ($reason)"}\n  heard: $raw\n  typed: $text")
+        // Only a failed or rejected polish counts as a fallback in the status line.
+        val shown = if (reason.isEmpty() || reason.startsWith("polished") || reason.startsWith("short") || reason == "empty") "" else reason.substringBefore(" by ")
+        return Outcome(text, shown, total)
+    }
+
+    /**
+     * Gemma's polish of rules-cleaned [rules], when [Gate] says it's worth it and [Validate] accepts the result;
+     * otherwise [rules] unchanged. Returns the text and why, for the log. Worker thread only.
+     */
+    fun polish(context: Context, settings: Settings, rules: String): Pair<String, String> {
+        val (useLlm, gate) = Gate.decide(rules)
+        if (!useLlm) return rules to gate
+        val t0 = System.nanoTime()
+        val dictionary = settings.dictionary()
+        var text = rules
+        val reason = try {
+            val reply = LocalLlm.ask(context, settings.cleanPrompt(), Groq.cleanPayload(rules, dictionary.bias), maxTokens = 1024)
+            val cleaned = Groq.stripEcho(reply.text, rules)
+            val why = Validate.check(rules, cleaned)
+            if (why.isEmpty()) text = dictionary.apply(cleaned)
+            why.ifEmpty { "polished" }
+        } catch (e: Exception) {
+            Log.w(TAG, "gemma polish failed; using the rules text", e)
+            "polish_failed:${e.javaClass.simpleName}"
+        }
+        return text to "$reason by Gemma in ${ms(t0)} ms"
     }
 
     private fun ms(since: Long) = (System.nanoTime() - since) / 1_000_000

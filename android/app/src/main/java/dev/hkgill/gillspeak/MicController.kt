@@ -112,7 +112,10 @@ class MicController(private val context: Context, private val ui: Ui) {
         lastWarm = now
         when (settings.engine) {
             // Loading the on-device model takes a few seconds; do it while the keyboard is up, not after speaking.
-            Settings.ENGINE_LOCAL -> worker.execute { runCatching { LocalAsr.warm(context) } }
+            Settings.ENGINE_LOCAL -> worker.execute {
+                runCatching { LocalAsr.warm(context) }
+                if (settings.localPolish) runCatching { LocalLlm.warm(context) }
+            }
             Settings.ENGINE_GEMINI -> Gemini(settings.apiKey, settings.model, "").let { worker.execute { it.warm() } }
         }
     }

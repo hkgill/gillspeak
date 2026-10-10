@@ -32,6 +32,14 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("local_ai", true)
         set(v) = prefs.edit().putBoolean("local_ai", v).apply()
 
+    /**
+     * Polish Local dictation with Gemma, like the cloud engines' clean-up but on the phone. Off by default: it adds
+     * about a second per 25 words, and only runs when [Gate] says the dictation is worth it.
+     */
+    var localPolish: Boolean
+        get() = prefs.getBoolean("local_polish", false)
+        set(v) = prefs.edit().putBoolean("local_polish", v).apply()
+
     var model: String
         get() = prefs.getString("model", "").orEmpty().ifBlank { DEFAULT_MODEL }
         set(v) = prefs.edit().putString("model", v.trim()).apply()

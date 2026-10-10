@@ -31,8 +31,7 @@ class Groq(private val apiKey: String) {
 
     /** gillspeak's clean-up: the same system prompt and payload format as the desktop's Gemini cleaner. */
     fun clean(systemPrompt: String, text: String, bias: List<String>): String {
-        val payload = "Mode: default (Keep the speaker's tone.)\nStyle instructions: $STYLE\n" +
-            "Preferred spellings: ${bias.joinToString(", ")}\n\n<transcript>\n$text\n</transcript>"
+        val payload = cleanPayload(text, bias)
         val body = JSONObject()
             .put("model", CHAT_MODEL)
             .put("temperature", 0)
@@ -80,6 +79,10 @@ class Groq(private val apiKey: String) {
          * The cleaned text from a chat completion. Anything but a normal stop (e.g. "length": the token limit cut
          * it off) is an error, so the caller keeps the rules text; a truncated reply can still pass the validator.
          */
+        /** The user message for a text-only clean-up, as the desktop sends it. Gemma on the phone uses it too. */
+        fun cleanPayload(text: String, bias: List<String>) = "Mode: default (Keep the speaker's tone.)\nStyle instructions: $STYLE\n" +
+            "Preferred spellings: ${bias.joinToString(", ")}\n\n<transcript>\n$text\n</transcript>"
+
         fun parseChat(json: String, original: String): String {
             val choice = runCatching { JSONObject(json).getJSONArray("choices").getJSONObject(0) }
                 .getOrElse { throw GeminiError("error", "unexpected chat response") }

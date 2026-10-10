@@ -12,10 +12,11 @@ import java.io.File
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es selftest t.wav [--es engine local]
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez download_model true
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es command "set up an alarm for three o'clock"
+ *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es polish "so um the meeting is on thursday sorry friday"
  *
  * The self-test runs a WAV from the app's files dir through the full pipeline; `engine` overrides the chosen
  * engine for that run only. `command` runs a sentence through the command rules and Gemma and logs both, without
- * doing anything. Results go to `adb logcat -s gillspeak` and the app's dictation log.
+ * doing anything; `polish` runs a sentence through the rules and Gemma's polish, as if Parakeet had heard it. Results go to `adb logcat -s gillspeak` and the app's dictation log.
  */
 class DebugReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
@@ -33,6 +34,22 @@ class DebugReceiver : BroadcastReceiver() {
                         "raw=${reply.text} ${reply.ms - reply.loadMs} ms (load ${reply.loadMs} ms)")
                 } catch (e: Throwable) {
                     Log.e(Dictation.TAG, "commandtest failed", e)
+                } finally {
+                    pending.finish()
+                }
+            }.start()
+            return
+        }
+        intent.getStringExtra("polish")?.let { text ->
+            val pending = goAsync()
+            Thread {
+                try {
+                    val settings = Settings(app)
+                    val rules = Rules(settings.dictionary()).apply(text)
+                    val (out, why) = Dictation.polish(app, settings, rules)
+                    Log.i(Dictation.TAG, "polishtest: rules=\"$rules\" -> \"$out\" ($why)")
+                } catch (e: Throwable) {
+                    Log.e(Dictation.TAG, "polishtest failed", e)
                 } finally {
                     pending.finish()
                 }
