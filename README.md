@@ -1,64 +1,69 @@
-<p align="center"><img src="docs/assets/icon.png" width="96" height="96" alt="gillspeak mark: a speech bubble holding a g"></p>
+<p align="center"><img src="docs/assets/icon.png" width="96" height="96" alt="gillspeak icon: a g whose middle is three lime sound bars"></p>
 
 # gillspeak
 
 [![CI](https://github.com/hkgill/gillspeak/actions/workflows/ci.yml/badge.svg)](https://github.com/hkgill/gillspeak/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
-![Python 3.12+](https://img.shields.io/badge/python-3.12%2B-blue.svg)
-![Fedora GNOME](https://img.shields.io/badge/platform-Fedora%20GNOME%20Wayland-294172.svg)
-![Android 11+](https://img.shields.io/badge/android-11%2B%20(experimental)-14A394.svg)
-![Local AI](https://img.shields.io/badge/AI-100%25%20on--device-14A394.svg)
+![Android 11+](https://img.shields.io/badge/android-11%2B-4A6600.svg)
+![Local AI](https://img.shields.io/badge/AI-100%25%20on--device-4A6600.svg)
+![Also on Linux](https://img.shields.io/badge/also-Fedora%20GNOME%20Wayland-294172.svg)
 
-**Talk, and clean text lands at your cursor in any app, on your Linux desktop or your Android phone.**
+**Talk to your Android phone. Hold the bubble to dictate into any app, or hold the side button to give a command. It all runs on the phone.**
 
-> 🔒 **Nothing leaves your device.** The speech AI runs on your own computer or phone. There's no account, no API key and no server, and it works with Wi-Fi off. Your voice is never uploaded, stored or used for training, because it never goes anywhere.
+> 🔒 **Nothing leaves your phone.** Speech recognition (Parakeet) and understanding (Gemma 4 E2B) run on the device. There's no account and no server, and it works with Wi-Fi off. Cloud engines (Gemini, Groq) are there only if you pick them, and the app labels them "Sends audio".
 
-<p align="center"><img src="docs/assets/local-flow.png" width="820" alt="You talk, the local AI speech model transcribes it, rules clean it up, and the text lands at your cursor, all inside your phone or computer. No account, no network, nothing leaves your device."></p>
+<p align="center"><img src="docs/assets/android-screens.png" width="880" alt="The gillspeak Android app's settings: the home screen with setup progress and one row per section, the speech and understanding page with Local only selected and Gemma downloading, and the bubble page in dark mode with a live preview of the round bubble"></p>
 
 ## ✨ Features
 
-- 🔒 **Private by default**: speech recognition and clean-up both run on your device. No account, no API key, no network needed.
-- 🧠 **Local AI**: NVIDIA's Parakeet speech model runs on your CPU (no GPU needed). It handles English and 24 other European languages. See [Local AI](#-local-ai-what-runs-on-your-device).
-- ✍️ **Clean text**: rules remove fillers and stutters, apply spoken commands ("new line", "bullet point", "question mark") and your dictionary. Short, clean dictations come out ready to send.
-- ⌨️ **Hold-to-talk**: hold Right Ctrl + Right Alt, speak, let go. Or tap Ctrl+Space to start and stop.
-- 📱 **Android too**: a floating bubble over any keyboard, running the same model on the phone. See [On Android](#-on-android).
-- ☁️ **Optional cloud polish**: if you choose to, Gemini Flash-Lite can also handle self-corrections ("Thursday, sorry Friday") and number formatting. It's off unless you turn it on, and even then only transcript *text* is sent, never audio. See [Optional: cloud clean-up with Gemini](#optional-cloud-clean-up-with-gemini).
-- 🛟 **Never loses words**: if the optional cloud step is slow, offline or returns something odd, the rules-cleaned text is pasted instead.
+- 🫧 **A bubble over any keyboard**: keep the keyboard you like. A small round **g** floats over it whenever you type. Hold it and talk, let go, and clean text lands in the field. Or tap to start and tap again to finish.
+- 🎙️ **Side-button commands**: make gillspeak your digital assistant, hold the side button and say "set a timer for 10 minutes", "text Sam I'm running late" or "add dentist tomorrow at 3 to my calendar". Texts and calls open Messages or Phone filled in; you tap Send. See [Voice commands](android/README.md#voice-commands).
+- 🧠 **Local AI**: NVIDIA's Parakeet hears you, on the phone. Google's Gemma 4 E2B, also on the phone, understands commands the rules miss (about 0.4 s on a Galaxy S25), and anything it chose waits for your tap. See [Local AI](#-local-ai-what-runs-on-your-device).
+- ✍️ **Clean text**: rules remove fillers and stutters, apply spoken commands ("new line", "question mark") and your dictionary. Gemma can also polish dictation, if you turn it on.
+- 🌗 **Made for the phone**: light and dark themes, two panes on a foldable's inner screen, 48 dp touch targets and TalkBack labels.
+- ⌨️ **Or a mic keyboard**: a full-screen gillspeak keyboard, for when you'd rather switch keyboards.
+- 🐧 **Also on the Linux desktop**: hold Right Ctrl + Right Alt, speak, let go, and the text is pasted at your cursor. See [Linux desktop](#-linux-desktop).
+
+<p align="center"><img src="docs/assets/bubble-states.png" width="720" alt="The bubble's states: the round g when ready; a night pill with a red dot, lime sound bars and a timer while listening; three lime dots while typing; amber 'Tap to retry' after a failure; and the wide bar, ready and listening"></p>
+
+## 📱 Get it on Android
+
+Download `gillspeak-*.apk` from the [Releases page](https://github.com/hkgill/gillspeak/releases) on your phone and open it. The app's **Setup** card walks you through the rest: the microphone, the floating bubble, the side button and (optionally) the keyboard and contacts. Then download Parakeet (640 MB, once, over Wi-Fi) and, if you want commands understood in your own words, Gemma (2.6 GB).
+
+Building it yourself, voice commands and how each piece works: [`android/README.md`](android/README.md). Plans, including stopping endless short-video scrolling: [ROADMAP.md](ROADMAP.md).
 
 ## 🧠 Local AI: what runs on your device
 
 | Step | What runs | Where |
 |---|---|---|
-| Hear | Silero VAD (voice activity detection) trims silence | Your CPU (desktop) |
-| Transcribe | NVIDIA **Parakeet-TDT 0.6B v3** (int8), through sherpa-onnx | Your CPU (desktop) or phone |
-| Clean up | Rules: fillers, stutters, spoken commands, your dictionary | Your CPU or phone |
-| Type | Text goes in at your cursor | Your desktop or phone |
+| Transcribe | NVIDIA **Parakeet-TDT 0.6B v3** (int8), through sherpa-onnx | Phone CPU (or desktop CPU) |
+| Clean up | Rules: fillers, stutters, spoken commands, your dictionary | Phone (or desktop) |
+| Understand | Rules first; **Gemma 4 E2B** through LiteRT-LM when they miss a command | Phone GPU |
+| Act | A fixed list of commands, run through Android intents; texts and calls wait for your tap | Phone |
 
-The models are downloaded once, about 640 MB, and each file is SHA256-checked. After that, dictation works fully offline. Your dictation history and dictionary stay in local files on your device.
-
-## 📱 On Android
-
-<p align="center"><img src="docs/assets/android-screens.png" width="880" alt="The gillspeak Android app: the settings screen showing local only by default, the floating bubble over Gboard, the bubble recording as a pill with a live waveform, and the gillspeak voice keyboard"></p>
-
-The experimental Android app runs the same Parakeet model **on the phone**, so nothing leaves it there either. A small speech-bubble **g** floats over whatever keyboard you already use. Hold it and talk, and clean text lands in the field. Cloud engines (Gemini, Groq) are there only if you pick them, and the app labels them "Sends audio". Build and install steps are in [`android/README.md`](android/README.md).
-
-<p align="center"><img src="docs/assets/bubble-states.png" width="560" alt="The bubble's states: idle, listening, transcribing, retry"></p>
+Each model is downloaded once and SHA256-checked; after that everything works offline. Why these models, and what we measured: [docs/android-on-device-ai.md](docs/android-on-device-ai.md).
 
 ## Supported platforms
 
 | Platform | Status |
 |---|---|
+| **Android 11+** | ✅ The main app: floating bubble, keyboard and side-button commands. Tested on a Galaxy S25 and a Galaxy Z Fold5 |
 | **Fedora Workstation, GNOME on Wayland** | ✅ Supported: one-script install, tested on real hardware and in CI |
 | Other distros with GNOME on Wayland | ⚠️ Should work with the manual install; package names differ and shortcuts need adding by hand |
 | KDE, Sway, Hyprland (Wayland) | ⚠️ Untested. Bind `gillspeak toggle` in your desktop's settings; hold-to-talk doesn't depend on the desktop |
 | X11 sessions | ⚠️ Code path exists (`xclip`, `xdotool`) but is only tested with fakes |
 | Debian / Ubuntu | ⚠️ Untested. May need `ydotool` 1.x; older 0.1.x releases use a different command syntax |
-| Android 11+ | 🧪 Experimental companion app in [`android/`](android/README.md): a floating dictation bubble over any keyboard, local only by default |
-| macOS, Windows | ❌ Not supported |
+| iOS, macOS, Windows | ❌ Not supported |
+
+## 🐧 Linux desktop
+
+The desktop app does the same thing at your cursor: hold Right Ctrl + Right Alt (or tap Ctrl+Space), speak, and clean text is pasted. It runs Parakeet on your CPU, with Silero VAD to trim silence. Optional cloud clean-up with Gemini is off unless you turn it on, and even then only transcript *text* is sent, never audio.
+
+<p align="center"><img src="docs/assets/local-flow.png" width="820" alt="You talk, the local AI speech model transcribes it, rules clean it up, and the text lands at your cursor, all inside your phone or computer. No account, no network, nothing leaves your device."></p>
 
 Needs Python 3.12+, a microphone, and about 1 GB of RAM for the speech model. Reports from other setups are welcome: open an issue with your `gillspeak doctor` output.
 
-## Install
+### Install
 
 ```bash
 git clone https://github.com/hkgill/gillspeak.git && cd gillspeak
@@ -84,7 +89,7 @@ Manual install: `uv tool install --python 3.12 .`, then `gillspeak download-mode
 
 **Uninstall:** `scripts/uninstall.sh` removes the services, shortcuts and command but keeps your config, history and models; add `--purge` to remove those and the stored API key too.
 
-### Optional: cloud clean-up with Gemini
+#### Optional: cloud clean-up with Gemini
 
 gillspeak works fully offline and needs no key. If you want AI polish on longer or corrected dictations (self-corrections, "$4,250", grammar), you can opt in to Gemini Flash-Lite: gillspeak then sends the transcript **text** (never audio) of those dictations to Google. Set `provider = "gemini"` under `[llm]` in `~/.config/gillspeak/config.toml` (the setup script can do it for you) and store a key. The free tier works.
 
@@ -110,7 +115,7 @@ gillspeak works fully offline and needs no key. If you want AI polish on longer 
 
 **Privacy on the free tier.** Google may use free-tier prompts and responses to improve its products, and humans may review them. Your audio never leaves the laptop, but the transcript text does, and dictations often include private messages. For daily use with private messages, enable billing on the project (Flash-Lite costs a fraction of a cent per dictation), or keep the default `llm.provider = "none"`, where nothing leaves your computer. Either way, use a **dedicated** key restricted to the Generative Language API, and set a budget alert if billing is on.
 
-## Use
+### Use
 
 | Shortcut | Command | What it does |
 |---|---|---|
@@ -133,7 +138,7 @@ Spoken commands: "new line", "new paragraph", "bullet point", "question mark", a
 
 **Terminals** paste with Ctrl+Shift+V. Either add Ctrl+V as a paste shortcut in Ptyxis/GNOME Terminal (recommended), or bind another shortcut to `gillspeak toggle --chord ctrl+shift+v`.
 
-## Configure
+### Configure
 
 - `~/.config/gillspeak/config.toml`: every option, with comments. It is created on first run; see `DEFAULT_CONFIG_TOML` in `gillspeak/config.py`.
 - `~/.config/gillspeak/dictionary.toml`: spoken → written replacements, and `bias` terms that go to ASR hotwords and to the LLM as preferred spellings:
@@ -149,7 +154,7 @@ terms = ["Supabase", "Fedora", "Parakeet"]
 
 Changes to `[audio]`, `[asr]` or the bias terms need `systemctl --user restart gillspeakd`. Everything else applies after `gillspeak reload`.
 
-## How it works
+### How it works
 
 ```
 gillspeak toggle ──JSON over $XDG_RUNTIME_DIR/gillspeak.sock──► gillspeakd
@@ -168,6 +173,8 @@ Everything on the default path runs on your computer. The bracketed step only ru
 - **History** (`~/.local/share/gillspeak/history.db`) keeps text for `history.keep_days` (0 = metrics only). Audio is never written to disk unless `debug.save_audio = true`.
 
 ## Develop
+
+Android: see [Build and install](android/README.md#build-and-install). Desktop:
 
 ```bash
 uv venv -p 3.12 && uv pip install -e '.[dev]'

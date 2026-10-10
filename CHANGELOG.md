@@ -5,6 +5,7 @@ All notable changes to gillspeak (called Murmur up to 0.5.1). The format follows
 ## [Unreleased]
 
 ### Changed
+- **Android: a new look, from a Claude Design canvas.** Settings is now a home screen that shows what still needs setting up, then one row per section that opens its own page; foldables show two panes. The bubble is a round night-black **g** with three lime sound bars, the side-button wave and cards are lime, and the launcher icon matches. Figtree is bundled (SIL Open Font License).
 - **Murmur is now gillspeak, everywhere.** The commands are `gillspeak`, `gillspeakd` and `gillspeak-keyd`, the services `gillspeakd.service` and `gillspeak-keyd.service`, and the folders `~/.config/gillspeak`, `~/.local/share/gillspeak` and `~/.cache/gillspeak`. **Upgrading keeps everything:** on first run gillspeak moves the old `murmur` folders over (config, dictionary, history, models) and copies the API key from the old keyring entry. Re-run `scripts/setup-fedora.sh`: it removes the old service, command, shortcuts, ydotool drop-in and hold-to-talk helper (`scripts/remove-legacy-murmur.sh`) before installing the new ones. The Android app's package id is now `dev.hkgill.gillspeak`, so it installs as a new app.
 
 - **Local only by default: nothing leaves your computer or phone.** Desktop: `llm.provider` now defaults to `"none"` (speech recognition and rule clean-up are local; Gemini clean-up is opt-in, sends transcript text only, and the setup script asks before enabling it). `gillspeak eval --provider gemini` scores Gemini without turning it on. Android: the Local engine is the default and listed first; Gemini and Groq are labelled as optional cloud engines that send audio. Existing configs keep the provider they set.
@@ -17,6 +18,7 @@ All notable changes to gillspeak (called Murmur up to 0.5.1). The format follows
 - **Signed Android release APKs.** `assembleRelease` signs with a keystore configured in the git-ignored `local.properties`; APKs are attached to GitHub releases, never committed. See "Release a signed APK" in [android/README.md](android/README.md).
 
 ### Fixed
+- **Android: "The microphone is busy in another app"** instead of "No speech heard" when another app holds the microphone (Android records zeros then).
 - **Android: opening an app by voice no longer waits ~6 s** while every installed app's name is read; the list is read ahead of time and kept.
 - **Android: the validator rejects output in a writing system the input didn't use** (Gemma once swapped an English word for Hindi mid-sentence).
 

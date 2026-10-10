@@ -275,13 +275,12 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         button.retry = mic.canRetry
         button.label = if (!isBar) when (mic.state) {
             MicController.State.RECORDING, MicController.State.LATCHED -> timer.ifEmpty { "0:00" }
-            MicController.State.WORKING -> "Transcribing"
             else -> ""
         } else when {
-            mic.state == MicController.State.RECORDING -> "$timer · release to insert"
-            mic.state == MicController.State.LATCHED -> "$timer · tap to finish"
-            mic.state == MicController.State.WORKING -> "Transcribing…"
-            mic.canRetry -> message ?: "Tap to retry"
+            mic.state == MicController.State.RECORDING -> "$timer · release to type"
+            mic.state == MicController.State.LATCHED -> "$timer · tap to stop"
+            mic.state == MicController.State.WORKING -> "Typing…"
+            mic.canRetry -> message ?: "Didn't catch that · tap to retry"
             else -> message ?: "Hold to talk · tap to latch"
         }
     }

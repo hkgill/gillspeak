@@ -28,6 +28,15 @@ class Recorder {
     @Volatile var error: Int? = null
         private set
 
+    @Volatile private var chunks = 0
+    @Volatile private var zeroChunks = 0
+
+    /**
+     * Most of the recording was exact digital silence (every sample 0). A real microphone always picks up some
+     * noise; Android sends zeros when another app holds the microphone, even if a tap made a loud click first.
+     */
+    val blocked get() = mostlyZero(chunks, zeroChunks)
+
     val isRecording get() = running
 
     /** Caller checks RECORD_AUDIO first. Throws if the microphone can't be opened. */
@@ -46,6 +55,8 @@ class Recorder {
         peak = 0
         level = 0f
         error = null
+        chunks = 0
+        zeroChunks = 0
         record = r
         running = true
         r.startRecording()
@@ -64,6 +75,8 @@ class Recorder {
                 var chunk = 0
                 for (i in 0 until n - 1 step 2) chunk = maxOf(chunk, kotlin.math.abs((buf[i].toInt() and 0xff) or (buf[i + 1].toInt() shl 8)))
                 peak = maxOf(peak, chunk)
+                chunks++
+                if (chunk == 0) zeroChunks++
                 level = (chunk / 12_000f).coerceAtMost(1f) // normal speech peaks well below full scale
                 synchronized(pcm) {
                     pcm.write(buf, 0, n)
@@ -96,6 +109,9 @@ class Recorder {
     companion object {
         const val RATE = 16_000
         const val MAX_BYTES = RATE * 2 * 300 // 5 minutes
+
+        /** At least 300 ms read, and 80% or more of it all zeros. */
+        fun mostlyZero(chunks: Int, zeroChunks: Int) = chunks >= 6 && zeroChunks * 10 >= chunks * 8
 
         fun durationMs(wav: ByteArray) = ((wav.size - 44).coerceAtLeast(0) * 1000L) / (RATE * 2)
 

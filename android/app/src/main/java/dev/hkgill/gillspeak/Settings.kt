@@ -12,6 +12,7 @@ import java.util.Locale
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("gillspeak", Context.MODE_PRIVATE)
     private val assets = context.assets
+    private val debuggable = context.applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
 
     /** Cloud engine keys exist only if the user types their own in the app; none is ever built into the APK. */
     var apiKey: String
@@ -44,6 +45,14 @@ class Settings(context: Context) {
     var compareLog: Boolean
         get() = prefs.getBoolean("compare_log", false)
         set(v) = prefs.edit().putBoolean("compare_log", v).apply()
+
+    /**
+     * Debug builds: when Parakeet hears nothing in a recording, keep that recording as files/empty.wav (the last one
+     * only) so it can be checked over adb. Off by default; set over adb only. Release builds never write audio.
+     */
+    var keepEmptyAudio: Boolean
+        get() = debuggable && prefs.getBoolean("keep_empty_audio", false)
+        set(v) = prefs.edit().putBoolean("keep_empty_audio", v).apply()
 
     var model: String
         get() = prefs.getString("model", "").orEmpty().ifBlank { DEFAULT_MODEL }
@@ -172,6 +181,8 @@ class Settings(context: Context) {
     }
 
     fun recentLog(): List<String> = prefs.getString("log", "").orEmpty().split(SEP).filter { it.isNotBlank() }
+
+    fun clearLog() = prefs.edit().remove("log").apply()
 
     companion object {
         /** The name people see. The package id stays dev.hkgill.gillspeak so installs upgrade in place. */

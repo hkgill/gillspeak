@@ -14,6 +14,7 @@ import java.io.File
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es command "set up an alarm for three o'clock"
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez compare true   # or false
  *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --es polish "so um the meeting is on thursday sorry friday"
+ *     adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez keep_empty_audio true   # or false
  *
  * The self-test runs a WAV from the app's files dir through the full pipeline; `engine` overrides the chosen
  * engine for that run only. `command` runs a sentence through the command rules and Gemma and logs both, without
@@ -29,6 +30,12 @@ class DebugReceiver : BroadcastReceiver() {
         if (intent.hasExtra("compare")) {
             Settings(app).compareLog = intent.getBooleanExtra("compare", false)
             Log.i(Dictation.TAG, "compare log ${if (Settings(app).compareLog) "on" else "off"}")
+        }
+        if (intent.hasExtra("keep_empty_audio")) {
+            val on = intent.getBooleanExtra("keep_empty_audio", false)
+            Settings(app).keepEmptyAudio = on
+            if (!on) File(app.filesDir, "empty.wav").delete()
+            Log.i(Dictation.TAG, "keep empty audio ${if (on) "on" else "off"}")
         }
         intent.getStringExtra("command")?.let { text ->
             val pending = goAsync()

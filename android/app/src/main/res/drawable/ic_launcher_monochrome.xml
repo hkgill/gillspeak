@@ -1,18 +1,28 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Themed-icon version: the launcher tints it, so only the shape matters (the g is cut out of the bubble). -->
+<!-- Themed-icon version: the launcher tints it, so only the shape matters: the g and its three sound bars. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
     <group
-        android:scaleX="0.52"
-        android:scaleY="0.52"
-        android:translateX="22.8"
-        android:translateY="20.2">
+        android:scaleX="0.55"
+        android:scaleY="0.55"
+        android:translateX="21"
+        android:translateY="21">
         <path
-            android:fillColor="#000000"
-            android:fillType="evenOdd"
-            android:pathData="M22,20 H98 A16,16 0 0,1 114,36 V78 A16,16 0 0,1 98,94 H52 L32,110 V94 H22 A16,16 0 0,1 6,78 V36 A16,16 0 0,1 22,20 Z M37.25,52 a18.75,18.75 0 1,0 37.5,0 a18.75,18.75 0 1,0 -37.5,0 Z M46.75,52 a9.25,9.25 0 1,1 18.5,0 a9.25,9.25 0 1,1 -18.5,0 Z" />
+            android:strokeColor="#000000"
+            android:strokeWidth="11"
+            android:pathData="M26,52 a28,28 0 1,0 56,0 a28,28 0 1,0 -56,0" />
+        <path
+            android:strokeColor="#000000"
+            android:strokeWidth="11"
+            android:strokeLineCap="round"
+            android:pathData="M82,26 V84 C82,102 68,108 56,108 C47,108 41,105 36,100" />
+        <path
+            android:strokeColor="#000000"
+            android:strokeWidth="9"
+            android:strokeLineCap="round"
+            android:pathData="M42,46 V58 M54,38 V66 M66,46 V58" />
     </group>
 </vector>
