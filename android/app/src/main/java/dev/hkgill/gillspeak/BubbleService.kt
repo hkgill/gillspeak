@@ -98,7 +98,10 @@ class BubbleService : AccessibilityService(), MicController.Ui {
 
     override fun onDestroy() {
         if (::mic.isInitialized) mic.shutdown()
-        main.removeCallbacks(wake)
+        // Everything: a refresh still queued would schedule the next snooze wake-up, which schedules the next, and
+        // keep this destroyed service alive.
+        main.removeCallbacksAndMessages(null)
+        prefsListener?.let { settings.stopListening(it) }
         hide()
         super.onDestroy()
     }

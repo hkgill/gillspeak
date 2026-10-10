@@ -98,6 +98,9 @@ class Settings(context: Context) {
     fun setBubblePosition(x: Float, dy: Int) =
         prefs.edit().putFloat("bubble_x", x.coerceIn(0f, 1f)).putInt("bubble_dy", dy).apply()
 
+    fun stopListening(listener: android.content.SharedPreferences.OnSharedPreferenceChangeListener) =
+        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+
     fun resetBubblePosition() = prefs.edit().remove("bubble_x").remove("bubble_dy").apply()
 
     /** Calls [listener] when a bubble setting changes. Keep the returned object: preferences hold listeners weakly. */
