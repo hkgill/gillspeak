@@ -120,8 +120,12 @@ class BubbleService : AccessibilityService(), MicController.Ui {
             lastSummary = summary
         }
         when {
-            // Snoozed: stay hidden whatever is on screen. Snoozing needs an idle bubble, so nothing is in flight.
-            snoozed && mic.state != MicController.State.WORKING -> hide()
+            // Snoozed: stay hidden whatever is on screen. Dragging to snooze needs an idle bubble, but night snooze or
+            // the app's snooze can start mid-recording: never leave a hidden mic running.
+            snoozed && mic.state != MicController.State.WORKING -> {
+                mic.cancel(null)
+                hide()
+            }
             // A keyboard still sliding in reaches past the bottom of the screen. Placing the bubble against it
             // made the bubble jump up as the keyboard settled, so wait for it (but not forever).
             keyboard != null && !shown && keyboard.bottom > screen().second && settleChecks < MAX_SETTLE_CHECKS -> {
