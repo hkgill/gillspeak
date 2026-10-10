@@ -61,6 +61,10 @@ class ListenActivity : Activity(), MicController.Ui {
     private var askingContacts = false
     private var pending: Command? = null // waiting for contacts access
     private var byModel = false // the command on screen was understood by Gemma, not the rules
+    // Bumped on every listen: Gemma and planning answer later, and an answer for an earlier listen must not show
+    // (or act) once the person has started another.
+    private var listen = 0
+    private var pendingAct: Runnable? = null
     private var heard = ""
 
     // Silence detection.
@@ -211,6 +215,9 @@ class ListenActivity : Activity(), MicController.Ui {
     }
 
     private fun startListening() {
+        listen++
+        pendingAct?.let(main::removeCallbacks)
+        pendingAct = null
         handled = false
         heard = ""
         if (!mic.latch()) return // the controller has said why, through status()
@@ -301,9 +308,12 @@ class ListenActivity : Activity(), MicController.Ui {
                 // When comparing, also ask Gemma, only to log what it would have done next to the rules.
                 if (comparing && gemmaOn()) gemmaWorker.execute { askGemma(text, rules) }
             }
-            gemmaOn() -> gemmaWorker.execute {
-                val command = askGemma(text, null)
-                main.post { if (!closing) plan(command, model = command != null) }
+            gemmaOn() -> {
+                val asked = listen
+                gemmaWorker.execute {
+                    val command = askGemma(text, null)
+                    main.post { if (!closing && asked == listen) plan(command, model = command != null) }
+                }
             }
             else -> plan(null, model = false)
         }
@@ -344,7 +354,7 @@ class ListenActivity : Activity(), MicController.Ui {
     // ---- Planning and acting ----
 
     private fun plan(command: Command?, model: Boolean) {
-        byModel = model
+        val asked = listen
         worker.execute {
             val outcome = runCatching {
                 if (command == null) Actions.Outcome.Ready(actions.searchInstead(heard)) else actions.plan(command)
@@ -352,11 +362,12 @@ class ListenActivity : Activity(), MicController.Ui {
                 Log.e(Dictation.TAG, "command: planning failed", it)
                 Actions.Outcome.Problem("Something went wrong", it.javaClass.simpleName)
             }
-            main.post { if (!closing) show(command, outcome) }
+            main.post { if (!closing && asked == listen) show(command, outcome, model) }
         }
     }
 
-    private fun show(command: Command?, outcome: Actions.Outcome) {
+    private fun show(command: Command?, outcome: Actions.Outcome, model: Boolean) {
+        byModel = model
         edge.working = false
         when (outcome) {
             is Actions.Outcome.Problem -> {
@@ -375,7 +386,7 @@ class ListenActivity : Activity(), MicController.Ui {
                 if (plan.confirm == null) {
                     showCard(plan.title, plan.detail, plan.body, big, buttons = emptyList())
                     pill.label = plan.title
-                    main.postDelayed({ act(plan) }, ACT_DELAY_MS)
+                    pendingAct = Runnable { act(plan) }.also { main.postDelayed(it, ACT_DELAY_MS) }
                 } else {
                     pill.label = if (command == null) "Not a command" else if (byModel) "Is this right?" else "Waiting for you"
                     showCard(plan.title, plan.detail, plan.body, big = big && byModel, buttons = listOf("Cancel" to { close() }, plan.confirm to { act(plan) }))
