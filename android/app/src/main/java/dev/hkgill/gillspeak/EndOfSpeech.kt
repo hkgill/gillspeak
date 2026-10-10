@@ -17,10 +17,13 @@ class EndOfSpeech(private val start: Long) {
     private var loudest = 0f
     private var lastLoud = start
 
-    fun feed(level: Float, now: Long): Verdict {
-        if (readings++ < FLOOR_READINGS) floor = minOf(floor, level)
+    /** [heard]: the recorder has read audio. Before that the level is a placeholder 0, which mustn't set the floor. */
+    fun feed(level: Float, now: Long, heard: Boolean = true): Verdict {
+        if (heard && readings++ < FLOOR_READINGS) floor = minOf(floor, level)
         val room = minOf(floor, MAX_FLOOR) * ROOM_FACTOR // someone talking from the start mustn't count as the room
-        if (level > maxOf(SPEECH_LEVEL, room, loudest * QUIET_FACTOR)) {
+        // Relative to the loudest moment, but capped: one loud word mustn't make softer speech after it count as quiet.
+        val relative = minOf(loudest * QUIET_FACTOR, MAX_RELATIVE)
+        if (level > maxOf(SPEECH_LEVEL, room, relative)) {
             spoke = spoke || level > maxOf(SPEECH_LEVEL, room)
             if (spoke) lastLoud = now
         }
@@ -41,6 +44,7 @@ class EndOfSpeech(private val start: Long) {
         private const val FLOOR_READINGS = 6 // about the first 300 ms
         private const val MAX_FLOOR = 0.2f
         private const val ROOM_FACTOR = 2.5f
-        private const val QUIET_FACTOR = 0.3f // after speech, quiet is under 30% of the loudest reading
+        private const val QUIET_FACTOR = 0.3f // after speech, quiet is under 30% of the loudest reading...
+        private const val MAX_RELATIVE = 0.12f // ...but never needs to be quieter than this
     }
 }

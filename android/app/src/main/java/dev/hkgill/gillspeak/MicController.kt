@@ -50,6 +50,7 @@ class MicController(private val context: Context, private val ui: Ui) {
     /** A tap now retries a failed request, or inserts text that couldn't be delivered. */
     val canRetry get() = (failedAudio != null || pendingText != null) && state == State.IDLE
     val level get() = recorder.level
+    val heard get() = recorder.heard
     val isActive get() = state != State.IDLE
 
     /** Finger down on the mic. Returns true when something started or finished (worth a haptic tick). */

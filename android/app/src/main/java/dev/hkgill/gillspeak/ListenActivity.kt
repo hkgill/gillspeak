@@ -234,7 +234,7 @@ class ListenActivity : Activity(), MicController.Ui {
     private val watch = object : Runnable {
         override fun run() {
             if (mic.state != MicController.State.LATCHED && mic.state != MicController.State.RECORDING) return
-            when (ear.feed(mic.level, SystemClock.uptimeMillis())) {
+            when (ear.feed(mic.level, SystemClock.uptimeMillis(), mic.heard)) {
                 EndOfSpeech.Verdict.FINISHED, EndOfSpeech.Verdict.TOO_LONG -> mic.press()
                 EndOfSpeech.Verdict.NOTHING_SAID -> {
                     mic.cancel(null)

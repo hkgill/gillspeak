@@ -49,6 +49,23 @@ class EndOfSpeechTest {
         assertEquals(3100 + 950L, at)
     }
 
+    @Test fun softSpeechAfterALoudWordStillCounts() {
+        // Regression (CodeRabbit): one 0.8 peak made 0.15 speech after it count as quiet, cutting the person off.
+        val (v, at) = run(0.01f to 500, 0.8f to 200, 0.15f to 2000, 0.01f to 3000)
+        assertEquals(Verdict.FINISHED, v)
+        assertEquals(2700 + 950L, at)
+    }
+
+    @Test fun readingsBeforeTheMicStartsDontSetTheRoom() {
+        // Regression (CodeRabbit): the recorder's placeholder 0 set the floor to 0, so a noisy room counted as speech.
+        val e = EndOfSpeech(0)
+        var t = 0L
+        repeat(4) { t += 50; e.feed(0f, t, heard = false) }
+        var v = Verdict.LISTENING
+        while (v == Verdict.LISTENING) { t += 50; v = e.feed(0.15f, t) }
+        assertEquals(Verdict.NOTHING_SAID, v)
+    }
+
     @Test fun capsTheLength() {
         // Loud and changing the whole time (music): it gives up at the cap.
         val levels = Array(400) { (if (it % 2 == 0) 0.9f else 0.5f) to 100L }
