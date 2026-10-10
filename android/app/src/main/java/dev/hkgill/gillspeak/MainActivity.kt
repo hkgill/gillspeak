@@ -184,6 +184,7 @@ class MainActivity : Activity() {
         ENGINE -> detail("Speech and understanding", enginePage(asr, gemma))
         BUBBLE -> detail("Bubble", bubblePage())
         SNOOZE -> detail("Snooze", snoozePage())
+        MINDFUL -> detail("Mindful mode", mindfulPage())
         WORDS -> detail("Words and keys", wordsPage())
         RECENT -> detail("Recent dictations", recentPage())
         else -> homePage(asr, gemma)
@@ -240,6 +241,7 @@ class MainActivity : Activity() {
             addView(navRow("Bubble", bubbleSummary(), BUBBLE))
             addView(navRow("Snooze", snoozeSummary(), SNOOZE, summaryColor = if (settings.snoozed()) t.attT else t.ink2))
             addView(navRow("Words and keys", wordsSummary(), WORDS))
+            if (mindfulBuilt()) addView(navRow("Mindful mode", mindfulSummary(), MINDFUL))
         })
 
         col.addView(recentCard())
@@ -429,6 +431,17 @@ class MainActivity : Activity() {
         settings.snoozedUntil()?.let { return "Hidden until ${clock(it)}" }
         return if (settings.nightSnooze) "Night snooze ${clockOfDay(settings.nightStart)} – ${clockOfDay(settings.nightEnd)}" else "Off"
     }
+
+    /** Mindful mode's service is only in debug builds until it stops anything (phase 2). */
+    private fun mindfulBuilt() = runCatching { packageManager.getServiceInfo(ComponentName(this, FocusService::class.java), 0) }.isSuccess
+
+    private fun mindfulOn(): Boolean {
+        val focus = ComponentName(this, FocusService::class.java)
+        return Secure.getString(contentResolver, Secure.ENABLED_ACCESSIBILITY_SERVICES).orEmpty().split(':')
+            .any { it == focus.flattenToString() || it == focus.flattenToShortString() }
+    }
+
+    private fun mindfulSummary() = if (mindfulOn()) "Stops feeds after ${FeedClock.limitLabel(settings.mindfulLimitSec)}" else "Off"
 
     private fun wordsSummary(): String {
         val words = dictionaryWords().size
@@ -780,6 +793,57 @@ class MainActivity : Activity() {
                     LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f).apply { marginStart = dp(10) })
             })
         })
+        return col
+    }
+
+    private fun mindfulPage(): View {
+        val col = column(dp(16), dp(4), dp(16), dp(32), gap = 16)
+        val on = mindfulOn()
+        val limit = settings.mindfulLimitSec
+        val clock = settings.feedClock
+        col.addView(LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            background = rounded(if (on) t.accSoft else t.card, dp(22).toFloat())
+            setPadding(dp(18), dp(16), dp(12), dp(16))
+            val sub = if (on) "${FeedClock.format(minOf(clock.usedMs, clock.limitMs(limit)))} of ${FeedClock.limitLabel(limit)} used. " +
+                "For now it only keeps a log; it doesn't stop you yet." else "Turn on ${getString(R.string.focus_label)} in Accessibility."
+            addView(stack(
+                text(if (on) "Watching Shorts, Reels and TikTok" else "Mindful mode is off", 16f, if (on) t.accT else t.ink, f.bold),
+                text(sub, 14f, t.ink2).apply { setPadding(0, dp(2), 0, 0); setLineSpacing(0f, 1.1f) },
+            ), LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            if (!on) addView(pill("Turn on", true, "Turn on Mindful mode in Accessibility settings") {
+                startActivity(Intent(ACTION_ACCESSIBILITY_SETTINGS))
+            })
+        })
+
+        col.addView(section("Stop the feeds after", top = 4))
+        FeedClock.LIMITS_SEC.chunked(4).forEach { row ->
+            col.addView(LinearLayout(this).apply {
+                row.forEachIndexed { i, sec ->
+                    val picked = sec == limit
+                    addView(text(FeedClock.limitLabel(sec), 15f, if (picked) t.onBtn else t.ink, f.bold).apply {
+                        gravity = Gravity.CENTER
+                        background = GradientDrawable().apply {
+                            cornerRadius = dp(999).toFloat()
+                            setColor(if (picked) t.btn else 0)
+                            if (!picked) setStroke(dpf(1.5f).toInt(), t.line2)
+                        }
+                        isSelected = picked
+                        contentDescription = "Stop after ${FeedClock.limitLabel(sec)}"
+                        ripple(this, 999)
+                        setOnClickListener { settings.mindfulLimitSec = sec; render() }
+                    }, LinearLayout.LayoutParams(0, dp(48), 1f).apply { if (i > 0) marginStart = dp(8) })
+                }
+            }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = -dp(8) })
+        }
+        col.addView(note(
+            "One timer for YouTube Shorts, Instagram Reels and TikTok together. It counts only while a feed is on screen, " +
+                "and starts again after 5 minutes away. Normal videos, search and messages stay free."
+        ))
+        col.addView(note(
+            "${getString(R.string.focus_label)} sees only which screen of those three apps is open, never what you watch. " +
+                "Nothing leaves your phone."
+        ))
         return col
     }
 
@@ -1169,6 +1233,7 @@ class MainActivity : Activity() {
         const val SNOOZE = "snooze"
         const val WORDS = "words"
         const val RECENT = "recent"
+        const val MINDFUL = "mindful"
         const val TWO_PANE_DP = 720
 
         const val COMMAND_EXAMPLES = "“Open Spotify”\n“Set a timer for 10 minutes”\n“Wake me up at 6:30”\n" +
