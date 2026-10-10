@@ -40,6 +40,9 @@ class ListenActivity : Activity(), MicController.Ui {
     private lateinit var actions: Actions
     private val main = Handler(Looper.getMainLooper())
     private val worker = Executors.newSingleThreadExecutor()
+    // Gemma gets its own thread: loading it takes seconds, and a command the rules understood shouldn't wait.
+    private val gemmaWorker = Executors.newSingleThreadExecutor()
+    private val debuggable by lazy { applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0 }
 
     private lateinit var scrim: View
     private lateinit var edge: EdgeWaveView
@@ -53,6 +56,7 @@ class ListenActivity : Activity(), MicController.Ui {
     private var handled = false // the transcript arrived; later status lines from the controller are not ours
     private var askingContacts = false
     private var pending: Command? = null // waiting for contacts access
+    private var byModel = false // the command on screen was understood by Gemma, not the rules
     private var heard = ""
 
     // Silence detection.
@@ -162,6 +166,7 @@ class ListenActivity : Activity(), MicController.Ui {
         main.removeCallbacksAndMessages(null)
         mic.shutdown()
         worker.shutdownNow()
+        gemmaWorker.shutdown() // let a reply in flight finish writing the compare log
         super.onDestroy()
     }
 
@@ -179,6 +184,7 @@ class ListenActivity : Activity(), MicController.Ui {
         edge.open()
         flyIn()
         mic.warm()
+        if (gemmaOn()) gemmaWorker.execute { runCatching { LocalLlm.warm(applicationContext) }.onFailure { Log.e(Dictation.TAG, "gemma: warm-up failed", it) } }
         startListening()
     }
 
@@ -280,14 +286,58 @@ class ListenActivity : Activity(), MicController.Ui {
         showTranscript(text)
         pill.label = "Thinking"
         edge.working = true
-        val command = Commands.parse(text)
-        Log.i(Dictation.TAG, "command: ${command ?: "none"}")
-        plan(command)
+        val rules = Commands.parse(text)
+        Log.i(Dictation.TAG, "command: rules=${rules ?: "none"}")
+        when {
+            rules != null -> {
+                plan(rules, model = false)
+                // Debug builds also ask Gemma, only to log what it would have done next to the rules.
+                if (debuggable && gemmaOn()) gemmaWorker.execute { askGemma(text, rules) }
+            }
+            gemmaOn() -> gemmaWorker.execute {
+                val command = askGemma(text, null)
+                main.post { if (!closing) plan(command, model = command != null) }
+            }
+            else -> plan(null, model = false)
+        }
+    }
+
+    // ---- Gemma ----
+
+    /** Gemma is used when its model is on the phone and the setting is on. */
+    private fun gemmaOn() = settings.localAi && LocalLlm.isReady(this)
+
+    /** Asks Gemma what [text] means. Runs on [gemmaWorker]; null when it's not a command or Gemma failed. */
+    private fun askGemma(text: String, rules: Command?): Command? {
+        val reply = runCatching { LocalLlm.ask(applicationContext, ModelCommands.PROMPT, text) }
+            .onFailure { Log.e(Dictation.TAG, "gemma: command failed", it) }
+        val command = reply.getOrNull()?.let { ModelCommands.toCommand(it.text) }
+        Log.i(Dictation.TAG, "command: gemma=${command ?: "none"} raw=${reply.getOrNull()?.text}")
+        if (debuggable) compareLog(text, rules, reply.getOrNull(), command, reply.exceptionOrNull())
+        return command
+    }
+
+    /**
+     * Debug builds only: one JSON line per command in files/compare.log, to compare the rules with Gemma on real
+     * speech. Stays on the phone; read it with `adb shell run-as dev.hkgill.gillspeak cat files/compare.log`.
+     */
+    private fun compareLog(heard: String, rules: Command?, reply: LocalLlm.Reply?, model: Command?, error: Throwable?) {
+        val line = org.json.JSONObject()
+            .put("at", java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.ROOT).format(java.util.Date()))
+            .put("heard", heard)
+            .put("rules", rules?.toString() ?: "none")
+            .put("gemma", model?.toString() ?: "none")
+            .put("gemmaRaw", reply?.text ?: "")
+            .put("gemmaMs", reply?.let { it.ms - it.loadMs } ?: -1)
+            .put("loadMs", reply?.loadMs ?: -1)
+        error?.let { line.put("error", it.toString()) }
+        runCatching { java.io.File(filesDir, "compare.log").appendText(line.toString() + "\n") }
     }
 
     // ---- Planning and acting ----
 
-    private fun plan(command: Command?) {
+    private fun plan(command: Command?, model: Boolean) {
+        byModel = model
         worker.execute {
             val outcome = runCatching {
                 if (command == null) Actions.Outcome.Ready(actions.searchInstead(heard)) else actions.plan(command)
@@ -312,15 +362,16 @@ class ListenActivity : Activity(), MicController.Ui {
                 if (!outcome.askContacts) closeIn(5000)
             }
             is Actions.Outcome.Ready -> {
-                val plan = outcome.plan
+                // Anything Gemma chose waits for a tap: a model can be wrong in ways the rules can't.
+                val plan = if (byModel) outcome.plan.asking("Yes, do it") else outcome.plan
                 val big = command is Command.Timer || command is Command.Alarm
                 if (plan.confirm == null) {
                     showCard(plan.title, plan.detail, plan.body, big, buttons = emptyList())
                     pill.label = plan.title
                     main.postDelayed({ act(plan) }, ACT_DELAY_MS)
                 } else {
-                    pill.label = if (command == null) "Not a command" else "Waiting for you"
-                    showCard(plan.title, plan.detail, plan.body, big = false, buttons = listOf("Cancel" to { close() }, plan.confirm to { act(plan) }))
+                    pill.label = if (command == null) "Not a command" else if (byModel) "Is this right?" else "Waiting for you"
+                    showCard(plan.title, plan.detail, plan.body, big = big && byModel, buttons = listOf("Cancel" to { close() }, plan.confirm to { act(plan) }))
                 }
             }
         }
@@ -356,7 +407,7 @@ class ListenActivity : Activity(), MicController.Ui {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode != REQ_CONTACTS) return
         askingContacts = false
-        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) plan(pending) else close()
+        if (grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) plan(pending, byModel) else close()
     }
 
     // ---- Views ----
@@ -414,7 +465,8 @@ class ListenActivity : Activity(), MicController.Ui {
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, dp(12), 0, 0)
             addView(View(this@ListenActivity).apply { background = rounded(Brand.TEAL, dp(3).toFloat()) }, LinearLayout.LayoutParams(dp(6), dp(6)))
-            val where = if (settings.engine == Settings.ENGINE_LOCAL) "Understood on this phone" else "Transcribed by ${engineName()}, understood on this phone"
+            val understood = if (byModel) "understood by Gemma on this phone" else "understood on this phone"
+            val where = if (settings.engine == Settings.ENGINE_LOCAL) understood.replaceFirstChar { it.uppercase() } else "Transcribed by ${engineName()}, $understood"
             addView(text(where, 11.5f, DIM).apply { setPadding(dp(7), 0, 0, 0) })
         })
         if (card.visibility != View.VISIBLE) {

@@ -85,6 +85,8 @@ kotlin {
 
 dependencies {
     implementation(files(sherpaAar))
+    // On-device Gemma. 0.16.x is the last release built with Kotlin 2.2; later ones need Kotlin 2.4 here too.
+    implementation("com.google.ai.edge.litertlm:litertlm-android:0.16.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303") // android.jar's org.json is a stub in JVM unit tests
 }

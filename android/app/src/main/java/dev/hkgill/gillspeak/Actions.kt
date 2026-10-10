@@ -34,7 +34,10 @@ class Actions(private val context: Context) {
         val confirm: String? = null,
         val opensApp: Boolean = false,
         val run: () -> Boolean,
-    )
+    ) {
+        /** The same plan, but waiting for a tap on [label] if it would otherwise run straight away. */
+        fun asking(label: String) = Plan(title, detail, body, confirm ?: label, opensApp, run)
+    }
 
     sealed interface Outcome {
         data class Ready(val plan: Plan) : Outcome

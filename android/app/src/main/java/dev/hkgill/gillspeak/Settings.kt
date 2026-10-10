@@ -27,6 +27,11 @@ class Settings(context: Context) {
         get() = prefs.getString("engine", ENGINE_LOCAL) ?: ENGINE_LOCAL // local only unless the user opts in
         set(v) = prefs.edit().putString("engine", v).apply()
 
+    /** Use Gemma ([LocalLlm]) on this phone when its model is installed: commands the rules miss, and polish. */
+    var localAi: Boolean
+        get() = prefs.getBoolean("local_ai", true)
+        set(v) = prefs.edit().putBoolean("local_ai", v).apply()
+
     var model: String
         get() = prefs.getString("model", "").orEmpty().ifBlank { DEFAULT_MODEL }
         set(v) = prefs.edit().putString("model", v.trim()).apply()
