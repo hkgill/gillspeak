@@ -119,7 +119,7 @@ object LocalLlm {
         background.execute {
             try {
                 val src = downloaded(context)
-                val part = File(file(context).path + ".part").also { it.parentFile?.mkdirs() }
+                val part = partFile(context).also { it.parentFile?.mkdirs() }
                 val md = java.security.MessageDigest.getInstance("SHA-256")
                 src.inputStream().use { input ->
                     part.outputStream().use { out ->
@@ -144,6 +144,7 @@ object LocalLlm {
                 }
             } catch (e: Exception) {
                 Log.e(Dictation.TAG, "gemma install failed", e)
+                partFile(context).delete() // a full disk can stop the copy part way: don't leave gigabytes behind
                 fail(context, e.message ?: e.javaClass.simpleName)
             } finally {
                 installing = false
@@ -161,11 +162,14 @@ object LocalLlm {
                 engine = null
                 cancelDownload(context)
                 file(context).delete()
+                partFile(context).delete()
                 failure = null
             }
             onDone()
         }
     }
+
+    private fun partFile(context: Context) = File(file(context).path + ".part")
 
     /** Loads the model ahead of time (a few seconds), so the first command doesn't wait for it. Worker thread only. */
     fun warm(context: Context) {

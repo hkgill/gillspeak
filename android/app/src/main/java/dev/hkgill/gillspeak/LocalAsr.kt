@@ -211,6 +211,7 @@ object LocalAsr {
                 if (isReady(context)) Log.i(Dictation.TAG, "model download complete and verified")
             } catch (e: Exception) {
                 Log.e(Dictation.TAG, "model install failed", e)
+                FILES.forEach { File(dir(context), it.name + ".part").delete() } // don't leave a part-copied file behind
                 fail(context, e.message ?: e.javaClass.simpleName)
             } finally {
                 val waiters = synchronized(installWaiters) {
