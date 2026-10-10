@@ -173,6 +173,8 @@ class Settings(context: Context) {
 
     fun recentLog(): List<String> = prefs.getString("log", "").orEmpty().split(SEP).filter { it.isNotBlank() }
 
+    fun clearLog() = prefs.edit().remove("log").apply()
+
     companion object {
         /** The name people see. The package id stays dev.hkgill.gillspeak so installs upgrade in place. */
         const val APP_NAME = "gillspeak"
