@@ -81,6 +81,10 @@ object Dictation {
         val total = ms(t0)
         Log.i(TAG, "local $total ms for ${Recorder.durationMs(wav)} ms of audio (parakeet $sttMs ms${if (reason.isEmpty()) "" else ", $reason"})")
         if (raw.isNotBlank()) settings.log("Local $total ms${if (reason.isEmpty()) "" else " ($reason)"}\n  heard: $raw\n  typed: $text")
+        if (raw.isBlank()) {
+            Log.w(TAG, "local: Parakeet heard nothing in ${Recorder.durationMs(wav)} ms of audio")
+            if (settings.keepEmptyAudio) runCatching { java.io.File(context.filesDir, "empty.wav").writeBytes(wav) }
+        }
         // Only a failed or rejected polish counts as a fallback in the status line.
         val shown = if (reason.isEmpty() || reason.startsWith("polished") || reason.startsWith("short") || reason == "empty") "" else reason.substringBefore(" by ")
         return Outcome(text, shown, total)
