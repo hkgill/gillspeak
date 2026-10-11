@@ -83,6 +83,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         scheduleWake()
         // Read app names now, in the background, so the first voice command doesn't wait ~5 s for them.
         Thread({ runCatching { Actions(applicationContext).apps() } }, "gillspeak-apps").apply { priority = Thread.MIN_PRIORITY }.start()
+        running = this
         Log.i(Dictation.TAG, "bubble service connected")
     }
 
@@ -97,6 +98,7 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
+        if (running === this) running = null
         if (::mic.isInitialized) mic.shutdown()
         // Everything: a refresh still queued would schedule the next snooze wake-up, which schedules the next, and
         // keep this destroyed service alive.
@@ -508,6 +510,20 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         main.post(refresh)
     }
 
+    /**
+     * Types a side-button dictation ([ListenActivity]) into the field that was open before it. Its see-through screen
+     * is still closing, so look for the field a few times before giving up and copying the text instead.
+     */
+    fun typeWhenBack(text: String) {
+        var tries = 0
+        val attempt = object : Runnable {
+            override fun run() {
+                if (focusedField() == null && ++tries < TYPE_TRIES) main.postDelayed(this, TYPE_RETRY_MS) else insert(text)
+            }
+        }
+        main.post(attempt)
+    }
+
     /** Splices the text in at the cursor (replacing any selection) and puts the cursor after it. */
     private fun setText(node: AccessibilityNodeInfo, text: String): Boolean {
         val current = realText(
@@ -538,5 +554,11 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         private const val HOLD_MS = 150L
         private const val SETTLE_MS = 60L
         private const val MAX_SETTLE_CHECKS = 10
+        private const val TYPE_TRIES = 15
+        private const val TYPE_RETRY_MS = 100L
+
+        /** The connected service, for the side button's dictation to type through. Null while it's off. */
+        @Volatile var running: BubbleService? = null
+            private set
     }
 }

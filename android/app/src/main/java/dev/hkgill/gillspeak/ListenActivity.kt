@@ -32,6 +32,9 @@ import java.util.concurrent.Executors
  * see the side button being let go). The transcript is matched against [Commands], and [Actions] carries it out:
  * apps, timers and the torch straight away, texts and calls only after a tap.
  *
+ * With [Settings.sideButtonDictates] on, it dictates instead: the same screen listens the same way, and the text goes
+ * to [BubbleService], which types it into the field that was open underneath once this screen has gone.
+ *
  * Being an activity in front is what lets it use the microphone; Parakeet on the phone transcribes it, as for dictation.
  */
 class ListenActivity : Activity(), MicController.Ui {
@@ -56,6 +59,7 @@ class ListenActivity : Activity(), MicController.Ui {
     private lateinit var pill: BubbleView
 
     private var started = false
+    private var dictating = false // read once: changing the setting mid-listen mustn't turn a command into text
     @Volatile private var closing = false
     private var handled = false // the transcript arrived; later status lines from the controller are not ours
     private var askingContacts = false
@@ -75,6 +79,7 @@ class ListenActivity : Activity(), MicController.Ui {
         settings = Settings(this)
         actions = Actions(this)
         mic = MicController(this, this)
+        dictating = settings.sideButtonDictates
 
         window.setDecorFitsSystemWindows(false)
         window.isNavigationBarContrastEnforced = false
@@ -111,7 +116,7 @@ class ListenActivity : Activity(), MicController.Ui {
         }
         pill = BubbleView(this) { mic.level }.apply {
             pill = true
-            label = "Listening"
+            label = listening()
             alpha = 0f
             setOnClickListener { onPillTap() }
         }
@@ -191,6 +196,10 @@ class ListenActivity : Activity(), MicController.Ui {
         edge.open()
         flyIn()
         mic.warm()
+        if (dictating) {
+            startListening()
+            return
+        }
         worker.execute { runCatching { actions.apps() } } // read app names while the person is still talking
         // Gemma loads while the person speaks (4-7 s of GPU work, then it stays ten minutes for the next command).
         // Loading it only once the rules missed made those commands wait 5-6 s after speaking.
@@ -266,8 +275,8 @@ class ListenActivity : Activity(), MicController.Ui {
         pill.retry = mic.canRetry
         edge.working = state == MicController.State.WORKING
         pill.label = when (state) {
-            MicController.State.RECORDING, MicController.State.LATCHED -> "Listening"
-            MicController.State.WORKING -> "Thinking"
+            MicController.State.RECORDING, MicController.State.LATCHED -> listening()
+            MicController.State.WORKING -> if (dictating) "Typing…" else "Thinking"
             MicController.State.IDLE -> pill.label
         }
     }
@@ -288,6 +297,7 @@ class ListenActivity : Activity(), MicController.Ui {
 
     override fun insert(text: String) {
         handled = true
+        if (dictating) return type(text)
         heard = text
         showTranscript(text)
         pill.label = "Thinking"
@@ -310,6 +320,21 @@ class ListenActivity : Activity(), MicController.Ui {
             }
             else -> plan(null, model = false)
         }
+    }
+
+    private fun listening() = if (dictating) "Dictating" else "Listening"
+
+    /** Dictation: the field is underneath, so leave straight away and let the bubble's service type into it. */
+    private fun type(text: String) {
+        val bubble = BubbleService.running
+        if (bubble != null) {
+            bubble.typeWhenBack(text)
+        } else {
+            getSystemService(android.content.ClipboardManager::class.java)
+                .setPrimaryClip(android.content.ClipData.newPlainText(Settings.APP_NAME, text))
+            android.widget.Toast.makeText(this, "Copied. Turn on the bubble to have it typed in", android.widget.Toast.LENGTH_LONG).show()
+        }
+        finishQuietly()
     }
 
     // ---- Gemma ----

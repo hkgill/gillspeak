@@ -46,6 +46,7 @@ Make gillspeak the phone's digital assistant (in the app, the **Side button** st
 - **Only these commands ever run.** The transcript is matched by rules in `Commands.kt` on the phone; a model never decides what to do. Texts and calls are never sent or dialled by gillspeak.
 - **Texting and calling by name** need the contacts permission; contacts are read on the phone when you ask and never stored.
 - Giving gillspeak the assistant role turns off "Hey Google" and Gemini's overlay; the Gemini app still opens from its icon.
+- **Dictating instead.** In the app, *Speech and understanding → Holding the side button → Dictates* makes the side button a hands-free bubble: the same screen listens, stops when you stop talking, and types what you said into the text field you were in. The bubble's accessibility service does the typing, so it needs to be on; without it the text is copied for you to paste.
 - The words appear after you stop talking: Parakeet doesn't stream.
 - The wave starts 40% of the way down the right edge, where the side button is on Galaxy S-series phones.
 
