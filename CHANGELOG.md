@@ -5,6 +5,7 @@ All notable changes to gillspeak (called Murmur up to 0.5.1). The format follows
 ## [Unreleased]
 
 ### Changed
+- **Android downloads first.** The repository README now links directly to the public Android 0.2.0 APK, with Linux installation secondary. Both install guides identify the experimental Android release, explain GitHub's Linux-only "Latest" link, and distinguish the published APK from current source features.
 - **Android: a new look, from a Claude Design canvas.** Settings is now a home screen that shows what still needs setting up, then one row per section that opens its own page; foldables show two panes. The bubble is a round night-black **g** with three lime sound bars, the side-button wave and cards are lime, and the launcher icon matches. Figtree is bundled (SIL Open Font License).
 - **Murmur is now gillspeak, everywhere.** The commands are `gillspeak`, `gillspeakd` and `gillspeak-keyd`, the services `gillspeakd.service` and `gillspeak-keyd.service`, and the folders `~/.config/gillspeak`, `~/.local/share/gillspeak` and `~/.cache/gillspeak`. **Upgrading keeps everything:** on first run gillspeak moves the old `murmur` folders over (config, dictionary, history, models) and copies the API key from the old keyring entry. Re-run `scripts/setup-fedora.sh`: it removes the old service, command, shortcuts, ydotool drop-in and hold-to-talk helper (`scripts/remove-legacy-murmur.sh`) before installing the new ones. The Android app's package id is now `dev.hkgill.gillspeak`, so it installs as a new app.
 

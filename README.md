@@ -10,6 +10,14 @@
 
 **AI models run locally on your Android phone. A free, open-source alternative to Wispr Flow for offline voice typing into any app and voice commands. No account needed. Also on Linux.**
 
+**[📱 Download Android APK — v0.2.0 (experimental)](https://github.com/hkgill/gillspeak/releases/download/android-v0.2.0/gillspeak-0.2.0.apk)**
+
+Android 11+ · arm64 phones · [Release notes](https://github.com/hkgill/gillspeak/releases/tag/android-v0.2.0) · [Install and setup](#-get-it-on-android)
+
+Also available: [🐧 Linux desktop installation](#-linux-desktop).
+
+The published Android 0.2.0 APK is local-only by default; its optional Gemini/Groq modes send audio if enabled. The feature descriptions below follow the current source on `main`, which has removed those cloud options.
+
 > 🔒 **Nothing leaves your phone.** Speech recognition (Parakeet) and understanding (Gemma 4 E2B) run on the device. There's no account and no server, and it works with Wi-Fi off. The app has no cloud options at all: the network is used only to download the models once.
 
 <p align="center"><img src="docs/assets/android-screens.png" width="880" alt="The gillspeak Android app's settings: the home screen with setup progress and one row per section, the speech and understanding page with Local only selected and Gemma downloading, and the bubble page in dark mode with a live preview of the round bubble"></p>
@@ -28,7 +36,9 @@
 
 ## 📱 Get it on Android
 
-Download `gillspeak-*.apk` from the [Releases page](https://github.com/hkgill/gillspeak/releases) on your phone and open it. The app's **Setup** card walks you through the rest: the microphone, the floating bubble, the side button and (optionally) the keyboard and contacts. Then download Parakeet (640 MB, once, over Wi-Fi) and, if you want commands understood in your own words, Gemma (2.6 GB).
+Download **[gillspeak-0.2.0.apk](https://github.com/hkgill/gillspeak/releases/download/android-v0.2.0/gillspeak-0.2.0.apk)** (experimental; Android 11+, arm64) on your phone and open it. See the [Android release notes](https://github.com/hkgill/gillspeak/releases/tag/android-v0.2.0) for installation details and the checksum. The app's **Setup** card walks you through the rest: the microphone, the floating bubble, the side button and (optionally) the keyboard and contacts. Then download Parakeet (640 MB, once, over Wi-Fi) and, if you want commands understood in your own words, Gemma (2.6 GB).
+
+GitHub's **Latest** release currently points to the older Linux package because Android releases are marked as prereleases. Use the Android APK link above, or find the **Android** entries on the [Releases page](https://github.com/hkgill/gillspeak/releases).
 
 Building it yourself, voice commands and how each piece works: [`android/README.md`](android/README.md). Plans, including stopping endless short-video scrolling: [ROADMAP.md](ROADMAP.md).
 
