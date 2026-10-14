@@ -22,7 +22,9 @@ Tested on a Galaxy S25 (Android 17, One UI 9) and a Galaxy Z Fold5 (Android 16).
 
 ## Install
 
-Download `gillspeak-*.apk` from the [Releases page](https://github.com/hkgill/gillspeak/releases) on your phone, open it and allow installing from your browser or file manager. No account or API key is needed.
+Download **[gillspeak-0.2.0.apk](https://github.com/hkgill/gillspeak/releases/download/android-v0.2.0/gillspeak-0.2.0.apk)** (experimental; Android 11+, arm64) on your phone, open it and allow installing from your browser or file manager. No account or API key is needed. See the [Android release notes](https://github.com/hkgill/gillspeak/releases/tag/android-v0.2.0) for the checksum. GitHub's **Latest** release currently points to the older Linux package; Android releases are prereleases.
+
+The published 0.2.0 APK is local-only by default and still offers optional Gemini/Groq modes that send audio if enabled. The feature descriptions above follow the current source on `main`, which has removed those cloud options.
 
 Then set it up as described at the end of [Build and install](#build-and-install).
 
