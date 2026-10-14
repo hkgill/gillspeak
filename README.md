@@ -8,7 +8,7 @@
 ![Local AI](https://img.shields.io/badge/AI-100%25%20on--device-4A6600.svg)
 ![Also on Linux](https://img.shields.io/badge/also-Fedora%20GNOME%20Wayland-294172.svg)
 
-**Talk to your Android phone. Hold the bubble to dictate into any app, or hold the side button to give a command. It all runs on the phone.**
+**AI models run locally on your Android phone. A free, open-source alternative to Wispr Flow for offline voice typing into any app and voice commands. No account needed. Also on Linux.**
 
 > 🔒 **Nothing leaves your phone.** Speech recognition (Parakeet) and understanding (Gemma 4 E2B) run on the device. There's no account and no server, and it works with Wi-Fi off. The app has no cloud options at all: the network is used only to download the models once.
 
