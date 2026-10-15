@@ -27,6 +27,20 @@ import java.io.File
 class DebugReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         val app = context.applicationContext
+        // Synthetic text only; exercises the watch assistant prompt without microphone or Data Layer bypass.
+        if (intent.getBooleanExtra("watch_model_selftest", false)) {
+            val pending = goAsync()
+            Thread {
+                try {
+                    val result = LocalLlm.ask(app, WatchSessionService.SYSTEM_PROMPT,
+                        "What is two plus two? Answer in one short sentence.", maxTokens = 32)
+                    Log.i(Dictation.TAG, "watch_model_selftest: answer=${result.text} elapsed=${result.ms}ms")
+                } catch (e: Exception) {
+                    Log.e(Dictation.TAG, "watch_model_selftest failed: ${e.javaClass.simpleName}")
+                } finally { pending.finish() }
+            }.start()
+            return
+        }
         if (intent.getBooleanExtra("download_model", false)) {
             LocalAsr.download(app)
         }

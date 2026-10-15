@@ -141,6 +141,8 @@ class MainActivity : Activity() {
         render()
     }
 
+    // API 33+ already uses the native OnBackInvokedDispatcher above; retain this legacy fallback.
+    @android.annotation.SuppressLint("GestureBackNavigation")
     @Deprecated("Android 12 and older; newer versions use the OnBackInvokedCallback")
     override fun onBackPressed() {
         if (!twoPane && page != HOME) go(HOME) else @Suppress("DEPRECATION") super.onBackPressed()
@@ -243,6 +245,9 @@ class MainActivity : Activity() {
             addView(navRow("Snooze", snoozeSummary(), SNOOZE, summaryColor = if (settings.snoozed()) t.attT else t.ink2))
             addView(navRow("Words", wordsSummary(), WORDS))
             addView(navRow("Mindful mode", mindfulSummary(), MINDFUL))
+            addView(navRow("Watch companion", "Local Gemma for your paired watch", "watch").apply {
+                setOnClickListener { startActivity(Intent(this@MainActivity, WatchSetupActivity::class.java)) }
+            })
         })
 
         col.addView(recentCard())

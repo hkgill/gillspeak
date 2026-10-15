@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "gillspeak-android"
-include(":app")
+include(":app", ":wear", ":wear-protocol")

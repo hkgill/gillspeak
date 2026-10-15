@@ -142,6 +142,8 @@ class ListenActivity : Activity(), MicController.Ui {
         }
     }
 
+    // API 33+ already uses the native OnBackInvokedDispatcher above; retain this legacy fallback.
+    @android.annotation.SuppressLint("GestureBackNavigation")
     @Deprecated("Android 13 and later use onBackInvokedDispatcher")
     override fun onBackPressed() = close()
 

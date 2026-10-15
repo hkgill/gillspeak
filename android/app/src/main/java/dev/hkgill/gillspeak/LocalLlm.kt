@@ -194,15 +194,19 @@ object LocalLlm {
         asking?.takeIf { it.second === owner }?.let { runCatching { it.first.cancelProcess() } }
     }
 
-    fun ask(context: Context, system: String, user: String, maxTokens: Int = 256, owner: Any? = null): Reply {
+    fun ask(context: Context, system: String, user: String, maxTokens: Int = 256, owner: Any? = null,
+            shouldCancel: () -> Boolean = { false }, onReady: () -> Unit = {}): Reply {
         val t0 = SystemClock.uptimeMillis()
         val text: String
         val loadMs: Long
         try {
             synchronized(lock) {
+                if (shouldCancel()) throw java.util.concurrent.CancellationException()
                 val tl = SystemClock.uptimeMillis()
                 val e = load(context)
                 loadMs = SystemClock.uptimeMillis() - tl
+                if (shouldCancel()) throw java.util.concurrent.CancellationException()
+                onReady()
                 val config = ConversationConfig(
                     systemInstruction = Contents.of(system),
                     samplerConfig = SamplerConfig(1, 1.0, 0.0, 0), // greedy: the same words always get the same answer
@@ -210,7 +214,10 @@ object LocalLlm {
                     thinkingConfig = ThinkingConfig(false),
                 )
                 text = e.createConversation(config).use { c ->
-                    if (owner != null) synchronized(askingLock) { asking = c to owner }
+                    synchronized(askingLock) {
+                        if (shouldCancel()) throw java.util.concurrent.CancellationException()
+                        if (owner != null) asking = c to owner
+                    }
                     try {
                         c.sendMessage(user).contents.contents.filterIsInstance<Content.Text>().joinToString("") { it.text }.trim()
                     } finally {
