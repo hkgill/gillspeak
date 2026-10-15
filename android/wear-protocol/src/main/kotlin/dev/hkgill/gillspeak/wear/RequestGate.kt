@@ -6,7 +6,26 @@ import java.util.concurrent.atomic.AtomicBoolean
 class RequestGate {
     class Ticket(val node: String, val id: String, val deadline: Long) {
         val cancelled = AtomicBoolean(false)
+        private val terminalClaimed = AtomicBoolean(false)
         fun stopped(now: Long) = cancelled.get() || now >= deadline
+
+        /** Claim the terminal reply before transport; cancellation checks alone are not atomic with sending. */
+        fun sendReply(kind: Protocol.Kind, deliver: () -> Unit) {
+            when (kind) {
+                Protocol.Kind.STATUS -> if (!cancelled.get() && !terminalClaimed.get()) deliver()
+                Protocol.Kind.RESULT, Protocol.Kind.ERROR ->
+                    if (!cancelled.get() && terminalClaimed.compareAndSet(false, true)) deliver()
+                else -> error("Only response packets can be sent.")
+            }
+        }
+
+        /** Timeout, user cancellation and shutdown compete with completion for the same terminal reply. */
+        fun cancelAndReply(deliver: () -> Unit) {
+            if (terminalClaimed.compareAndSet(false, true)) {
+                cancelled.set(true)
+                deliver()
+            }
+        }
     }
     enum class Rejection { BUSY, DUPLICATE }
     data class Admission(val ticket: Ticket? = null, val rejection: Rejection? = null)

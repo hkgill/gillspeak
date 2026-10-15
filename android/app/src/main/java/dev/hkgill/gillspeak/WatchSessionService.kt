@@ -65,15 +65,20 @@ class WatchSessionService : Service() {
     }
 
     fun receive(node: String, packet: Protocol.Packet) {
+        if (packet.kind == Protocol.Kind.CANCEL) {
+            gate.cancel(node, packet.id)?.let { ticket ->
+                ticket.cancelAndReply {
+                    LocalLlm.cancel(ticket)
+                    reply(node, packet.id, Protocol.Kind.ERROR, "Cancelled.")
+                }
+            }
+            return
+        }
         if (!isActive) {
             reply(node, packet.id, Protocol.Kind.ERROR, "Phone session ended. Enable it again on your phone.")
             stopSelf(); return
         }
         when (packet.kind) {
-            Protocol.Kind.CANCEL -> {
-                gate.cancel(node, packet.id)?.let { LocalLlm.cancel(it) }
-                reply(node, packet.id, Protocol.Kind.ERROR, "Cancelled.")
-            }
             Protocol.Kind.PING -> reply(node, packet.id, Protocol.Kind.RESULT,
                 if (LocalLlm.isReady(this)) "Phone connected · Gemma ready" else "Phone connected · download Gemma in Speech and understanding.")
             Protocol.Kind.ASK -> ask(node, packet)
@@ -94,7 +99,7 @@ class WatchSessionService : Service() {
         }
         val remaining = (expiresAt - SystemClock.elapsedRealtime()).coerceAtLeast(1)
         val timeout = timer.schedule({
-            if (!ticket.cancelled.getAndSet(true)) {
+            ticket.cancelAndReply {
                 LocalLlm.cancel(ticket)
                 reply(node, packet.id, Protocol.Kind.ERROR, if (isActive) "Phone took too long. Try a shorter question."
                     else "Phone session ended. Enable it again on your phone.")
@@ -108,7 +113,7 @@ class WatchSessionService : Service() {
                 AnswerTask.run({ LocalLlm.isReady(this) }, cancelled, { onReady ->
                     LocalLlm.ask(applicationContext, SYSTEM_PROMPT, packet.text, maxTokens = 256, owner = ticket,
                         shouldCancel = cancelled, onReady = onReady).text
-                }) { kind, text -> reply(node, packet.id, kind, text) }
+                }) { kind, text -> ticket.sendReply(kind) { reply(node, packet.id, kind, text) } }
             } finally {
                 timeout.cancel(false)
                 if (wake.isHeld) wake.release()
@@ -125,9 +130,11 @@ class WatchSessionService : Service() {
         stopped = true
         current = null
         main.removeCallbacks(endSession)
-        gate.stop()?.let {
-            LocalLlm.cancel(it)
-            reply(it.node, it.id, Protocol.Kind.ERROR, "Phone session ended. Enable it again on your phone.")
+        gate.stop()?.let { ticket ->
+            ticket.cancelAndReply {
+                LocalLlm.cancel(ticket)
+                reply(ticket.node, ticket.id, Protocol.Kind.ERROR, "Phone session ended. Enable it again on your phone.")
+            }
         }
         timer.shutdownNow()
         worker.shutdownNow()
