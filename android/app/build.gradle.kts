@@ -50,8 +50,8 @@ android {
         applicationId = "dev.hkgill.gillspeak"
         minSdk = 30
         targetSdk = 36
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 5
+        versionName = "0.3.2-watch-preview"
         // Every current phone is 64-bit ARM; the other ABIs would add ~70 MB of native code.
         ndk { abiFilters += "arm64-v8a" }
     }
@@ -66,6 +66,9 @@ android {
             keyPassword = local.getProperty("release.keyPassword")
         }
     }
+
+    // Explicit existing debug key only; never generate a new signing identity for an update.
+    local.getProperty("debug.storeFile")?.let { signingConfigs.getByName("debug").storeFile = file(it) }
 
     buildTypes {
         release {
@@ -84,9 +87,16 @@ kotlin {
 }
 
 dependencies {
+    implementation(project(":wear-protocol"))
+    implementation("com.google.android.gms:play-services-wearable:20.0.1")
     implementation(files(sherpaAar))
     // On-device Gemma. 0.16.x is the last release built with Kotlin 2.2; later ones need Kotlin 2.4 here too.
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.16.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303") // android.jar's org.json is a stub in JVM unit tests
+}
+
+// The existing root testDebugUnitTest CI entry point must exercise the shared JVM protocol too.
+tasks.matching { it.name == "testDebugUnitTest" || it.name == "testReleaseUnitTest" }.configureEach {
+    dependsOn(":wear-protocol:test")
 }

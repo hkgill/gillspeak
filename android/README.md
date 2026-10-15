@@ -111,3 +111,7 @@ Without the `release.*` settings, `assembleRelease` produces an unsigned `app-re
   adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez download_model true
   adb logcat -s gillspeak
   ```
+
+## Watch6 companion preview
+
+The `:wear` app sends explicit typed questions to the paired phone's local Gemma through the official Wear OS Data Layer. Install both matching APKs and enable **Watch companion** on the phone. See [setup, architecture, privacy, build instructions and device-test limits](../docs/wear-os-companion.md). This preview does not record watch audio or use cloud inference.

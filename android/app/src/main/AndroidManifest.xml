@@ -1,9 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- Only for the one-off model downloads, which go through Android's DownloadManager. Speech, commands and
-         Mindful mode never use the network. -->
+    <!-- Model downloads use DownloadManager. Watch requests use Play services Data Layer; inference stays local. -->
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Voice commands: timers and alarms go through the Clock app; contacts are looked up on the phone to text or
          call someone by name (Messages and Phone open filled in, nothing is sent or dialled by gillspeak). -->
@@ -24,6 +26,18 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@android:style/Theme.DeviceDefault.DayNight">
+
+        <activity android:name=".WatchSetupActivity" android:exported="false" />
+        <service android:name=".WatchSessionService" android:exported="false" android:foregroundServiceType="specialUse">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="User-enabled 30-minute watch companion session performing local phone Gemma inference for explicit watch questions" />
+        </service>
+        <service android:name=".WatchListenerService" android:exported="true">
+            <intent-filter>
+                <action android:name="com.google.android.gms.wearable.MESSAGE_RECEIVED" />
+                <data android:scheme="wear" android:host="*" android:path="/gillspeak/v1/request" />
+            </intent-filter>
+        </service>
 
         <!-- Gemma (LiteRT-LM) runs on the GPU through the vendor's OpenCL driver, when the phone has one. -->
         <uses-native-library android:name="libvndksupport.so" android:required="false" />

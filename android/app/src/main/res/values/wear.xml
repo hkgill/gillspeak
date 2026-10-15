@@ -1,0 +1,4 @@
+<resources xmlns:tools="http://schemas.android.com/tools">
+    <!-- Play services discovers this resource by its fixed name. -->
+    <string-array name="android_wear_capabilities" translatable="false" tools:ignore="UnusedResources,Typos"><item>gillspeak_phone_v1</item></string-array>
+</resources>
