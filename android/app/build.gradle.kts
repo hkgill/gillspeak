@@ -1,6 +1,7 @@
 import java.net.URI
 import java.security.MessageDigest
 import java.util.Properties
+import java.util.zip.ZipFile
 
 plugins {
     id("com.android.application")
@@ -77,6 +78,8 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
+    testOptions { unitTests.isIncludeAndroidResources = true }
 }
 
 kotlin {
@@ -87,6 +90,31 @@ dependencies {
     implementation(files(sherpaAar))
     // On-device Gemma. 0.16.x is the last release built with Kotlin 2.2; later ones need Kotlin 2.4 here too.
     implementation("com.google.ai.edge.litertlm:litertlm-android:0.16.1")
+    // An unregistered developer prototype, never packaged in release or advertised as an eligible category.
+    debugImplementation("androidx.car.app:app:1.8.0-rc01")
+    debugImplementation("androidx.car.app:app-projected:1.8.0-rc01")
+    testDebugImplementation("androidx.car.app:app-testing:1.8.0-rc01")
+    testDebugImplementation("org.robolectric:robolectric:4.16.1")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303") // android.jar's org.json is a stub in JVM unit tests
+}
+
+// Keep the experiment and its host APIs out of distributable phone builds.
+tasks.register("verifyCarReleaseIsolation") {
+    dependsOn("assembleRelease")
+    doLast {
+        val apks = layout.buildDirectory.dir("outputs/apk/release").get().asFile
+            .listFiles().orEmpty().filter { it.extension == "apk" }
+        check(apks.isNotEmpty()) { "No release APK to inspect" }
+        apks.forEach { apk ->
+            ZipFile(apk).use { zip ->
+                zip.entries().asSequence().filter { it.name.endsWith(".dex") }.forEach { entry ->
+                    val dex = zip.getInputStream(entry).use { it.readBytes().toString(Charsets.ISO_8859_1) }
+                    check("Ldev/hkgill/gillspeak/car/" !in dex && "Landroidx/car/app/" !in dex) {
+                        "Car prototype code leaked into ${apk.name}"
+                    }
+                }
+            }
+        }
+    }
 }

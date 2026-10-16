@@ -2,6 +2,14 @@
 <!-- Debug builds only: test hooks, triggerable from adb (which holds DUMP) but not by other apps. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <application>
+        <!-- Synthetic developer UI only. No CarAppService registration or fabricated car category. -->
+        <activity android:name=".car.CarPreviewActivity" android:exported="true"
+            android:label="GillSpeak car preview">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
         <receiver
             android:name=".DebugReceiver"
             android:exported="true"
