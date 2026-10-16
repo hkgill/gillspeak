@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="car_preview_notice">Developer preview · synthetic fixtures only\nNot an Android Auto launcher app. Use while parked. No microphone or model is activated.</string>
+    <string name="car_preview_disconnect">Disconnect</string>
+    <string name="car_preview_reconnect">Reconnect</string>
+</resources>

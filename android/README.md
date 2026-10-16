@@ -98,6 +98,8 @@ Without the `release.*` settings, `assembleRelease` produces an unsigned `app-re
 
 ## Develop
 
+- **Car interface prototype (debug only):** the separate **GillSpeak car preview** launcher uses synthetic fixtures and the same Car App Library message/action model as the experimental car screen. It does not open a microphone or run models. There is currently no supported general-assistant category, so the car service is unregistered and this build does not appear in Android Auto. See [architecture, limits and acceptance checks](../docs/android-auto-prototype.md).
+
 - `app/src/main/assets/clean_v2.txt` is a copy of `gillspeak/prompts/clean_v2.txt`; `PromptSyncTest` fails if they drift. Gemma's polish uses it.
 - `RulesTest` holds cases copied from `tests/test_rules.py` and `tests/test_validate.py`. Android's regex engine is ICU, not the JVM's: don't use `(?U)` (ICU rejects it at load time, which JVM tests won't catch).
 - `MicController` is the mic state machine (hold, latch, retry) shared by the keyboard and the bubble. The bubble waits 150 ms before starting the mic so a drag never starts a recording, and refuses to send all-silent audio (what Android returns when it blocks background recording).
