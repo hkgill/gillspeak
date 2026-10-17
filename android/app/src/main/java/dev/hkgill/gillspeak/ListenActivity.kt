@@ -245,6 +245,12 @@ class ListenActivity : Activity(), MicController.Ui {
     private val watch = object : Runnable {
         override fun run() {
             if (mic.state != MicController.State.LATCHED && mic.state != MicController.State.RECORDING) return
+            // Bluetooth setup can take seconds; give speech its full listening window after the input is ready.
+            if (mic.preparing) {
+                ear = EndOfSpeech(SystemClock.uptimeMillis())
+                main.postDelayed(this, 50)
+                return
+            }
             when (ear.feed(mic.level, SystemClock.uptimeMillis(), mic.heard)) {
                 EndOfSpeech.Verdict.FINISHED, EndOfSpeech.Verdict.TOO_LONG -> mic.press()
                 EndOfSpeech.Verdict.NOTHING_SAID -> {
@@ -288,6 +294,13 @@ class ListenActivity : Activity(), MicController.Ui {
         pill.retry = mic.canRetry
         message(text)
         if (!mic.canRetry) closeIn(2000) else closeIn(8000)
+    }
+
+    override fun microphone(text: String) {
+        if (handled || closing) return
+        transcript.text = text
+        transcript.setTextColor(DIM)
+        transcript.alpha = 1f
     }
 
     /** Every listen belongs to this screen, so the field never "changes" under it. */

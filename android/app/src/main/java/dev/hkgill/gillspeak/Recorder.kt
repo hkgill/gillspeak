@@ -1,6 +1,6 @@
 package dev.hkgill.gillspeak
 
-import android.annotation.SuppressLint
+import android.content.Context
 import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
@@ -8,105 +8,144 @@ import java.io.ByteArrayOutputStream
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
-/** 16 kHz mono PCM16 into memory. Audio is never written to disk. */
-class Recorder {
-    private var record: AudioRecord? = null
-    private var thread: Thread? = null
-    private val pcm = ByteArrayOutputStream()
+/** 16 kHz mono PCM16 into memory. Route setup and capture run off the UI thread. */
+class Recorder internal constructor(
+    private val platform: () -> RoutingPlatform,
+    private val clock: RouteClock,
+    private val createCapture: (RoutingPlatform, Boolean) -> MicCapture,
+) {
+    constructor(context: Context) : this(
+        { AndroidMicrophoneRouting(context.applicationContext) }, AndroidRouteClock,
+        { routing, wireless -> AndroidMicCapture(routing as AndroidMicrophoneRouting, wireless) },
+    )
+    private class Session {
+        val pcm = ByteArrayOutputStream()
+        @Volatile var cancelled = false
+        @Volatile var running = true
+        @Volatile var preparing = true
+        @Volatile var capture: MicCapture? = null
+        lateinit var thread: Thread
+    }
+    private var session: Session? = null
 
-    @Volatile private var running = false
-
-    /** Loudest sample so far (0..32767). Stays 0 when Android silences a background recording. */
     @Volatile var peak = 0
         private set
-
-    /** Loudness of the last 100 ms, 0..1, for the recording animation. */
     @Volatile var level = 0f
         private set
-
-    /** The AudioRecord error that stopped the recording early (e.g. ERROR_DEAD_OBJECT), or null. */
     @Volatile var error: Int? = null
         private set
-
+    @Volatile var failure: String? = null
+        private set
+    @Volatile var routeStatus = "Checking microphone…"
+        private set
+    @Volatile var startedAt = 0L
+        private set
     @Volatile private var chunks = 0
     @Volatile private var zeroChunks = 0
 
-    /**
-     * Most of the recording was exact digital silence (every sample 0). A real microphone always picks up some
-     * noise; Android sends zeros when another app holds the microphone, even if a tap made a loud click first.
-     */
     val blocked get() = mostlyZero(chunks, zeroChunks)
-
-    /** Audio has been read since [start]; until then [level] is only a placeholder. */
     val heard get() = chunks > 0
+    val isRecording get() = session?.running == true
+    val preparing get() = session?.preparing == true
 
-    val isRecording get() = running
-
-    /** Caller checks RECORD_AUDIO first. Throws if the microphone can't be opened. */
-    @SuppressLint("MissingPermission")
+    /** Caller checks RECORD_AUDIO. Multiple activation surfaces must never own routing simultaneously. */
     fun start() {
-        val min = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        val r = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION, RATE,
-            AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, maxOf(min, RATE),
-        )
-        if (r.state != AudioRecord.STATE_INITIALIZED) {
-            r.release()
-            throw IllegalStateException("microphone unavailable")
-        }
-        synchronized(pcm) { pcm.reset() }
+        check(session?.thread?.isAlive != true) { "microphone is still stopping" }
+        val s = Session()
+        check(RecordingOwner.acquire(s)) { "microphone is already in use by GillSpeak" }
         peak = 0
         level = 0f
         error = null
+        failure = null
         chunks = 0
         zeroChunks = 0
-        record = r
-        running = true
-        r.startRecording()
-        thread = Thread({
-            val buf = ByteArray(1600) // 50 ms, so stopping never waits long
-            while (running) {
-                val n = r.read(buf, 0, buf.size)
+        startedAt = 0L
+        routeStatus = "Connecting microphone…"
+        session = s
+        s.thread = Thread({ capture(s) }, "gillspeak-recorder")
+        try { s.thread.start() } catch (e: Exception) {
+            s.running = false
+            RecordingOwner.release(s)
+            throw e
+        }
+    }
+
+    private fun capture(s: Session) {
+        var owned: RoutedCapture? = null
+        try {
+            val backend = platform()
+            val routed = RoutedCapture(backend, clock) { wireless ->
+                createCapture(backend, wireless).also { s.capture = it }
+            }
+            owned = routed
+            routed.open { s.cancelled }
+            if (s.cancelled) return
+            val c = checkNotNull(routed.capture)
+            routeStatus = microphoneStatus(c.actual(), routed.choice.reason)
+            startedAt = clock.now()
+            s.preparing = false
+            val buf = ByteArray(1600) // 50 ms
+            while (!s.cancelled) {
+                val n = c.read(buf)
+                if (s.cancelled) break
                 if (n < 0) {
-                    // Errors don't clear on their own (a dead object needs a new AudioRecord), so retrying would
-                    // spin forever. Stop; the controller finishes with what was recorded.
                     error = n
-                    running = false
+                    failure = "Microphone stopped working. Check the headset and try again"
                     break
                 }
+                // Read actual routing after capture starts, and throughout capture (including disconnects).
+                val actual = c.actual()
+                if (routed.routeLost(actual)) {
+                    failure = "Microphone disconnected or changed. Tap to record again"
+                    break
+                }
+                routeStatus = microphoneStatus(actual, routed.choice.reason)
                 if (n == 0) continue
                 var chunk = 0
                 for (i in 0 until n - 1 step 2) chunk = maxOf(chunk, kotlin.math.abs((buf[i].toInt() and 0xff) or (buf[i + 1].toInt() shl 8)))
                 peak = maxOf(peak, chunk)
                 chunks++
                 if (chunk == 0) zeroChunks++
-                level = (chunk / 12_000f).coerceAtMost(1f) // normal speech peaks well below full scale
-                synchronized(pcm) {
-                    pcm.write(buf, 0, n)
-                    if (pcm.size() >= MAX_BYTES) running = false
+                level = (chunk / 12_000f).coerceAtMost(1f)
+                synchronized(s.pcm) {
+                    s.pcm.write(buf, 0, n)
                 }
+                if (s.pcm.size() >= MAX_BYTES) break
             }
-        }, "gillspeak-recorder").apply { start() }
+        } catch (_: RouteCancelled) {
+            // A release, cancellation or service shutdown during asynchronous route setup.
+        } catch (_: SecurityException) {
+            failure = "Microphone permission denied. Allow it in GillSpeak settings"
+        } catch (_: Exception) {
+            if (!s.cancelled) failure = "Microphone unavailable. Check the headset or try again"
+        } finally {
+            try { owned?.close() } finally {
+                s.capture = null
+                s.preparing = false
+                RecordingOwner.release(s)
+                s.running = false
+            }
+        }
     }
 
-    /** Stops and returns the recording as a WAV file in memory. */
     fun stop(): ByteArray {
-        halt()
-        val data = synchronized(pcm) { pcm.toByteArray().also { pcm.reset() } }
+        val s = halt()
+        val data = s?.let { synchronized(it.pcm) { it.pcm.toByteArray().also { _ -> it.pcm.reset() } } }
+            ?: byteArrayOf()
         return wav(data)
     }
 
     fun cancel() {
-        halt()
-        synchronized(pcm) { pcm.reset() }
+        halt()?.let { synchronized(it.pcm) { it.pcm.reset() } }
     }
 
-    private fun halt() {
-        running = false
-        thread?.join(1000)
-        thread = null
-        record?.run { runCatching { stop() }; release() }
-        record = null
+    private fun halt(): Session? {
+        val s = session ?: return null
+        s.cancelled = true
+        // AudioRecord.stop unblocks a blocking read. Only the capture thread releases native resources/routes.
+        runCatching { s.capture?.stop() }
+        s.thread.join(1000)
+        return s
     }
 
     companion object {
@@ -125,4 +164,74 @@ class Recorder {
             put("data".toByteArray()); putInt(pcm.size); put(pcm)
         }.array()
     }
+}
+
+/** One lease across the bubble, keyboard and side-button controllers. */
+internal object RecordingOwner {
+    private var owner: Any? = null
+    @Synchronized fun acquire(token: Any): Boolean {
+        if (owner != null) return false
+        owner = token
+        return true
+    }
+    @Synchronized fun release(token: Any) { if (owner === token) owner = null }
+}
+
+private class AndroidMicCapture(platform: AndroidMicrophoneRouting, wireless: Boolean) : MicCapture {
+    private val routing = platform
+    private val communication = wireless
+    private var rate = Recorder.RATE
+    private val narrowband = ByteArray(800)
+    private val upsample = NarrowbandPcm()
+    private var record = try {
+        openRecord()
+    } catch (e: IllegalStateException) {
+        if (!communication) throw e
+        rate = 8_000
+        openRecord()
+    }
+
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun openRecord() = AudioRecord(
+        if (communication) MediaRecorder.AudioSource.VOICE_COMMUNICATION else MediaRecorder.AudioSource.VOICE_RECOGNITION,
+        rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
+        maxOf(AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT), rate),
+    ).also {
+        if (it.state != AudioRecord.STATE_INITIALIZED) {
+            it.release()
+            throw IllegalStateException("microphone unavailable")
+        }
+    }
+
+    override fun prefer(device: MicDevice?): Boolean {
+        val input = device?.let { routing.input(it.id) }
+        if (device != null && input == null) return false
+        return record.setPreferredDevice(input)
+    }
+    @android.annotation.SuppressLint("MissingPermission")
+    @Synchronized override fun start() {
+        try {
+            startChecked()
+        } catch (e: IllegalStateException) {
+            if (!communication || rate == 8_000) throw e
+            // Some classic SCO implementations accept only narrowband input. Keep ASR's format at 16 kHz.
+            record.release()
+            rate = 8_000
+            record = openRecord()
+            startChecked()
+        }
+    }
+    @android.annotation.SuppressLint("MissingPermission")
+    private fun startChecked() {
+        record.startRecording()
+        check(record.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "microphone did not start" }
+    }
+    override fun actual() = record.routedDevice?.micDevice()
+    override fun read(buffer: ByteArray): Int {
+        if (rate == Recorder.RATE) return record.read(buffer, 0, buffer.size)
+        val n = record.read(narrowband, 0, minOf(narrowband.size, buffer.size / 2))
+        return if (n <= 0) n else upsample.expand(narrowband, n, buffer)
+    }
+    @Synchronized override fun stop() { runCatching { record.stop() } }
+    @Synchronized override fun close() = record.release()
 }

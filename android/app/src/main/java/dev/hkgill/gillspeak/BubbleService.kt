@@ -311,6 +311,11 @@ class BubbleService : AccessibilityService(), MicController.Ui {
         }
     }
 
+    override fun microphone(text: String) {
+        // The small pill cannot fit a route/fallback explanation. Announce it once when it changes.
+        if (text != "Connecting microphone…") Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+    }
+
     // ---- Gestures: hold to talk, tap to latch, drag to move ----
     //
     // The mic doesn't start the moment a finger lands: that would make every drag start (and then tear down)
