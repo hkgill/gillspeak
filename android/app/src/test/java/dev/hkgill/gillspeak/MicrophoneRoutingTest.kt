@@ -138,4 +138,25 @@ class MicrophoneRoutingTest {
         assertEquals("Phone mic · headset route unavailable", microphoneStatus(phone, "headset route unavailable"))
         assertEquals("USB mic", microphoneStatus(usb, "headset route unavailable"))
     }
+
+    @Test fun ordinaryPhoneMicrophoneDoesNotInterruptBubbleDictation() {
+        assertFalse(shouldAnnounceBubbleMicrophone(microphoneStatus(phone, null)))
+    }
+
+    @Test fun bubbleStillAnnouncesEverySupportedHeadsetInput() {
+        for (input in listOf(wired, usb, sco.copy(input = true), ble.copy(input = true))) {
+            assertTrue(input.kind.label, shouldAnnounceBubbleMicrophone(microphoneStatus(input, null)))
+        }
+    }
+
+    @Test fun bubbleStillAnnouncesPhoneFallbackReasonsAndUnconfirmedRoutes() {
+        for (reason in listOf("headset routing permission denied", "headset connection timed out", "headset microphone profile unavailable")) {
+            assertTrue(reason, shouldAnnounceBubbleMicrophone(microphoneStatus(phone, reason)))
+        }
+        assertTrue(shouldAnnounceBubbleMicrophone(microphoneStatus(null, null)))
+    }
+
+    @Test fun bubbleSetupStatusRemainsQuiet() {
+        assertFalse(shouldAnnounceBubbleMicrophone("Connecting microphone…"))
+    }
 }

@@ -98,3 +98,7 @@ internal fun microphoneStatus(actual: MicDevice?, reason: String?): String = whe
     actual.kind == MicKind.PHONE && reason != null -> "Phone mic · $reason"
     else -> actual.kind.label
 }
+
+/** The bubble needs a toast for headset/fallback feedback; routine phone capture stays quiet. */
+internal fun shouldAnnounceBubbleMicrophone(status: String) =
+    status != "Connecting microphone…" && status != MicKind.PHONE.label

@@ -312,8 +312,8 @@ class BubbleService : AccessibilityService(), MicController.Ui {
     }
 
     override fun microphone(text: String) {
-        // The small pill cannot fit a route/fallback explanation. Announce it once when it changes.
-        if (text != "Connecting microphone…") Toast.makeText(this, text, Toast.LENGTH_LONG).show()
+        // Announce headset routes and fallback without interrupting ordinary phone dictation.
+        if (shouldAnnounceBubbleMicrophone(text)) Toast.makeText(this, text, Toast.LENGTH_LONG).show()
     }
 
     // ---- Gestures: hold to talk, tap to latch, drag to move ----
