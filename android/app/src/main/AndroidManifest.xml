@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Select a connected headset input for the lifetime of a recording. No Bluetooth discovery or pairing. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Only for the one-off model downloads, which go through Android's DownloadManager. Speech, commands and
          Mindful mode never use the network. -->
     <uses-permission android:name="android.permission.INTERNET" />

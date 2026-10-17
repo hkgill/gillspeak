@@ -20,6 +20,32 @@ Dictation for Android: hold the mic, talk, let go, and clean text lands in the f
 
 Tested on a Galaxy S25 (Android 17, One UI 9) and a Galaxy Z Fold5 (Android 16). Needs Android 11+.
 
+### Headset microphones
+
+The bubble, keyboard and side button share the same input selection: a connected wired headset microphone,
+then a USB microphone, then a Bluetooth communication headset. Among Bluetooth routes, the current communication
+device wins; otherwise LE Audio is preferred over classic HFP/SCO. Android 12+ uses the communication-device API,
+including LE headsets Android exposes as compatible; Android 11 uses SCO. Playback-only headphones (including
+A2DP or a USB adapter without an input) do not provide a microphone.
+
+Wait for the input label before speaking. Bluetooth setup runs in the background for up to five seconds. The
+label comes from the active recording input, rather than assuming the requested headset was selected. The keyboard
+and side-button screen show it; the floating bubble announces it in a toast. If setup fails, GillSpeak releases the
+headset route, tries the phone microphone, and explains the fallback. If no input can be confirmed, recording fails
+instead of claiming a headset is in use. A microphone change/disconnect during capture stops and discards that
+session; tap again to start with the available input. An incoming call or another communication app can prevent
+Bluetooth setup. Cancelling, closing the activation surface, and service shutdown release capture and routing.
+
+No pairing, Bluetooth scan, Nearby devices permission, network service or phone call is needed. The additional
+`MODIFY_AUDIO_SETTINGS` permission is Android's normal permission for the temporary communication route. Speech
+still uses the on-phone Parakeet/Gemma pipeline and the 16 kHz mono WAV format in memory.
+Classic SCO devices that reject 16 kHz capture are retried at 8 kHz and converted in memory for ASR.
+
+Hardware verification is still required for Android 11 SCO, current Android HFP, compatible BLE, wired TRRS and
+USB headsets. For each, check the reported input and a short dictation from all three activation surfaces, then
+cancel, disconnect, deny/revoke microphone access, and stop the service. Confirm ordinary media/call routing works
+afterwards. Unit tests use fake audio endpoints and never activate a real microphone.
+
 ## Install
 
 Download **[gillspeak-0.2.0.apk](https://github.com/hkgill/gillspeak/releases/download/android-v0.2.0/gillspeak-0.2.0.apk)** (experimental; Android 11+, arm64) on your phone, open it and allow installing from your browser or file manager. No account or API key is needed. See the [Android release notes](https://github.com/hkgill/gillspeak/releases/tag/android-v0.2.0) for the checksum. GitHub's **Latest** release currently points to the older Linux package; Android releases are prereleases.
@@ -48,6 +74,7 @@ Make gillspeak the phone's digital assistant (in the app, the **Side button** st
 - **Only these commands ever run.** The transcript is matched by rules in `Commands.kt` on the phone; a model never decides what to do. Texts and calls are never sent or dialled by gillspeak.
 - **Texting and calling by name** need the contacts permission; contacts are read on the phone when you ask and never stored.
 - Giving gillspeak the assistant role turns off "Hey Google" and Gemini's overlay; the Gemini app still opens from its icon.
+- **Dictating instead.** In the app, *Speech and understanding → Holding the side button → Dictates* makes the side button a hands-free bubble: the same screen listens, stops when you stop talking, and types what you said into the text field you were in. The bubble's accessibility service does the typing, so it needs to be on; without it the text is copied for you to paste.
 - The words appear after you stop talking: Parakeet doesn't stream.
 - The wave starts 40% of the way down the right edge, where the side button is on Galaxy S-series phones.
 
