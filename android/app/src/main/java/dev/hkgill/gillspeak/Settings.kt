@@ -19,6 +19,11 @@ class Settings(context: Context) {
         if (CLOUD_PREFS.any(prefs::contains)) prefs.edit().apply { CLOUD_PREFS.forEach(::remove) }.apply()
     }
 
+    /** Speech model used by the keyboard, bubble and side button. Existing installs keep Parakeet. */
+    var speechModel: SpeechModel
+        get() = SpeechModel.fromId(prefs.getString("speech_model", null))
+        set(v) = prefs.edit().putString("speech_model", v.id).apply()
+
     /** Use Gemma ([LocalLlm]) on this phone when its model is installed: commands the rules miss, and polish. */
     var localAi: Boolean
         get() = prefs.getBoolean("local_ai", true)

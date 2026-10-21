@@ -1,0 +1,10 @@
+cmake_minimum_required(VERSION 3.22.1)
+project(gillspeak_whistle LANGUAGES CXX)
+
+add_library(needle STATIC IMPORTED)
+set_target_properties(needle PROPERTIES IMPORTED_LOCATION "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/whistle/libneedle.a")
+add_library(gillspeak_whistle SHARED whistle_jni.cpp)
+target_compile_features(gillspeak_whistle PRIVATE cxx_std_17)
+target_include_directories(gillspeak_whistle PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../../libs/whistle")
+target_link_libraries(gillspeak_whistle PRIVATE needle)
+target_link_options(gillspeak_whistle PRIVATE "-Wl,-z,max-page-size=16384" "-Wl,--exclude-libs,ALL")

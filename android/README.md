@@ -13,7 +13,7 @@ Dictation for Android: hold the mic, talk, let go, and clean text lands in the f
 
 - **Mindful mode**: a time limit on YouTube Shorts, Instagram Reels and TikTok, shared between them (10 minutes by default, from 30 seconds to 30 minutes). At the limit a full-screen card covers the feed: "Leave" goes home and pauses the feeds for 30 minutes; "5 more minutes" is offered once, after a 10-second wait. A 5-minute break resets the time. It is a separate accessibility service, **gillspeak focus**, that only sees those three apps and only reads which screen is open, never what is on it. Turn it on from the app's **Mindful mode** page.
 
-- **Nothing leaves your phone.** There are no cloud options. Speech recognition is Parakeet TDT 0.6B v3 on the phone (the desktop model, through sherpa-onnx), followed by the desktop clean-up rules. The ~640 MB model is downloaded once by Android's DownloadManager (Wi-Fi only, resumable) and each file is SHA256-checked. English and 24 other European languages. The models' downloads are the only time the app uses the network.
+- **Nothing leaves your phone.** There are no cloud options. Choose the speech model in **Speech and understanding**: Parakeet TDT 0.6B v3 (the default, ~640 MB, English and 24 other European languages) or [Cactus Whistle](https://huggingface.co/Cactus-Compute/whistle) (16.9 MB, English, German, French, Spanish, Italian, Dutch and Polish). Each runs on the phone, followed by the same clean-up rules. Downloads use Android's DownloadManager (Wi-Fi only, resumable), and each file is SHA256-checked. You can keep both downloaded and switch with **Use Parakeet** or **Use Whistle**; the selection applies to the keyboard, bubble and voice commands. The models' downloads are the only time the app uses the network.
 - **Optional polish with Gemma 4 E2B** on the phone: the desktop's clean-up prompt, gate and validator, ported to Kotlin. If a polished text fails validation, the rules-cleaned transcript is inserted instead.
 - Keyboard: ⌨ goes back to your previous keyboard, ↶ removes the last dictation, and a failed request keeps the audio: tap the status line to retry.
 - The app's home screen shows what still needs setting up, then one row per section with its current value: speech and understanding, bubble, snooze, words and keys, and recent dictations (the last 30, kept only on the phone). Light and dark; on a foldable's inner screen the list and the open section sit side by side.
@@ -48,12 +48,12 @@ Make gillspeak the phone's digital assistant (in the app, the **Side button** st
 - **Only these commands ever run.** The transcript is matched by rules in `Commands.kt` on the phone; a model never decides what to do. Texts and calls are never sent or dialled by gillspeak.
 - **Texting and calling by name** need the contacts permission; contacts are read on the phone when you ask and never stored.
 - Giving gillspeak the assistant role turns off "Hey Google" and Gemini's overlay; the Gemini app still opens from its icon.
-- The words appear after you stop talking: Parakeet doesn't stream.
+- The words appear after you stop talking with either speech model.
 - The wave starts 40% of the way down the right edge, where the side button is on Galaxy S-series phones.
 
 ## Build and install
 
-Needs the Android SDK (platform 36) and a JDK 17–21. Android Studio's bundled JBR works; JDK 25 is too new for the Android Gradle plugin.
+Needs the Android SDK (platform 36), NDK 29.0.14206865, CMake 3.22.1 and a JDK 17–21. The Android Gradle plugin can install the native build tools when SDK licenses are accepted. Android Studio's bundled JBR works; JDK 25 is too new for the Android Gradle plugin.
 
 ```bash
 cd android
@@ -111,3 +111,9 @@ Without the `release.*` settings, `assembleRelease` produces an unsigned `app-re
   adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez download_model true
   adb logcat -s gillspeak
   ```
+
+### Whistle runtime
+
+The ARM64 C API is linked through a small JNI bridge. Gradle fetches its static library and header from an immutable Hugging Face revision and checks SHA256; the app downloads only the model weights. The native API runs locally without the Python telemetry wrapper, and telemetry opt-out variables are set before loading it. Apache 2.0 license text is bundled in the app's assets.
+
+Whistle's runtime has no unload API, so its model mapping and recognition state remain until the app process exits, including after switching models. Parakeet still releases its recognizer after five idle minutes. Model file size is not a measurement of runtime memory or recognition accuracy.
