@@ -76,12 +76,24 @@ data class Snapshot(val sessions: List<Session>, val running: Int, val waiting: 
 object Endpoint {
     const val PATH = "/v1/agents"
 
+    /** Null if it isn't an address, or if it's plain http to a host outside your own network: the token would cross the internet unencrypted. */
     fun url(typed: String): String? {
         val t = typed.trim()
         if (t.isEmpty() || t.any { it.isWhitespace() }) return null
         val full = if (t.startsWith("http://") || t.startsWith("https://")) t else "http://$t"
         val host = full.substringAfter("://").substringBefore('/').substringBefore(':')
-        return if (host.isEmpty()) null else full.trimEnd('/').removeSuffix(PATH) + PATH
+        if (host.isEmpty() || (full.startsWith("http://") && !isLocal(host))) return null
+        return full.trimEnd('/').removeSuffix(PATH) + PATH
+    }
+
+    /** Loopback, private, link-local or Tailscale (100.64/10) addresses, `.local` names and single-label names. */
+    fun isLocal(host: String): Boolean {
+        val h = host.lowercase()
+        if (h == "localhost" || h.endsWith(".local") || '.' !in h) return true
+        val p = h.split('.').map { it.toIntOrNull() ?: return false }
+        if (p.size != 4 || p.any { it !in 0..255 }) return false
+        return p[0] == 10 || p[0] == 127 || (p[0] == 172 && p[1] in 16..31) || (p[0] == 192 && p[1] == 168) ||
+            (p[0] == 169 && p[1] == 254) || (p[0] == 100 && p[1] in 64..127)
     }
 
     /** The token as `gillspeak agents token` prints it ("abcd-efgh-jkmn"), however it was typed. */

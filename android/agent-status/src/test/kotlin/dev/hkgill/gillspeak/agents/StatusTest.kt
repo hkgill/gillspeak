@@ -40,12 +40,23 @@ class StatusTest {
     }
 
     @Test fun endpointFromWhatWasTyped() {
-        assertEquals("http://192.0.2.20:8765/v1/agents", Endpoint.url(" 192.0.2.20:8765/ "))
+        assertEquals("http://192.168.0.20:8765/v1/agents", Endpoint.url(" 192.168.0.20:8765/ "))
         assertEquals("https://box.local/v1/agents", Endpoint.url("https://box.local/v1/agents"))
         assertNull(Endpoint.url(""))
         assertNull(Endpoint.url("http://"))
-        assertNull(Endpoint.url("192.0.2.20 8765"))
+        assertNull(Endpoint.url("192.168.0.20 8765"))
         assertEquals("abcdefghjkmn", Endpoint.token(" ABCD-efgh jkmn "))
+    }
+
+    @Test fun plainHttpOnlyInsideYourOwnNetwork() {
+        for (local in listOf("10.1.2.3", "172.16.0.9", "192.168.0.20", "127.0.0.1", "169.254.1.1", "100.100.1.2", "desk.local", "desk", "localhost")) {
+            assertEquals(local, "http://$local:8765/v1/agents", Endpoint.url("$local:8765"))
+        }
+        for (remote in listOf("example.com", "172.32.0.1", "192.0.2.20", "100.128.0.1", "999.1.1.1")) {
+            assertNull(remote, Endpoint.url("$remote:8765"))
+            assertNull(remote, Endpoint.url("http://$remote:8765"))
+        }
+        assertEquals("https://example.com:8765/v1/agents", Endpoint.url("https://example.com:8765"))
     }
 
     @Test fun agentReadings() {

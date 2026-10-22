@@ -44,6 +44,7 @@ object StatusRepository {
     fun address(c: Context) = prefs(c).getString("address", "").orEmpty()
     fun token(c: Context) = prefs(c).getString("token", "").orEmpty()
 
+    /** Call on [executor], like [current]: a fetch still running for the old address could otherwise land after it. */
     fun save(c: Context, address: String, token: String) {
         prefs(c).edit().clear().putString("address", address.trim()).putString("token", Endpoint.token(token)).commit()
     }

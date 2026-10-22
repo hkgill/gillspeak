@@ -203,7 +203,7 @@ def apply_codex(state: dict[str, Any], payload: dict[str, Any], now: float) -> N
     s = _session(state, "codex", str(sid), payload.get("cwd"), now)
     if kind == "agent-turn-complete":
         _finish(state, s, now)
-        s["activity"] = _short(payload.get("last-assistant-message")) or "Finished"
+        s["activity"] = "Finished"  # never the answer itself: it would leave the computer
     elif "approval" in kind:
         s["state"] = "waiting"
         s["activity"] = "Needs approval"
@@ -302,10 +302,9 @@ def lan_address() -> str:
     return "127.0.0.1"
 
 
-def make_handler(token: str):
+def make_handler(token_source=get_token):
+    """Checks every request against the token on disk, so `gillspeak agents token --new` locks the old one out at once."""
     from http.server import BaseHTTPRequestHandler  # not at the top: the hooks never need it
-
-    expected = f"Bearer {token}".encode()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "gillspeak-agents"
@@ -317,7 +316,7 @@ def make_handler(token: str):
                 return
             given = self.headers.get("Authorization", "")
             given = "Bearer " + normalize_token(given[7:]) if given.startswith("Bearer ") else given
-            if not hmac.compare_digest(given.encode(), expected):
+            if not hmac.compare_digest(given.encode(), f"Bearer {token_source()}".encode()):
                 self._send(401, {"error": "wrong or missing token"})
                 return
             self._send(200, summary(load_state(), time.time()))
@@ -340,8 +339,8 @@ def make_handler(token: str):
 def serve(host: str, port: int) -> int:
     from http.server import ThreadingHTTPServer
 
-    token = get_token()
-    server = ThreadingHTTPServer((host, port), make_handler(token))
+    get_token()  # create it now, so `gillspeak agents token` shows the one the server checks
+    server = ThreadingHTTPServer((host, port), make_handler())
     address = lan_address() if host in ("", "0.0.0.0") else host
     print(f"Serving agent status on http://{address}:{server.server_port}  (Ctrl+C to stop)")
     print("On the watch: open gillspeak agents and enter this address under Computer, with the token from `gillspeak agents token`.")

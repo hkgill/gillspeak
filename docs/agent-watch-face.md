@@ -89,7 +89,7 @@ Only the summary, only to the watch, only on your network:
 - a short description of the current tool call (for example "Editing Face.kt"), and the **command waiting for approval**
 - how many tasks finished today
 
-Your prompts, the agents' answers, file contents and session ids are not sent. The summary travels as **plain HTTP**: anyone on the same Wi-Fi who can watch the traffic could read it and the token. The server only answers with the token, only reads, and changes nothing on your computer. Use it on your home network, not on public Wi-Fi; `gillspeak agents token --new` replaces the token.
+Your prompts, the agents' answers, file contents and session ids are not sent. The summary travels as **plain HTTP**: anyone on the same Wi-Fi who can watch the traffic could read it and the token. The server only answers with the token, only reads, and changes nothing on your computer. Use it on your home network, not on public Wi-Fi; `gillspeak agents token --new` replaces the token, and the server stops accepting the old one straight away. The watch refuses plain HTTP to anything outside your own network (private addresses, `.local` names and Tailscale's 100.64/10); anything further away needs `https://`.
 
 ## Limits
 

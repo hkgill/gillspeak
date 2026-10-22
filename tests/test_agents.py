@@ -101,7 +101,8 @@ def test_codex_turns_and_approvals():
     agents.apply_codex(st, {"type": "agent-turn-complete", "thread-id": "t1", "cwd": "/src/app",
                             "last-assistant-message": "Added the watch face.\nAll tests pass."}, NOW)
     s = only(st)
-    assert (s["agent"], s["project"], s["state"], s["activity"]) == ("codex", "app", "done", "Added the watch face. All tests pass.")
+    assert (s["agent"], s["project"], s["state"], s["activity"]) == ("codex", "app", "done", "Finished")
+    assert "watch face" not in json.dumps(agents.summary(st, NOW))  # the answer never leaves the computer
     agents.apply_codex(st, {"type": "approval-requested", "thread-id": "t1", "command": ["npm", "test"]}, NOW)
     assert (s["state"], s["detail"]) == ("waiting", "npm test")
 
@@ -169,7 +170,7 @@ def test_token_is_created_once_private_and_typeable():
 @pytest.fixture
 def server():
     token = agents.get_token()
-    srv = ThreadingHTTPServer(("127.0.0.1", 0), agents.make_handler(token))
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), agents.make_handler())
     threading.Thread(target=srv.serve_forever, daemon=True).start()
     yield f"http://127.0.0.1:{srv.server_port}", token
     srv.shutdown()
@@ -194,6 +195,13 @@ def test_server_needs_the_token(server):
     assert code == 200
     assert body["agents"][0]["project"] == "proj"
     assert get(base + "/other", token)[0] == 404
+
+
+def test_new_token_locks_the_old_one_out_without_a_restart(server):
+    base, old = server
+    new = agents.get_token(renew=True)
+    assert get(base + "/v1/agents", old)[0] == 401
+    assert get(base + "/v1/agents", new)[0] == 200
 
 
 def test_cli_agents_commands(capsys):

@@ -67,12 +67,19 @@ class AgentsActivity : Activity() {
     }
 
     private fun save() {
-        if (Endpoint.url(address.text.toString()) == null) {
-            status.text = "That address doesn't look right"
+        val typedAddress = address.text.toString()
+        val typedToken = token.text.toString()
+        if (Endpoint.url(typedAddress) == null) {
+            status.text = "Use the address `gillspeak agents serve` shows (plain http only on your own network)"
             return
         }
-        StatusRepository.save(this, address.text.toString(), token.text.toString())
-        refresh(0)
+        status.text = "Updating…"
+        val app = applicationContext
+        StatusRepository.executor.execute {
+            StatusRepository.save(app, typedAddress, typedToken)
+            val s = StatusRepository.current(app, 0)
+            runOnUiThread { if (!isDestroyed) show(s) }
+        }
     }
 
     private fun refresh(maxAgeMs: Long) {
