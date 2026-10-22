@@ -57,6 +57,10 @@ class StatusTest {
             assertNull(remote, Endpoint.url("http://$remote:8765"))
         }
         assertEquals("https://example.com:8765/v1/agents", Endpoint.url("https://example.com:8765"))
+        // A user name that looks like a local host doesn't make the real host local.
+        assertNull(Endpoint.url("http://localhost:ignored@example.com:8765"))
+        assertNull(Endpoint.url("desk.local@example.com:8765"))
+        assertNull(Endpoint.url("desk:8765/other"))
     }
 
     @Test fun agentReadings() {

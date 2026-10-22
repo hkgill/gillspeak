@@ -1,6 +1,8 @@
 package dev.hkgill.gillspeak.agents
 
 import org.json.JSONObject
+import java.net.URI
+import java.net.URISyntaxException
 
 /** One coding-agent session, as `gillspeak agents serve` reports it (schema v1, see docs/agent-watch-face.md). */
 data class Session(
@@ -80,10 +82,18 @@ object Endpoint {
     fun url(typed: String): String? {
         val t = typed.trim()
         if (t.isEmpty() || t.any { it.isWhitespace() }) return null
-        val full = if (t.startsWith("http://") || t.startsWith("https://")) t else "http://$t"
-        val host = full.substringAfter("://").substringBefore('/').substringBefore(':')
-        if (host.isEmpty() || (full.startsWith("http://") && !isLocal(host))) return null
-        return full.trimEnd('/').removeSuffix(PATH) + PATH
+        val uri = try {
+            URI(if (t.startsWith("http://") || t.startsWith("https://")) t else "http://$t")
+        } catch (e: URISyntaxException) {
+            return null
+        }
+        // The host the request really goes to: "localhost:x@example.com" is a user name and example.com.
+        val host = uri.host ?: return null
+        if (uri.rawUserInfo != null || uri.rawQuery != null || uri.rawFragment != null) return null
+        val path = uri.rawPath.orEmpty().trimEnd('/')
+        if (path.isNotEmpty() && path != PATH) return null
+        if (uri.scheme == "http" && !isLocal(host)) return null
+        return "${uri.scheme}://$host${if (uri.port == -1) "" else ":${uri.port}"}$PATH"
     }
 
     /** Loopback, private, link-local or Tailscale (100.64/10) addresses, `.local` names and single-label names. */
