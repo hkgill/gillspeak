@@ -1,0 +1,13 @@
+[Unit]
+Description=gillspeak agent status for the watch face
+Documentation=https://github.com/hkgill/gillspeak/blob/main/docs/agent-watch-face.md
+After=network-online.target
+
+[Service]
+# Serves ~/.local/share/gillspeak/agents.json (written by the Claude Code and Codex hooks) to the watch, on the
+# local network, to whoever has the token from `gillspeak agents token`.
+ExecStart=%h/.local/bin/gillspeak agents serve
+Restart=on-failure
+
+[Install]
+WantedBy=default.target

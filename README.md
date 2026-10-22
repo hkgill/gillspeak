@@ -182,6 +182,10 @@ Everything on the default path runs on your computer. The bracketed step only ru
 - **Injector** (`inject.py`) passes text to `wl-copy` through stdin (never argv), sends the paste chord with ydotool keycodes, then puts your previous clipboard back, unless you copied something else in the meantime. If ydotool is down, the text stays on the clipboard and a notification tells you to press Ctrl+V.
 - **History** (`~/.local/share/gillspeak/history.db`) keeps text for `history.keep_days` (0 = metrics only). Audio is never written to disk unless `debug.save_audio = true`.
 
+### ⌚ Agent watch face (preview)
+
+A Wear OS watch face for a Galaxy Watch that shows what Claude Code and Codex are doing on this computer: an arc per agent filling up through its plan, and an amber ring when one needs your answer. Hooks record each agent's progress, `gillspeak agents serve` shares a summary on your local network (with a token), and a small watch app hands it to the face. It hasn't been tried on a watch yet. Setup and what it shares: [docs/agent-watch-face.md](docs/agent-watch-face.md).
+
 ## Develop
 
 Android: see [Build and install](android/README.md#build-and-install). Desktop:

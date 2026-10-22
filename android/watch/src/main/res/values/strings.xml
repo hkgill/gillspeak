@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">gillspeak agents</string>
+    <string name="complication_claude">Claude Code progress</string>
+    <string name="complication_codex">Codex progress</string>
+    <string name="complication_attention">Agents needing you</string>
+    <string name="complication_done">Agent tasks done today</string>
+</resources>

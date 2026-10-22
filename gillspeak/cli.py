@@ -137,6 +137,24 @@ def cmd_eval(a: argparse.Namespace) -> int:
     return run_eval(a.file, limit=a.limit, delay=a.delay, verbose=a.verbose, provider=a.provider)
 
 
+def cmd_agents(a: argparse.Namespace) -> int:
+    from . import agents
+
+    if a.action == "claude-hook":
+        return agents.run_hook("claude", sys.stdin.read())
+    if a.action == "codex-notify":
+        return agents.run_hook("codex", a.payload or "")
+    if a.action == "serve":
+        return agents.serve(a.host, a.port)
+    if a.action == "token":
+        print(agents.format_token(agents.get_token(renew=a.new)))
+        return 0
+    if a.action == "hooks":
+        print(agents.hook_config(), end="")
+        return 0
+    return agents.print_status()
+
+
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="gillspeak", description="Local dictation with LLM clean-up.")
     sub = p.add_subparsers(dest="command", required=True)
@@ -188,6 +206,20 @@ def build_parser() -> argparse.ArgumentParser:
     e.add_argument("-v", "--verbose", action="store_true")
     e.add_argument("--provider", choices=["gemini", "proxy"], help="evaluate this provider for this run only (llm.provider is none by default)")
     e.set_defaults(func=cmd_eval)
+
+    ag = sub.add_parser("agents", help="coding-agent status for the watch face (Claude Code, Codex)")
+    ag_sub = ag.add_subparsers(dest="action")
+    ag_sub.add_parser("status", help="show the sessions the watch would see")
+    ag_sub.add_parser("claude-hook", help="Claude Code hook: reads the event JSON from stdin")
+    cn = ag_sub.add_parser("codex-notify", help="Codex notify program: takes the event JSON as an argument")
+    cn.add_argument("payload", nargs="?")
+    sv = ag_sub.add_parser("serve", help="share the status with the watch over the local network")
+    sv.add_argument("--host", default="0.0.0.0", help="address to listen on (default: every interface)")
+    sv.add_argument("--port", type=int, default=8765)
+    tk = ag_sub.add_parser("token", help="print the token the watch needs")
+    tk.add_argument("--new", action="store_true", help="replace it (the watch must be updated)")
+    ag_sub.add_parser("hooks", help="print the Claude Code and Codex settings that report to gillspeak")
+    ag.set_defaults(func=cmd_agents, action="status")
     return p
 
 
