@@ -63,6 +63,17 @@ class StatusTest {
         assertNull(Endpoint.url("desk:8765/other"))
     }
 
+    @Test fun ipv6IsLocalOnlyInLocalRanges() {
+        for (local in listOf("[::1]", "[fe80::1]", "[fd7a:115c:a1e0::1]", "[fc00::5]", "[::ffff:192.168.0.20]")) {
+            assertEquals(local, "http://$local:8765/v1/agents", Endpoint.url("http://$local:8765"))
+        }
+        // No dot, but not a single-label name: a public IPv6 address must not get the token over plain http.
+        for (remote in listOf("[2001:db8::1]", "[::ffff:203.0.113.7]", "[fe00::1]", "[nothex::1]")) {
+            assertNull(remote, Endpoint.url("http://$remote:8765"))
+        }
+        assertEquals("https://[2001:db8::1]:8765/v1/agents", Endpoint.url("https://[2001:db8::1]:8765"))
+    }
+
     @Test fun agentReadings() {
         val s = Snapshot.parse(sample)
         val claude = Face.agent(s, Agent.CLAUDE, "Off")

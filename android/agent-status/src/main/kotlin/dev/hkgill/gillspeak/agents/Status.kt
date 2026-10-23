@@ -1,6 +1,7 @@
 package dev.hkgill.gillspeak.agents
 
 import org.json.JSONObject
+import java.net.InetAddress
 import java.net.URI
 import java.net.URISyntaxException
 
@@ -96,14 +97,35 @@ object Endpoint {
         return "${uri.scheme}://$host${if (uri.port == -1) "" else ":${uri.port}"}$PATH"
     }
 
-    /** Loopback, private, link-local or Tailscale (100.64/10) addresses, `.local` names and single-label names. */
+    /**
+     * Loopback, private, link-local or Tailscale (100.64/10) addresses, IPv6 loopback, link-local (fe80::/10) and
+     * unique local (fc00::/7, Tailscale's included) addresses, `.local` names and single-label names.
+     */
     fun isLocal(host: String): Boolean {
         val h = host.lowercase()
+        // An IPv6 literal ("[2001:db8::1]" from URI.host) has no dot either, so it must not pass as a single label.
+        if (h.startsWith('[') || ':' in h) return isLocalIpv6(h.removePrefix("[").removeSuffix("]"))
         if (h == "localhost" || h.endsWith(".local") || '.' !in h) return true
         val p = h.split('.').map { it.toIntOrNull() ?: return false }
-        if (p.size != 4 || p.any { it !in 0..255 }) return false
-        return p[0] == 10 || p[0] == 127 || (p[0] == 172 && p[1] in 16..31) || (p[0] == 192 && p[1] == 168) ||
+        return p.size == 4 && p.all { it in 0..255 } && isLocalIpv4(p)
+    }
+
+    private fun isLocalIpv4(p: List<Int>) =
+        p[0] == 10 || p[0] == 127 || (p[0] == 172 && p[1] in 16..31) || (p[0] == 192 && p[1] == 168) ||
             (p[0] == 169 && p[1] == 254) || (p[0] == 100 && p[1] in 64..127)
+
+    private fun isLocalIpv6(literal: String): Boolean {
+        if (literal.isEmpty() || literal.any { !(it.isLetterOrDigit() || it == ':' || it == '.' || it == '%') }) return false
+        // A literal with a colon is parsed, never looked up in DNS.
+        val raw = try {
+            InetAddress.getByName(literal).address
+        } catch (e: Exception) {
+            return false
+        }
+        val bytes = raw.map { it.toInt() and 0xff }
+        if (bytes.size == 4) return isLocalIpv4(bytes) // "::ffff:a.b.c.d" comes back as IPv4
+        val loopback = bytes.dropLast(1).all { it == 0 } && bytes.last() == 1
+        return loopback || (bytes[0] == 0xfe && (bytes[1] and 0xc0) == 0x80) || (bytes[0] and 0xfe) == 0xfc
     }
 
     /** The token as `gillspeak agents token` prints it ("abcd-efgh-jkmn"), however it was typed. */
