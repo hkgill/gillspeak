@@ -230,7 +230,7 @@ class MainActivity : Activity() {
             addView(chipTarget)
         })
         col.addView(text(
-            "Hold the bubble to talk. Hold the side button to ask. Nothing leaves your phone.",
+            "Hold the bubble to talk. Hold the side button to ${if (settings.sideButtonDictates) "dictate" else "ask"}. Nothing leaves your phone.",
             16f, t.ink2,
         ).apply { setPadding(dp(4), 0, dp(4), 0); setLineSpacing(0f, 1.15f) })
 
@@ -501,6 +501,22 @@ class MainActivity : Activity() {
                 settings.localPolish, ready,
             ) { settings.localPolish = it })
         })
+
+        val dictates = settings.sideButtonDictates
+        col.addView(section("Holding the side button", top = 14))
+        col.addView(LinearLayout(this).apply {
+            background = rounded(t.field, dp(999).toFloat())
+            setPadding(dp(4), dp(4), dp(4), dp(4))
+            addView(segment("Gives a command", !dictates) { settings.sideButtonDictates = false; render() }, LinearLayout.LayoutParams(0, dp(48), 1f))
+            addView(segment("Dictates", dictates) { settings.sideButtonDictates = true; render() },
+                LinearLayout.LayoutParams(0, dp(48), 1f).apply { marginStart = dp(4) })
+        })
+        col.addView(note(
+            if (dictates) "Types what you say into the text field you were in, like tapping the bubble, and stops by itself " +
+                "when you stop talking. Needs the bubble turned on; without it the text is copied for you to paste."
+            else "Does what you say, like the examples below. It stops by itself when you stop talking."
+        ))
+        if (dictates) return col
 
         col.addView(section("Things to say to the side button", top = 14))
         col.addView(card(dp(16), dp(16)).apply {

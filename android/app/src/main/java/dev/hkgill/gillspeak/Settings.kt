@@ -37,6 +37,14 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("local_polish", false)
         set(v) = prefs.edit().putBoolean("local_polish", v).apply()
 
+    /**
+     * What holding the side button does: false gives a voice command ([ListenActivity]'s default), true dictates into
+     * the text field that was open, like a tap on the bubble but stopping by itself when the person stops talking.
+     */
+    var sideButtonDictates: Boolean
+        get() = prefs.getBoolean("side_button_dictates", false)
+        set(v) = prefs.edit().putBoolean("side_button_dictates", v).apply()
+
     /** Debug builds: log rules versus Gemma for every voice command (files/compare.log). Set over adb only. */
     var compareLog: Boolean
         get() = prefs.getBoolean("compare_log", false)
