@@ -28,6 +28,7 @@ class GillspeakIme : InputMethodService(), MicController.Ui {
     private val main = Handler(Looper.getMainLooper())
     private var lastInserted: String? = null
     private var inputSession = 0 // changes whenever the keyboard moves to another field
+    private var microphoneRoute = ""
 
     private lateinit var statusView: TextView
     private lateinit var micKey: LinearLayout
@@ -201,13 +202,18 @@ class GillspeakIme : InputMethodService(), MicController.Ui {
         }
         micTitle.text = title
         micTitle.setTextColor(if (state == MicController.State.RECORDING || state == MicController.State.LATCHED) 0xFFFF8A8E.toInt() else Brand.PAPER)
-        micSub.text = sub
+        micSub.text = if (mic.isActive && state != MicController.State.WORKING) microphoneRoute.ifEmpty { sub } else sub
         micMark.visibility = if (state == MicController.State.IDLE) View.VISIBLE else View.GONE
         micKey.background = rounded(colors.forState(state), dp(20).toFloat())
     }
 
     override fun status(text: String, opensApp: Boolean) {
         if (::statusView.isInitialized) statusView.text = text
+    }
+
+    override fun microphone(text: String) {
+        microphoneRoute = text
+        if (::micSub.isInitialized) micSub.text = text
     }
 
     private fun showIdleHint() {

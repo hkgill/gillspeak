@@ -25,6 +25,9 @@ class MicController(private val context: Context, private val ui: Ui) {
         fun status(text: String, opensApp: Boolean = false)
         fun insert(text: String)
 
+        /** Confirmed input (or a setup/fallback explanation), distinct from the recording timer. */
+        fun microphone(text: String) {}
+
         /** Identifies the text field in focus (compared with ==), or null when there is none. */
         fun field(): Any?
 
@@ -33,7 +36,7 @@ class MicController(private val context: Context, private val ui: Ui) {
     }
 
     val settings = Settings(context)
-    private val recorder = Recorder()
+    private val recorder = Recorder(context)
     private val worker = Executors.newSingleThreadExecutor()
     private val main = Handler(Looper.getMainLooper())
 
@@ -46,11 +49,13 @@ class MicController(private val context: Context, private val ui: Ui) {
     private var failedAudio: ByteArray? = null
     private var pendingText: String? = null // finished, but the field changed before it could be inserted
     private var lastWarm = 0L
+    private var lastRoute = ""
 
     /** A tap now retries a failed request, or inserts text that couldn't be delivered. */
     val canRetry get() = (failedAudio != null || pendingText != null) && state == State.IDLE
     val level get() = recorder.level
     val heard get() = recorder.heard
+    val preparing get() = recorder.preparing
     val isActive get() = state != State.IDLE
 
     /** Finger down on the mic. Returns true when something started or finished (worth a haptic tick). */
@@ -93,6 +98,7 @@ class MicController(private val context: Context, private val ui: Ui) {
     fun cancel(message: String? = "Cancelled") {
         if (state != State.RECORDING && state != State.LATCHED) return
         Log.i(Dictation.TAG, "recording cancelled, peak=${recorder.peak}")
+        main.removeCallbacks(ticker)
         recorder.cancel()
         set(State.IDLE)
         message?.let { ui.status(it) }
@@ -134,7 +140,9 @@ class MicController(private val context: Context, private val ui: Ui) {
 
     fun shutdown() {
         job++ // a result still in flight must not be delivered anywhere
+        main.removeCallbacks(ticker)
         recorder.cancel()
+        state = State.IDLE
         worker.shutdownNow()
     }
 
@@ -165,8 +173,10 @@ class MicController(private val context: Context, private val ui: Ui) {
         pendingText = null
         session = ui.field()
         recordingSince = SystemClock.uptimeMillis()
+        lastRoute = ""
         set(State.RECORDING)
         tick()
+        if (state != State.RECORDING) return false // asynchronous capture can fail before the first UI tick
         warm() // the local model loads while the user speaks, if it isn't loaded already
         return true
     }
@@ -177,20 +187,38 @@ class MicController(private val context: Context, private val ui: Ui) {
             finish()
             return
         }
-        val s = (SystemClock.uptimeMillis() - recordingSince) / 1000
-        ui.status("%d:%02d".format(s / 60, s % 60))
-        main.postDelayed(::tick, 250)
+        val route = recorder.routeStatus
+        if (route != lastRoute) {
+            lastRoute = route
+            Log.i(Dictation.TAG, "microphone route: $route") // generic type/reason only, no device identity
+            ui.microphone(route)
+        }
+        if (recorder.preparing) {
+            ui.status("0:00 · Connecting microphone…")
+        } else {
+            val s = (SystemClock.uptimeMillis() - recorder.startedAt.coerceAtLeast(recordingSince)) / 1000
+            ui.status("%d:%02d".format(s / 60, s % 60))
+        }
+        main.postDelayed(ticker, 250)
     }
 
+    private val ticker = Runnable { tick() }
+
     private fun finish() {
+        main.removeCallbacks(ticker)
+        val wav = recorder.stop()
         val peak = recorder.peak
         val blocked = recorder.blocked
         val error = recorder.error
-        val wav = recorder.stop()
+        val failure = recorder.failure
         val ms = Recorder.durationMs(wav)
         Log.i(Dictation.TAG, "recording stopped: $ms ms, peak=$peak${error?.let { ", microphone error $it" }.orEmpty()}")
-        if (error != null) settings.log("Microphone error $error after $ms ms; using what was recorded")
+        if (error != null) settings.log("Microphone error $error after $ms ms")
         when {
+            failure != null -> {
+                set(State.IDLE)
+                ui.status(failure)
+            }
             ms < MIN_MS -> {
                 set(State.IDLE)
                 ui.status(if (error != null) "The microphone stopped working" else "Too short. Hold the mic while you speak")
