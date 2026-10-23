@@ -148,3 +148,5 @@ Whistle's runtime has no unload API, so its model mapping and recognition state 
 ## Watch
 
 `watch/` (Wear OS app) and `watchface/` (Watch Face Format, no code) are the agent watch face; `agent-status/` is their shared plain-Kotlin logic, tested with `./gradlew :agent-status:test`. They don't touch the phone app. See [docs/agent-watch-face.md](../docs/agent-watch-face.md).
+
+`whistle-probe/` is a Wear OS test app that checks whether a watch can run Whistle itself and how fast; it reuses the phone app's JNI bridge. See [docs/whistle-on-watch.md](../docs/whistle-on-watch.md).

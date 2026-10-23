@@ -10,3 +10,4 @@ app/libs/
 
 # Native build intermediates
 app/.cxx/
+whistle-probe/.cxx/

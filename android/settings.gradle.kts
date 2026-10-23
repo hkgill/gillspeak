@@ -17,3 +17,4 @@ include(":app")
 include(":agent-status") // what the watch reads from `gillspeak agents serve`, as plain Kotlin
 include(":watch") // Wear OS app: fetches the agent status and serves it as complications
 include(":watchface") // the agent watch face (Watch Face Format, no code)
+include(":whistle-probe") // Wear OS test app: can the watch run Whistle itself? (docs/whistle-on-watch.md)
