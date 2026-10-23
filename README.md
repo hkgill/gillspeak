@@ -8,7 +8,15 @@
 ![Local AI](https://img.shields.io/badge/AI-100%25%20on--device-4A6600.svg)
 ![Also on Linux](https://img.shields.io/badge/also-Fedora%20GNOME%20Wayland-294172.svg)
 
-**Talk to your Android phone. Hold the bubble to dictate into any app, or hold the side button to give a command. It all runs on the phone.**
+**AI models run locally on your Android phone. A free, open-source alternative to Wispr Flow for offline voice typing into any app and voice commands. No account needed. Also on Linux.**
+
+**[📱 Download Android APK — v0.2.0 (experimental)](https://github.com/hkgill/gillspeak/releases/download/android-v0.2.0/gillspeak-0.2.0.apk)**
+
+Android 11+ · arm64 phones · [Release notes](https://github.com/hkgill/gillspeak/releases/tag/android-v0.2.0) · [Install and setup](#-get-it-on-android)
+
+Also available: [🐧 Linux desktop installation](#-linux-desktop).
+
+The published Android 0.2.0 APK is local-only by default; its optional Gemini/Groq modes send audio if enabled. The feature descriptions below follow the current source on `main`, which has removed those cloud options.
 
 > 🔒 **Nothing leaves your phone.** Speech recognition (Parakeet) and understanding (Gemma 4 E2B) run on the device. There's no account and no server, and it works with Wi-Fi off. The app has no cloud options at all: the network is used only to download the models once.
 
@@ -28,7 +36,9 @@
 
 ## 📱 Get it on Android
 
-Download `gillspeak-*.apk` from the [Releases page](https://github.com/hkgill/gillspeak/releases) on your phone and open it. The app's **Setup** card walks you through the rest: the microphone, the floating bubble, the side button and (optionally) the keyboard and contacts. Then download Parakeet (640 MB, once, over Wi-Fi) and, if you want commands understood in your own words, Gemma (2.6 GB).
+Download **[gillspeak-0.2.0.apk](https://github.com/hkgill/gillspeak/releases/download/android-v0.2.0/gillspeak-0.2.0.apk)** (experimental; Android 11+, arm64) on your phone and open it. See the [Android release notes](https://github.com/hkgill/gillspeak/releases/tag/android-v0.2.0) for installation details and the checksum. The app's **Setup** card walks you through the rest: the microphone, the floating bubble, the side button and (optionally) the keyboard and contacts. Then download Parakeet (640 MB, once, over Wi-Fi) and, if you want commands understood in your own words, Gemma (2.6 GB).
+
+GitHub's **Latest** release currently points to the older Linux package because Android releases are marked as prereleases. Use the Android APK link above, or find the **Android** entries on the [Releases page](https://github.com/hkgill/gillspeak/releases).
 
 Building it yourself, voice commands and how each piece works: [`android/README.md`](android/README.md). Plans, including stopping endless short-video scrolling: [ROADMAP.md](ROADMAP.md).
 
@@ -171,6 +181,10 @@ Everything on the default path runs on your computer. The bracketed step only ru
 - **Validator** (`validate.py`) rejects empty output, output that is too short or too long, preambles ("Sure, here's…"), and output where a number from the input has gone missing.
 - **Injector** (`inject.py`) passes text to `wl-copy` through stdin (never argv), sends the paste chord with ydotool keycodes, then puts your previous clipboard back, unless you copied something else in the meantime. If ydotool is down, the text stays on the clipboard and a notification tells you to press Ctrl+V.
 - **History** (`~/.local/share/gillspeak/history.db`) keeps text for `history.keep_days` (0 = metrics only). Audio is never written to disk unless `debug.save_audio = true`.
+
+### ⌚ Agent watch face (preview)
+
+A Wear OS watch face for a Galaxy Watch that shows what Claude Code and Codex are doing on this computer: an arc per agent filling up through its plan, and an amber ring when one needs your answer. Hooks record each agent's progress, `gillspeak agents serve` shares a summary on your local network (with a token), and a small watch app hands it to the face. It hasn't been tried on a watch yet. Setup and what it shares: [docs/agent-watch-face.md](docs/agent-watch-face.md).
 
 ## Develop
 

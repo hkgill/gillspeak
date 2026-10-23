@@ -1,0 +1,387 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  gillspeak agents: Direction A ("Rings") from the Claude Design canvas, in Watch Face Format 1.
+
+  Claude Code's progress is the orange arc on the left, Codex's the blue arc on the right; both fill upwards, with a
+  knob at the head. Below the time, a chip per agent and the tasks finished today. When an agent waits for an answer,
+  an amber ring goes round the face and a "Needs you" pill sits at the bottom. The data comes from the
+  gillspeak agents watch app (android/watch) as complications; the face itself has no code.
+
+  Geometry is on a 450 x 450 canvas: centre 225, gauge arcs on a 398 diameter (radius 199), angles clockwise from 12.
+  Progress p = (value - min) / (max - min), clamped to 0..1.
+-->
+<WatchFace width="450" height="450" clipShape="CIRCLE">
+    <Metadata key="CLOCK_TYPE" value="DIGITAL" />
+    <Metadata key="PREVIEW_TIME" value="07:47:00" />
+
+    <Scene backgroundColor="#FF000000">
+
+        <!-- Battery: ten ticks at 12 o'clock, lit up to the charge. Hidden in ambient. -->
+        <Group name="battery" x="0" y="0" width="450" height="450">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <PartDraw x="0" y="0" width="450" height="450">
+                <Arc centerX="225" centerY="225" width="398" height="398" startAngle="-20" endAngle="20">
+                    <Stroke color="#FF2A2C33" thickness="16" dashIntervals="3.5 8.5" />
+                </Arc>
+                <Arc centerX="225" centerY="225" width="398" height="398" startAngle="-20" endAngle="-20">
+                    <Stroke color="#FFC9CCD6" thickness="16" dashIntervals="3.5 8.5" />
+                    <Transform target="endAngle" value="-20 + 40 * clamp([BATTERY_PERCENT], 0, 100) / 100" />
+                </Arc>
+            </PartDraw>
+        </Group>
+
+        <!-- Date -->
+        <PartText x="70" y="92" width="148" height="32" name="dayOfWeek">
+            <Variant mode="AMBIENT" target="alpha" value="150" />
+            <Text align="END">
+                <Font family="SYNC_TO_DEVICE" size="24" weight="BOLD" color="#FFECEBFF">
+                    <Upper><Template>%s<Parameter expression="[DAY_OF_WEEK_S]" /></Template></Upper>
+                </Font>
+            </Text>
+        </PartText>
+        <PartText x="232" y="92" width="148" height="32" name="dayOfMonth">
+            <Variant mode="AMBIENT" target="alpha" value="150" />
+            <Text align="START">
+                <Font family="SYNC_TO_DEVICE" size="24" weight="MEDIUM" color="#FF9AA0AE">
+                    <Template>%d<Parameter expression="[DAY]" /></Template>
+                </Font>
+            </Text>
+        </PartText>
+
+        <!-- Time: semi-bold when awake, light and dimmer in ambient -->
+        <DigitalClock x="25" y="124" width="400" height="112" alpha="255">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <TimeText x="0" y="0" width="400" height="112" format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER">
+                <Font family="SYNC_TO_DEVICE" size="100" weight="SEMI_BOLD" color="#FFECEBFF" />
+            </TimeText>
+        </DigitalClock>
+        <DigitalClock x="25" y="124" width="400" height="112" alpha="0">
+            <Variant mode="AMBIENT" target="alpha" value="255" />
+            <TimeText x="0" y="0" width="400" height="112" format="hh:mm" hourFormat="SYNC_TO_DEVICE" align="CENTER">
+                <Font family="SYNC_TO_DEVICE" size="100" weight="LIGHT" color="#FFA9A8BF" />
+            </TimeText>
+        </DigitalClock>
+
+        <!-- Left arc: Claude Code, 205° (bottom) up to 335°. -->
+        <ComplicationSlot slotId="0" name="claudeArc" displayName="Left arc" x="0" y="0" width="450" height="450"
+            supportedTypes="RANGED_VALUE" isCustomizable="TRUE">
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
+                primaryProvider="dev.hkgill.gillspeak.watch/dev.hkgill.gillspeak.watch.ClaudeComplicationService"
+                primaryProviderType="RANGED_VALUE" />
+            <BoundingArc centerX="225" centerY="225" width="398" height="398" thickness="40" isRoundEdge="TRUE"
+                startAngle="205" endAngle="335" />
+            <Complication type="RANGED_VALUE">
+                <Group name="claudeArcAwake" x="0" y="0" width="450" height="450">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <PartDraw x="0" y="0" width="450" height="450">
+                        <Arc centerX="225" centerY="225" width="398" height="398" startAngle="205" endAngle="335">
+                            <Stroke color="#FF3A2414" thickness="15" cap="ROUND" />
+                        </Arc>
+                        <Arc centerX="225" centerY="225" width="398" height="398" startAngle="205" endAngle="205">
+                            <Stroke color="#FFFF8A3D" thickness="15" cap="ROUND" />
+                            <Transform target="endAngle" value="205 + 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                        </Arc>
+                        <!-- The knob: a sliver of arc with round caps is a dot at the head. -->
+                        <Arc centerX="225" centerY="225" width="398" height="398" startAngle="204.5" endAngle="205">
+                            <Stroke color="#FF000000" thickness="22" cap="ROUND" />
+                            <Transform target="startAngle" value="204.5 + 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                            <Transform target="endAngle" value="205 + 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                        </Arc>
+                        <Arc centerX="225" centerY="225" width="398" height="398" startAngle="204.5" endAngle="205">
+                            <Stroke color="#FFECEBFF" thickness="15" cap="ROUND" />
+                            <Transform target="startAngle" value="204.5 + 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                            <Transform target="endAngle" value="205 + 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                        </Arc>
+                    </PartDraw>
+                </Group>
+                <Group name="claudeArcAmbient" x="0" y="0" width="450" height="450" alpha="0">
+                    <Variant mode="AMBIENT" target="alpha" value="255" />
+                    <PartDraw x="0" y="0" width="450" height="450">
+                        <Arc centerX="225" centerY="225" width="398" height="398" startAngle="205" endAngle="205">
+                            <Stroke color="#FFC46A2E" thickness="4" cap="ROUND" />
+                            <Transform target="endAngle" value="205 + 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                        </Arc>
+                    </PartDraw>
+                </Group>
+            </Complication>
+        </ComplicationSlot>
+
+        <!-- Right arc: Codex, 155° (bottom) up to 25°. -->
+        <ComplicationSlot slotId="1" name="codexArc" displayName="Right arc" x="0" y="0" width="450" height="450"
+            supportedTypes="RANGED_VALUE" isCustomizable="TRUE">
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
+                primaryProvider="dev.hkgill.gillspeak.watch/dev.hkgill.gillspeak.watch.CodexComplicationService"
+                primaryProviderType="RANGED_VALUE" />
+            <BoundingArc centerX="225" centerY="225" width="398" height="398" thickness="40" isRoundEdge="TRUE"
+                startAngle="25" endAngle="155" />
+            <Complication type="RANGED_VALUE">
+                <Group name="codexArcAwake" x="0" y="0" width="450" height="450">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <PartDraw x="0" y="0" width="450" height="450">
+                        <Arc centerX="225" centerY="225" width="398" height="398" startAngle="25" endAngle="155">
+                            <Stroke color="#FF13263A" thickness="15" cap="ROUND" />
+                        </Arc>
+                        <Arc centerX="225" centerY="225" width="398" height="398" startAngle="155" endAngle="155">
+                            <Stroke color="#FF4DA8FF" thickness="15" cap="ROUND" />
+                            <Transform target="startAngle" value="155 - 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                        </Arc>
+                        <Arc centerX="225" centerY="225" width="398" height="398" startAngle="155" endAngle="155.5">
+                            <Stroke color="#FF000000" thickness="22" cap="ROUND" />
+                            <Transform target="startAngle" value="155 - 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                            <Transform target="endAngle" value="155.5 - 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                        </Arc>
+                        <Arc centerX="225" centerY="225" width="398" height="398" startAngle="155" endAngle="155.5">
+                            <Stroke color="#FFECEBFF" thickness="15" cap="ROUND" />
+                            <Transform target="startAngle" value="155 - 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                            <Transform target="endAngle" value="155.5 - 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                        </Arc>
+                    </PartDraw>
+                </Group>
+                <Group name="codexArcAmbient" x="0" y="0" width="450" height="450" alpha="0">
+                    <Variant mode="AMBIENT" target="alpha" value="255" />
+                    <PartDraw x="0" y="0" width="450" height="450">
+                        <Arc centerX="225" centerY="225" width="398" height="398" startAngle="155" endAngle="155">
+                            <Stroke color="#FF4A84C0" thickness="4" cap="ROUND" />
+                            <Transform target="startAngle" value="155 - 130 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                        </Arc>
+                    </PartDraw>
+                </Group>
+            </Complication>
+        </ComplicationSlot>
+
+        <!-- Chips under the time: Claude Code, Codex, finished today. A ring, the title and the text. -->
+        <ComplicationSlot slotId="2" name="claudeChip" displayName="Left chip" x="63" y="246" width="96" height="74"
+            supportedTypes="RANGED_VALUE SHORT_TEXT" isCustomizable="TRUE">
+            <Variant mode="AMBIENT" target="alpha" value="170" />
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
+                primaryProvider="dev.hkgill.gillspeak.watch/dev.hkgill.gillspeak.watch.ClaudeComplicationService"
+                primaryProviderType="RANGED_VALUE" />
+            <BoundingRoundBox x="0" y="0" width="96" height="74" cornerRadius="18" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="33" y="0" width="30" height="30">
+                    <Arc centerX="15" centerY="15" width="22" height="22" startAngle="0" endAngle="360">
+                        <Stroke color="#FF3A2414" thickness="4" />
+                    </Arc>
+                    <Arc centerX="15" centerY="15" width="22" height="22" startAngle="0" endAngle="0">
+                        <Stroke color="#FFFF8A3D" thickness="4" cap="ROUND" />
+                        <Transform target="endAngle" value="360 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <PartText x="0" y="32" width="96" height="21">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="16" weight="SEMI_BOLD" color="#FFFF8A3D">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="0" y="53" width="96" height="19">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="14" color="#FF9AA0AE">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="2" width="96" height="30">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="22" weight="SEMI_BOLD" color="#FFFF8A3D">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="0" y="36" width="96" height="19">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="14" color="#FF9AA0AE">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+
+        <ComplicationSlot slotId="3" name="codexChip" displayName="Middle chip" x="177" y="246" width="96" height="74"
+            supportedTypes="RANGED_VALUE SHORT_TEXT" isCustomizable="TRUE">
+            <Variant mode="AMBIENT" target="alpha" value="170" />
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
+                primaryProvider="dev.hkgill.gillspeak.watch/dev.hkgill.gillspeak.watch.CodexComplicationService"
+                primaryProviderType="RANGED_VALUE" />
+            <BoundingRoundBox x="0" y="0" width="96" height="74" cornerRadius="18" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="33" y="0" width="30" height="30">
+                    <Arc centerX="15" centerY="15" width="22" height="22" startAngle="0" endAngle="360">
+                        <Stroke color="#FF13263A" thickness="4" />
+                    </Arc>
+                    <Arc centerX="15" centerY="15" width="22" height="22" startAngle="0" endAngle="0">
+                        <Stroke color="#FF4DA8FF" thickness="4" cap="ROUND" />
+                        <Transform target="endAngle" value="360 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <PartText x="0" y="32" width="96" height="21">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="16" weight="SEMI_BOLD" color="#FF4DA8FF">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="0" y="53" width="96" height="19">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="14" color="#FF9AA0AE">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="2" width="96" height="30">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="22" weight="SEMI_BOLD" color="#FF4DA8FF">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="0" y="36" width="96" height="19">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="14" color="#FF9AA0AE">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+
+        <ComplicationSlot slotId="4" name="doneChip" displayName="Right chip" x="291" y="246" width="96" height="74"
+            supportedTypes="SHORT_TEXT RANGED_VALUE" isCustomizable="TRUE">
+            <Variant mode="AMBIENT" target="alpha" value="170" />
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
+                primaryProvider="dev.hkgill.gillspeak.watch/dev.hkgill.gillspeak.watch.DoneTodayComplicationService"
+                primaryProviderType="SHORT_TEXT" />
+            <BoundingRoundBox x="0" y="0" width="96" height="74" cornerRadius="18" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="0" y="2" width="96" height="30">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="22" weight="SEMI_BOLD" color="#FF3DDC84">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="0" y="36" width="96" height="19">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="14" color="#FF9AA0AE">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="33" y="0" width="30" height="30">
+                    <Arc centerX="15" centerY="15" width="22" height="22" startAngle="0" endAngle="360">
+                        <Stroke color="#FF12301F" thickness="4" />
+                    </Arc>
+                    <Arc centerX="15" centerY="15" width="22" height="22" startAngle="0" endAngle="0">
+                        <Stroke color="#FF3DDC84" thickness="4" cap="ROUND" />
+                        <Transform target="endAngle" value="360 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <PartText x="0" y="32" width="96" height="21">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="16" weight="SEMI_BOLD" color="#FF3DDC84">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="0" y="53" width="96" height="19">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="14" color="#FF9AA0AE">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+
+        <!-- Needs you: the slot draws over the whole face, but only the pill at the bottom takes taps. -->
+        <ComplicationSlot slotId="5" name="attention" displayName="Bottom" x="0" y="0" width="450" height="450"
+            supportedTypes="RANGED_VALUE SHORT_TEXT" isCustomizable="TRUE">
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"
+                primaryProvider="dev.hkgill.gillspeak.watch/dev.hkgill.gillspeak.watch.AttentionComplicationService"
+                primaryProviderType="RANGED_VALUE" />
+            <BoundingRoundBox x="140" y="348" width="170" height="44" cornerRadius="22" />
+            <Complication type="RANGED_VALUE">
+                <Condition>
+                    <Expressions>
+                        <Expression name="needsYou"><![CDATA[[COMPLICATION.RANGED_VALUE_VALUE] > 0]]></Expression>
+                    </Expressions>
+                    <Compare expression="needsYou">
+                        <Group name="needsYouRing" x="0" y="0" width="450" height="450">
+                            <Variant mode="AMBIENT" target="alpha" value="190" />
+                            <PartDraw x="0" y="0" width="450" height="450">
+                                <Arc centerX="225" centerY="225" width="438" height="438" startAngle="0" endAngle="360">
+                                    <Stroke color="#FFFFC53D" thickness="6" />
+                                </Arc>
+                            </PartDraw>
+                        </Group>
+                        <PartText x="125" y="327" width="200" height="20">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="14" weight="MEDIUM" color="#FFFFC53D">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartDraw x="150" y="350" width="150" height="38">
+                            <RoundRectangle x="0" y="0" width="150" height="38" cornerRadiusX="19" cornerRadiusY="19">
+                                <Fill color="#FFFFC53D" />
+                            </RoundRectangle>
+                        </PartDraw>
+                        <PartText x="150" y="357" width="150" height="24">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="17" weight="BOLD" color="#FF1A1400">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="125" y="358" width="200" height="22">
+                            <Variant mode="AMBIENT" target="alpha" value="150" />
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="15" weight="MEDIUM" color="#FF9AA0AE">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <PartText x="125" y="358" width="200" height="22">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="MEDIUM" color="#FF9AA0AE">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+
+        <!-- Top: free for weather or anything else (empty until you pick one in the face's editor). -->
+        <ComplicationSlot slotId="6" name="extra" displayName="Top" x="165" y="50" width="120" height="38"
+            supportedTypes="SHORT_TEXT" isCustomizable="TRUE">
+            <Variant mode="AMBIENT" target="alpha" value="150" />
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" />
+            <BoundingRoundBox x="0" y="0" width="120" height="38" cornerRadius="19" />
+            <Complication type="SHORT_TEXT">
+                <PartImage x="8" y="7" width="24" height="24">
+                    <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                </PartImage>
+                <PartText x="34" y="6" width="80" height="26">
+                    <Text align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="18" weight="MEDIUM" color="#FF9AA0AE">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+        </ComplicationSlot>
+    </Scene>
+</WatchFace>

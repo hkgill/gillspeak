@@ -48,7 +48,9 @@ afterwards. Unit tests use fake audio endpoints and never activate a real microp
 
 ## Install
 
-Download `gillspeak-*.apk` from the [Releases page](https://github.com/hkgill/gillspeak/releases) on your phone, open it and allow installing from your browser or file manager. No account or API key is needed.
+Download **[gillspeak-0.2.0.apk](https://github.com/hkgill/gillspeak/releases/download/android-v0.2.0/gillspeak-0.2.0.apk)** (experimental; Android 11+, arm64) on your phone, open it and allow installing from your browser or file manager. No account or API key is needed. See the [Android release notes](https://github.com/hkgill/gillspeak/releases/tag/android-v0.2.0) for the checksum. GitHub's **Latest** release currently points to the older Linux package; Android releases are prereleases.
+
+The published 0.2.0 APK is local-only by default and still offers optional Gemini/Groq modes that send audio if enabled. The feature descriptions above follow the current source on `main`, which has removed those cloud options.
 
 Then set it up as described at the end of [Build and install](#build-and-install).
 
@@ -136,3 +138,7 @@ Without the `release.*` settings, `assembleRelease` produces an unsigned `app-re
   adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez download_model true
   adb logcat -s gillspeak
   ```
+
+## Watch
+
+`watch/` (Wear OS app) and `watchface/` (Watch Face Format, no code) are the agent watch face; `agent-status/` is their shared plain-Kotlin logic, tested with `./gradlew :agent-status:test`. They don't touch the phone app. See [docs/agent-watch-face.md](../docs/agent-watch-face.md).
