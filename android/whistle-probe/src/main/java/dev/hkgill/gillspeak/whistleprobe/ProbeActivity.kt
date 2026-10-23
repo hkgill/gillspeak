@@ -39,6 +39,7 @@ class ProbeActivity : Activity() {
     private val work = Executors.newSingleThreadExecutor()
     private val prefs get() = getSharedPreferences("probe", MODE_PRIVATE)
     private val model get() = File(filesDir, MODEL_NAME)
+    @Volatile private var verified = false // the model on disk passed its SHA256 check in this process
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,7 +63,13 @@ class ProbeActivity : Activity() {
             prefs.edit().putBoolean(LOADING, false).commit()
             say("⚠ Last time the app died while running Whistle. The engine probably uses CPU instructions this watch lacks.")
         }
-        say(if (model.length() == MODEL_SIZE) "Model: downloaded" else "Model: not downloaded yet")
+        inBackground {
+            say(when {
+                modelOk() -> "Model: present and verified"
+                model.exists() -> "Model: the copy on the watch failed its checksum; download it again"
+                else -> "Model: not downloaded yet"
+            })
+        }
     }
 
     override fun onResume() {
@@ -88,7 +95,8 @@ class ProbeActivity : Activity() {
     }
 
     private fun download() {
-        if (model.length() == MODEL_SIZE) return say("Model: already downloaded")
+        if (modelOk()) return say("Model: already downloaded")
+        model.delete() // missing, or failed its checksum (a copy pushed with adb may be anything)
         say("Downloading ${MODEL_SIZE / MB} MB…")
         val part = File(filesDir, "$MODEL_NAME.part")
         val conn = URL(MODEL_URL).openConnection() as HttpURLConnection
@@ -96,21 +104,10 @@ class ProbeActivity : Activity() {
             conn.connectTimeout = 15_000
             conn.readTimeout = 30_000
             if (conn.responseCode != 200) throw IOException("the server answered ${conn.responseCode}")
-            val digest = MessageDigest.getInstance("SHA-256")
-            conn.inputStream.use { input ->
-                part.outputStream().use { out ->
-                    val buf = ByteArray(1 shl 16)
-                    while (true) {
-                        val n = input.read(buf)
-                        if (n < 0) break
-                        digest.update(buf, 0, n)
-                        out.write(buf, 0, n)
-                    }
-                }
-            }
-            val sha = digest.digest().joinToString("") { "%02x".format(it) }
-            if (part.length() != MODEL_SIZE || sha != MODEL_SHA256) throw IOException("the download failed its checksum")
+            conn.inputStream.use { input -> part.outputStream().use { input.copyTo(it, 1 shl 16) } }
+            if (!matches(part)) throw IOException("the download failed its checksum")
             if (!part.renameTo(model)) throw IOException("can't save the model")
+            verified = true
             say("Model: downloaded and verified")
         } finally {
             conn.disconnect()
@@ -120,7 +117,7 @@ class ProbeActivity : Activity() {
 
     /** Loads Whistle (timed, once per process) and transcribes [samples] (timed). */
     private fun transcribe(samples: FloatArray, label: String) {
-        if (model.length() != MODEL_SIZE) return say("Download the model first")
+        if (!modelOk()) return say("Download the model first (or the copy on the watch failed its checksum)")
         prefs.edit().putBoolean(LOADING, true).commit()
         val loadStart = SystemClock.elapsedRealtime()
         WhistleNative.load(model.path)
@@ -132,6 +129,26 @@ class ProbeActivity : Activity() {
         val text = runCatching { JSONObject(json).getString("text").trim() }.getOrDefault("?")
         val timing = Timing(samples.size / RATE.toDouble(), loadMs, transcribeMs)
         say("$label: ${timing.summary()}\nmemory ${Debug.getPss() / 1024} MB PSS\n“$text”")
+    }
+
+    /** Whether the model on disk is the pinned file: size, then SHA256 (once per process; it takes a moment). */
+    private fun modelOk(): Boolean {
+        if (!verified) verified = matches(model)
+        return verified
+    }
+
+    private fun matches(file: File): Boolean {
+        if (file.length() != MODEL_SIZE) return false
+        val digest = MessageDigest.getInstance("SHA-256")
+        file.inputStream().use { input ->
+            val buf = ByteArray(1 shl 16)
+            while (true) {
+                val n = input.read(buf)
+                if (n < 0) break
+                digest.update(buf, 0, n)
+            }
+        }
+        return digest.digest().joinToString("") { "%02x".format(it) } == MODEL_SHA256
     }
 
     /** Five seconds of quiet noise: times the engine without the microphone (the text is meaningless). */

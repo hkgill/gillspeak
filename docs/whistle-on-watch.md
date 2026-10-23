@@ -21,7 +21,7 @@ adb -s WATCH_SERIAL logcat -s whistle-probe      # every result is also logged h
 On the watch, open **Whistle test**:
 
 - The first lines show the watch's ABIs, CPU cores and which extensions it has (dot product, FP16 maths, int8 matrix, SVE), and its RAM.
-- **Download model** fetches the same pinned file as the phone app (16.9 MB) and checks its SHA256. Use Wi-Fi: over Bluetooth it's slow. Or copy it from your computer:
+- **Download model** fetches the same pinned file as the phone app (16.9 MB) and checks its SHA256. A copy you push yourself is checked the same way before Whistle loads it. Use Wi-Fi: over Bluetooth it's slow. Or copy it from your computer:
   ```bash
   adb -s WATCH_SERIAL push whistle.cact /data/local/tmp/
   adb -s WATCH_SERIAL shell run-as dev.hkgill.gillspeak.whistleprobe cp /data/local/tmp/whistle.cact files/
