@@ -111,3 +111,7 @@ Without the `release.*` settings, `assembleRelease` produces an unsigned `app-re
   adb shell am broadcast -n dev.hkgill.gillspeak/.DebugReceiver --ez download_model true
   adb logcat -s gillspeak
   ```
+
+## Watch
+
+`watch/` (Wear OS app) and `watchface/` (Watch Face Format, no code) are the agent watch face; `agent-status/` is their shared plain-Kotlin logic, tested with `./gradlew :agent-status:test`. They don't touch the phone app. See [docs/agent-watch-face.md](../docs/agent-watch-face.md).
