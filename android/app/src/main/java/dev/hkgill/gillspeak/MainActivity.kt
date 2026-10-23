@@ -170,7 +170,7 @@ class MainActivity : Activity() {
         }
         updateBack()
         val busy = { s: LocalAsr.Status -> s is LocalAsr.Status.Downloading || s == LocalAsr.Status.Installing }
-        if (resumed && (busy(asr) || busy(gemma))) handler.postDelayed(poll, 1000)
+        if (resumed && (SpeechModel.entries.any { busy(LocalAsr.refresh(this, it)) } || busy(gemma))) handler.postDelayed(poll, 1000)
         settings.snoozedUntil()?.let { handler.postDelayed(snoozeOver, it - System.currentTimeMillis() + 50) }
     }
 
@@ -409,11 +409,11 @@ class MainActivity : Activity() {
     }
 
     private fun engineSummary(asr: LocalAsr.Status, gemma: LocalAsr.Status): String = when {
-        asr is LocalAsr.Status.Downloading -> "Parakeet downloading, ${percent(asr)}%"
-        asr != LocalAsr.Status.Ready -> "Parakeet needs downloading"
+        asr is LocalAsr.Status.Downloading -> "${settings.speechModel.title} downloading, ${percent(asr)}%"
+        asr != LocalAsr.Status.Ready -> "${settings.speechModel.title} needs downloading"
         gemma is LocalAsr.Status.Downloading -> "Gemma downloading, ${percent(gemma)}%"
-        gemma == LocalAsr.Status.Ready -> if (settings.localAi) "On this phone · Gemma on" else "On this phone · Gemma off"
-        else -> "On this phone · no Gemma"
+        gemma == LocalAsr.Status.Ready -> if (settings.localAi) "${settings.speechModel.title} · Gemma on" else "${settings.speechModel.title} · Gemma off"
+        else -> "${settings.speechModel.title} · no Gemma"
     }
 
     private fun bubbleSummary() = (if (settings.bubbleShape == "bar") "Wide bar" else "Round bubble") + " · " + sizeWord().lowercase()
@@ -461,11 +461,28 @@ class MainActivity : Activity() {
 
     private fun enginePage(asr: LocalAsr.Status, gemma: LocalAsr.Status): View {
         val col = column(dp(16), dp(4), dp(16), dp(32), gap = 12)
-        col.addView(section("On this phone", top = 8))
-        col.addView(card(dp(6), dp(6)).apply {
-            addView(modelRow("Parakeet", "Hears your speech", LocalAsr.TOTAL_BYTES, asr, ::onParakeetButton) {
-                LocalAsr.delete(applicationContext) { runOnUiThread { render(); toast("Parakeet deleted") } }
+        col.addView(section("Speech model", top = 8))
+        col.addView(text("Choose which model hears dictation and voice commands. Both run on this phone.", 14f, t.ink2))
+        SpeechModel.entries.forEach { model ->
+            val status = if (model == settings.speechModel) asr else LocalAsr.refresh(this, model)
+            col.addView(card(dp(6), dp(6)).apply {
+                addView(modelRow(model.title, model.description, model.totalBytes, status, { onSpeechButton(model) }) {
+                    LocalAsr.delete(applicationContext, model) { runOnUiThread { render(); toast("${model.title} deleted") } }
+                })
+                addView(pill(
+                    if (settings.speechModel == model) "Selected" else "Use ${model.title}",
+                    settings.speechModel == model,
+                    if (settings.speechModel == model) "${model.title} selected speech model" else "Use ${model.title} for speech",
+                ) {
+                    if (status == LocalAsr.Status.Ready) {
+                        settings.speechModel = model
+                        render()
+                    } else toast("Download ${model.title} first")
+                })
             })
+        }
+        col.addView(section("Understanding", top = 14))
+        col.addView(card(dp(6), dp(6)).apply {
             addView(modelRow("Gemma 4 E2B", "Understands commands", LocalLlm.SIZE, gemma, ::onGemmaButton) {
                 LocalLlm.delete(applicationContext) { runOnUiThread { render(); toast("Gemma deleted") } }
             })
@@ -560,11 +577,11 @@ class MainActivity : Activity() {
         return row
     }
 
-    private fun onParakeetButton() {
-        when (LocalAsr.refresh(this)) {
-            is LocalAsr.Status.Downloading -> LocalAsr.cancelDownloads(applicationContext)
+    private fun onSpeechButton(model: SpeechModel) {
+        when (LocalAsr.refresh(this, model)) {
+            is LocalAsr.Status.Downloading -> LocalAsr.cancelDownloads(applicationContext, model)
             LocalAsr.Status.Installing, LocalAsr.Status.Ready -> Unit
-            else -> LocalAsr.download(applicationContext)
+            else -> LocalAsr.download(applicationContext, model)
         }
         render()
     }

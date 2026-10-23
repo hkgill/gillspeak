@@ -9,6 +9,8 @@ import com.k2fsa.sherpa.onnx.OfflineModelConfig
 import com.k2fsa.sherpa.onnx.OfflineRecognizer
 import com.k2fsa.sherpa.onnx.OfflineRecognizerConfig
 import com.k2fsa.sherpa.onnx.OfflineTransducerModelConfig
+import dev.hkgill.gillspeak.LocalAsr.Status
+import org.json.JSONObject
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
@@ -17,28 +19,8 @@ import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
 
-/**
- * On-device speech recognition: NVIDIA Parakeet TDT 0.6B v3 (int8) through sherpa-onnx, the same model and
- * settings as the desktop app. Nothing leaves the phone. English plus 24 other European languages.
- *
- * The model (about 640 MB) is downloaded once from the sherpa-onnx project by Android's DownloadManager, and
- * every file is checked against the SHA256 the desktop app pins before it's used. The loaded recognizer takes about 1 GB of memory, so it's released after a
- * few idle minutes and reloaded on the next dictation.
- */
+/** The selected speech engine, shared by every recording entry point. */
 object LocalAsr {
-    private data class ModelFile(val name: String, val size: Long, val sha256: String)
-
-    private const val BASE = "https://huggingface.co/csukuangfj/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/resolve/main"
-    private val FILES = listOf(
-        ModelFile("encoder.int8.onnx", 652_184_281, "acfc2b4456377e15d04f0243af540b7fe7c992f8d898d751cf134c3a55fd2247"),
-        ModelFile("decoder.int8.onnx", 11_845_275, "179e50c43d1a9de79c8a24149a2f9bac6eb5981823f2a2ed88d655b24248db4e"),
-        ModelFile("joiner.int8.onnx", 6_355_277, "3164c13fc2821009440d20fcb5fdc78bff28b4db2f8d0f0b329101719c0948b3"),
-        ModelFile("tokens.txt", 93_939, "d58544679ea4bc6ac563d1f545eb7d474bd6cfa467f0a6e2c1dc1c7d37e3c35d"),
-    )
-    val TOTAL_BYTES = FILES.sumOf { it.size }
-    private const val IDLE_RELEASE_MS = 5 * 60_000L
-    private const val DOWNLOAD_DIR = "model-download"
-
     sealed interface Status {
         data object Missing : Status
         data class Downloading(val done: Long, val total: Long, val waitingForWifi: Boolean) : Status
@@ -46,6 +28,33 @@ object LocalAsr {
         data class Failed(val reason: String) : Status
         data object Ready : Status
     }
+
+    private val engines = SpeechModel.entries.associateWith { AsrEngine(it) }
+    private fun engine(model: SpeechModel) = engines.getValue(model)
+    fun selected(context: Context) = Settings(context).speechModel
+    fun isReady(context: Context, model: SpeechModel = selected(context)) = engine(model).isReady(context)
+    fun refresh(context: Context, model: SpeechModel = selected(context)) = engine(model).refresh(context)
+    fun download(context: Context, model: SpeechModel = selected(context)) = engine(model).download(context)
+    fun cancelDownloads(context: Context, model: SpeechModel = selected(context)) = engine(model).cancelDownloads(context)
+    fun delete(context: Context, model: SpeechModel = selected(context), onDone: () -> Unit) = engine(model).delete(context, onDone)
+    fun owns(context: Context, id: Long) = engines.values.any { it.owns(context, id) }
+    fun installDownload(context: Context, id: Long, onDone: () -> Unit) {
+        val owner = engines.values.firstOrNull { it.owns(context, id) }
+        if (owner == null) onDone() else owner.install(context, onDone)
+    }
+    fun warm(context: Context) = engine(selected(context)).warm(context)
+    fun transcribe(context: Context, wav: ByteArray, model: SpeechModel = selected(context)): String =
+        engine(model).transcribe(context, wav, Settings(context).dictionary().bias)
+}
+
+/** A model's independent downloads, installation state and recognizer. */
+private class AsrEngine(private val model: SpeechModel) {
+    private val files get() = model.files
+    private val totalBytes get() = model.totalBytes
+    private val baseUrl get() = model.baseUrl
+    private val downloadDirectory get() = if (model == SpeechModel.PARAKEET) "model-download" else "model-download/${model.id}"
+    private val downloadPrefs get() = if (model == SpeechModel.PARAKEET) "model_download" else "model_download_${model.id}"
+    private val idleReleaseMs = 5 * 60_000L
 
     private var recognizer: OfflineRecognizer? = null
     private val lock = Any()
@@ -56,7 +65,7 @@ object LocalAsr {
     private val installWaiters = mutableListOf<() -> Unit>()
     @Volatile private var failure: String? = null
 
-    /** Frees the ~1 GB recognizer after [IDLE_RELEASE_MS] without use (restarts the countdown). */
+    /** Frees the ~1 GB recognizer after [idleReleaseMs] without use (restarts the countdown). */
     private fun scheduleRelease() {
         releaseTask?.cancel(false)
         releaseTask = background.schedule({
@@ -67,28 +76,28 @@ object LocalAsr {
                 }
                 recognizer = null
             }
-        }, IDLE_RELEASE_MS, TimeUnit.MILLISECONDS)
+        }, idleReleaseMs, TimeUnit.MILLISECONDS)
     }
 
-    private fun dir(context: Context) = File(context.filesDir, "models/parakeet-tdt-0.6b-v3-int8")
-    private fun downloads(context: Context) = context.getExternalFilesDir(DOWNLOAD_DIR)
+    private fun dir(context: Context) = File(context.filesDir, "models/${model.id}")
+    private fun downloads(context: Context) = context.getExternalFilesDir(downloadDirectory)
     private fun dm(context: Context) = context.getSystemService(DownloadManager::class.java)
 
     /** DownloadManager ids of files still being fetched, by file name. Kept in preferences: downloads outlive us. */
     private fun pending(context: Context): MutableMap<String, Long> {
-        val prefs = context.getSharedPreferences("model_download", Context.MODE_PRIVATE)
-        return FILES.mapNotNull { f -> prefs.getLong(f.name, -1).takeIf { it >= 0 }?.let { f.name to it } }.toMap().toMutableMap()
+        val prefs = context.getSharedPreferences(downloadPrefs, Context.MODE_PRIVATE)
+        return files.mapNotNull { f -> prefs.getLong(f.name, -1).takeIf { it >= 0 }?.let { f.name to it } }.toMap().toMutableMap()
     }
 
     private fun savePending(context: Context, ids: Map<String, Long>) {
-        context.getSharedPreferences("model_download", Context.MODE_PRIVATE).edit().clear().apply {
+        context.getSharedPreferences(downloadPrefs, Context.MODE_PRIVATE).edit().clear().apply {
             ids.forEach { (name, id) -> putLong(name, id) }
         }.apply()
     }
 
-    private fun installed(context: Context, f: ModelFile) = File(dir(context), f.name).length() == f.size
+    private fun installed(context: Context, f: SpeechModelFile) = File(dir(context), f.name).length() == f.size
 
-    fun isReady(context: Context) = FILES.all { installed(context, it) }
+    fun isReady(context: Context) = files.all { installed(context, it) }
 
     /** Where the model stands. When every file has finished downloading, this starts installing them. */
     fun refresh(context: Context): Status {
@@ -97,7 +106,7 @@ object LocalAsr {
         failure?.let { return Status.Failed(it) }
         val ids = pending(context)
         if (ids.isEmpty()) return Status.Missing
-        var done = FILES.filter { installed(context, it) }.sumOf { it.size }
+        var done = files.filter { installed(context, it) }.sumOf { it.size }
         var waitingForWifi = false
         var finished = 0
         dm(context).query(DownloadManager.Query().setFilterById(*ids.values.toLongArray())).use { c ->
@@ -115,7 +124,7 @@ object LocalAsr {
         }
         // Normally the completion broadcast installs finished files; this catches any it missed.
         if (finished > 0) install(context)
-        return if (finished == ids.size) Status.Installing else Status.Downloading(done, TOTAL_BYTES, waitingForWifi)
+        return if (finished == ids.size) Status.Installing else Status.Downloading(done, totalBytes, waitingForWifi)
     }
 
     private fun fail(context: Context, reason: String): Status {
@@ -126,22 +135,22 @@ object LocalAsr {
 
     /**
      * Hands the missing files to Android's DownloadManager: it keeps going when the app is closed, shows progress
-     * in a notification, resumes after network drops, and waits for Wi-Fi rather than use 640 MB of mobile data.
+     * in a notification, resumes after network drops, and waits for Wi-Fi.
      */
     fun download(context: Context) {
         failure = null
-        dir(context).mkdirs()
+        check(dir(context).isDirectory || dir(context).mkdirs()) { "Cannot create model directory" }
         val ids = pending(context)
-        for (f in FILES) {
+        for (f in files) {
             if (installed(context, f) || f.name in ids) continue
             File(downloads(context), f.name).delete() // DownloadManager won't overwrite a leftover
-            val request = DownloadManager.Request(Uri.parse("$BASE/${f.name}"))
-                .setTitle("${Settings.APP_NAME} speech model")
+            val request = DownloadManager.Request(Uri.parse("$baseUrl/${f.name}"))
+                .setTitle("${Settings.APP_NAME} ${model.title}")
                 .setDescription(f.name)
                 .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
                 .setAllowedOverMetered(false)
                 .setAllowedOverRoaming(false)
-                .setDestinationInExternalFilesDir(context, DOWNLOAD_DIR, f.name)
+                .setDestinationInExternalFilesDir(context, downloadDirectory, f.name)
             ids[f.name] = dm(context).enqueue(request)
         }
         savePending(context, ids)
@@ -181,7 +190,7 @@ object LocalAsr {
             try {
                 val ids = pending(context)
                 val done = succeeded(context, ids.values)
-                for (f in FILES) {
+                for (f in files) {
                     val id = ids[f.name]?.takeIf { it in done } ?: continue
                     val src = File(downloads(context), f.name)
                     val part = File(dir(context), f.name + ".part")
@@ -203,7 +212,7 @@ object LocalAsr {
                         Log.e(Dictation.TAG, "model install: ${f.name} failed its checksum")
                         return@execute
                     }
-                    part.renameTo(File(dir(context), f.name))
+                    check(part.length() == f.size && part.renameTo(File(dir(context), f.name))) { "Cannot install ${f.name}" }
                     dm(context).remove(id) // also deletes the downloaded copy
                     ids.remove(f.name)
                     savePending(context, ids)
@@ -211,7 +220,7 @@ object LocalAsr {
                 if (isReady(context)) Log.i(Dictation.TAG, "model download complete and verified")
             } catch (e: Exception) {
                 Log.e(Dictation.TAG, "model install failed", e)
-                FILES.forEach { File(dir(context), it.name + ".part").delete() } // don't leave a part-copied file behind
+                files.forEach { File(dir(context), it.name + ".part").delete() } // don't leave a part-copied file behind
                 fail(context, e.message ?: e.javaClass.simpleName)
             } finally {
                 val waiters = synchronized(installWaiters) {
@@ -242,18 +251,26 @@ object LocalAsr {
     fun warm(context: Context) {
         if (!isReady(context)) return
         synchronized(lock) {
-            load(context)
-            scheduleRelease() // loaded but perhaps never used: don't hold 1 GB forever
+            if (model == SpeechModel.WHISTLE) WhistleNative.load(File(dir(context), "whistle.cact").path) else load(context)
+            if (model == SpeechModel.PARAKEET) scheduleRelease() // release Parakeet after idle
         }
     }
 
     /** Transcribes a WAV from [Recorder] (16 kHz mono PCM16). Blocking; call off the main thread. */
-    fun transcribe(context: Context, wav: ByteArray): String {
+    fun transcribe(context: Context, wav: ByteArray, keywords: List<String>): String {
         check(isReady(context)) { "the on-device model isn't downloaded" }
+        require(wav.size >= 44 && (wav.size - 44) % 2 == 0) { "Invalid recording" }
         val pcm = ByteBuffer.wrap(wav, 44, wav.size - 44).order(ByteOrder.LITTLE_ENDIAN).asShortBuffer()
         val samples = FloatArray(pcm.remaining()) { pcm.get(it) / 32768f }
         synchronized(lock) {
             releaseTask?.cancel(false)
+            check(isReady(context)) { "the on-device model isn't downloaded" }
+            if (model == SpeechModel.WHISTLE) {
+                WhistleNative.load(File(dir(context), "whistle.cact").path)
+                val bias = keywords.joinToString("\n").toByteArray(Charsets.UTF_8)
+                val json = WhistleNative.transcribe(samples, bias).toString(Charsets.UTF_8)
+                return JSONObject(json).getString("text").trim()
+            }
             val rec = load(context)
             val stream = rec.createStream()
             try {

@@ -4,7 +4,7 @@ import android.content.Context
 import android.util.Log
 
 /**
- * The pipeline after recording: Parakeet on the phone, then the rules, then (if turned on) Gemma's polish behind the
+ * The pipeline after recording: the selected speech model on the phone, then the rules, then (if turned on) Gemma's polish behind the
  * desktop's gate and validator. Nothing leaves the phone. Runs on a worker thread; the keyboard, the bubble and the
  * debug self-test share it.
  */
@@ -19,16 +19,17 @@ object Dictation {
 
     fun run(context: Context, settings: Settings, wav: ByteArray): Outcome {
         val t0 = System.nanoTime()
-        val raw = LocalAsr.transcribe(context, wav)
+        val model = settings.speechModel
+        val raw = LocalAsr.transcribe(context, wav, model)
         val sttMs = ms(t0)
         val dictionary = settings.dictionary()
         val rules = Rules(dictionary).apply(raw)
         val (text, reason) = if (settings.localPolish && LocalLlm.isReady(context)) polish(context, settings, rules) else rules to ""
         val total = ms(t0)
-        Log.i(TAG, "local $total ms for ${Recorder.durationMs(wav)} ms of audio (parakeet $sttMs ms${if (reason.isEmpty()) "" else ", $reason"})")
+        Log.i(TAG, "local $total ms for ${Recorder.durationMs(wav)} ms of audio (${model.title} $sttMs ms${if (reason.isEmpty()) "" else ", $reason"})")
         if (raw.isNotBlank()) settings.log("Local $total ms${if (reason.isEmpty()) "" else " ($reason)"}\n  heard: $raw\n  typed: $text")
         if (raw.isBlank()) {
-            Log.w(TAG, "local: Parakeet heard nothing in ${Recorder.durationMs(wav)} ms of audio")
+            Log.w(TAG, "local: ${model.title} heard nothing in ${Recorder.durationMs(wav)} ms of audio")
             if (settings.keepEmptyAudio) runCatching { java.io.File(context.filesDir, "empty.wav").writeBytes(wav) }
         }
         // Only a failed or rejected polish counts as a fallback in the status line.

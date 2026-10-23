@@ -18,7 +18,7 @@ class ModelDownloadReceiver : BroadcastReceiver() {
         when {
             !finished(app, id) -> Unit
             // goAsync keeps the process alive while Parakeet's files (about 670 MB) are checked and moved into place.
-            LocalAsr.owns(app, id) -> goAsync().let { pending -> LocalAsr.install(app) { pending.finish() } }
+            LocalAsr.owns(app, id) -> goAsync().let { pending -> LocalAsr.installDownload(app, id) { pending.finish() } }
             // Gemma's 2.6 GB can take longer than a broadcast may run. If the process is stopped part way, opening
             // the app finds the finished download and installs it again.
             LocalLlm.owns(app, id) -> LocalLlm.install(app)
