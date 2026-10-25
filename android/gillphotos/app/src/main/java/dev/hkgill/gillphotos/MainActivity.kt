@@ -45,15 +45,21 @@ class MainActivity : Activity() {
     private lateinit var search: EditText
     private lateinit var peopleRow: LinearLayout
     private lateinit var peopleScroll: View
+    private lateinit var placesRow: LinearLayout
+    private lateinit var placesScroll: View
+    private lateinit var queryRow: LinearLayout
     private lateinit var note: TextView
     private lateinit var grid: GridView
     private var ids: List<Long> = emptyList()
     private var wasRunning = false
+    private var lastNote = ""
 
     private val onProgress: () -> Unit = {
         main.post {
             showStatus()
             val running = IndexService.progress.running
+            val note = IndexService.progress.note
+            if (note != lastNote) { lastNote = note; refresh() } // faces were grouped: new people to show
             if (wasRunning && !running) { refresh(); if (search.text.isEmpty()) showAll() }
             wasRunning = running
         }
@@ -78,78 +84,99 @@ class MainActivity : Activity() {
         look = Look.of(this)
         thumbs = Thumbs(this)
 
-        val title = label("gillphotos", look, 26f, bold = true).apply { layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f) }
-        val more = TextView(this).apply {
-            text = "⋯"
-            textSize = 26f
-            setTextColor(look.ink)
-            gravity = Gravity.CENTER
-            minWidth = dp(48)
-            minHeight = dp(48)
-            contentDescription = "More"
-            setOnClickListener { more() }
+        val title = label("gillphotos", look, 28f, bold = true).apply { layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f) }
+        // The promise, always in view: nothing here leaves the phone.
+        val badge = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            background = rounded(look.accSoft, dp(16).toFloat())
+            setPadding(dp(10), dp(6), dp(12), dp(6))
+            addView(Icon(this@MainActivity, Icon.Kind.LOCK, look.accT), LinearLayout.LayoutParams(dp(16), dp(16)))
+            addView(label("On this phone", look, 13f, bold = true).apply { setTextColor(look.accT); setPadding(dp(6), 0, 0, 0) })
+            contentDescription = "Everything stays on this phone: gillphotos has no internet access"
+            setOnClickListener {
+                AlertDialog.Builder(this@MainActivity).setTitle("On this phone")
+                    .setMessage("gillphotos has no internet permission, so Android blocks it from the network. Your photos, faces, places and searches never leave this phone, and aren't backed up or copied to a new phone.")
+                    .setPositiveButton("OK", null).show()
+            }
         }
         val header = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
             addView(title)
-            addView(more)
+            addView(badge, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(8) })
+            addView(pill("Settings", look) { more() })
         }
         status = label("", look, 13f, dim = true)
         setup = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            background = rounded(look.card, dp(20).toFloat())
-            setPadding(dp(16), dp(14), dp(16), dp(14))
         }
         search = EditText(this).apply {
-            hint = "Search: dog on a beach, Sam last summer, receipts"
+            hint = "Search: dog on a beach, Sam in Bondi"
             isSingleLine = true
             imeOptions = EditorInfo.IME_ACTION_SEARCH
             setTextColor(look.ink)
             setHintTextColor(look.ink2)
             textSize = 16f
-            background = rounded(look.field, dp(24).toFloat())
-            setPadding(dp(18), dp(12), dp(18), dp(12))
+            background = null
+            setPadding(dp(10), dp(12), dp(8), dp(12))
             setOnEditorActionListener { _, action, _ ->
                 if (action == EditorInfo.IME_ACTION_SEARCH) { find(text.toString()); true } else false
             }
         }
+        val searchBox = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            minimumHeight = dp(52)
+            setPadding(dp(16), 0, dp(8), 0)
+            background = android.graphics.drawable.GradientDrawable().apply {
+                cornerRadius = dp(26).toFloat()
+                setColor(look.card)
+                setStroke(dp(1), look.line)
+            }
+            addView(Icon(this@MainActivity, Icon.Kind.SEARCH, look.ink2), LinearLayout.LayoutParams(dp(20), dp(20)))
+            addView(search, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+        }
+        queryRow = LinearLayout(this).apply { visibility = View.GONE }
         val kinds = LinearLayout(this).apply {
             addView(chip("All photos") { search.setText(""); showAll() })
             addView(chip("Screenshots") { search.setText(""); searchFor { Search.screenshots(this@MainActivity) } })
             for ((name, prompt) in Search.KINDS) addView(chip(name) { search.setText(""); searchFor { Search.run(this@MainActivity, prompt) } })
         }
         peopleRow = LinearLayout(this)
-        peopleScroll = HorizontalScrollView(this).apply {
-            isHorizontalScrollBarEnabled = false
-            addView(peopleRow)
-            visibility = View.GONE
-        }
+        peopleScroll = section("People", peopleRow)
+        placesRow = LinearLayout(this)
+        placesScroll = section("Places", placesRow)
         note = label("", look, 13f, dim = true)
         grid = GridView(this).apply {
             numColumns = GridView.AUTO_FIT
-            columnWidth = dp(108)
+            columnWidth = dp(120)
             stretchMode = GridView.STRETCH_COLUMN_WIDTH
-            horizontalSpacing = dp(2)
-            verticalSpacing = dp(2)
+            horizontalSpacing = dp(3)
+            verticalSpacing = dp(3)
             adapter = this@MainActivity.adapter
             setOnItemClickListener { _, _, position, _ ->
                 startActivity(Intent(this@MainActivity, PhotoActivity::class.java).putExtra(PhotoActivity.ID, ids[position]))
             }
         }
 
-        val root = LinearLayout(this).apply {
+        val top = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
-            setBackgroundColor(look.bg)
             fun pad(v: View, top: Int = 0) = addView(v, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply {
                 marginStart = dp(16); marginEnd = dp(16); topMargin = dp(top)
             })
             pad(header, 8)
-            pad(status)
-            pad(setup, 12)
-            pad(search, 12)
-            pad(HorizontalScrollView(this@MainActivity).apply { isHorizontalScrollBarEnabled = false; addView(kinds) }, 10)
-            pad(peopleScroll, 10)
-            pad(note, 8)
+            pad(status, 6)
+            pad(setup, 6)
+            pad(searchBox, 12)
+            pad(HorizontalScrollView(this@MainActivity).apply { isHorizontalScrollBarEnabled = false; addView(queryRow) }, 10)
+            pad(peopleScroll, 12)
+            pad(placesScroll, 10)
+            pad(HorizontalScrollView(this@MainActivity).apply { isHorizontalScrollBarEnabled = false; addView(kinds) }, 12)
+            pad(note, 10)
+        }
+        // The top part scrolls away on short screens instead of squeezing the grid to nothing.
+        val root = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setBackgroundColor(look.bg)
+            addView(android.widget.ScrollView(this@MainActivity).apply { addView(top) }, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT))
             addView(grid, LinearLayout.LayoutParams(MATCH_PARENT, 0, 1f).apply { topMargin = dp(8) })
         }
         root.setOnApplyWindowInsetsListener { v, insets ->
@@ -173,13 +200,15 @@ class MainActivity : Activity() {
         super.onResume()
         IndexService.listeners += onProgress
         wasRunning = IndexService.progress.running
+        // Indexing that an app update or Android's time limit cut short carries on.
+        if (!wasRunning && IndexService.wanted(this) && Library.access(this) != Library.Access.NONE) IndexService.start(this)
         refresh()
     }
 
     private val poll = object : Runnable {
         override fun run() {
             if (Embedder.model.refresh(this@MainActivity) is PinnedModel.Status.Adding) {
-                buildSetup()
+                showStatus()
                 main.postDelayed(this, 1000)
             } else if (setupShowsDownload) {
                 refresh() // finished: drop the progress line
@@ -208,6 +237,15 @@ class MainActivity : Activity() {
         search.setText("")
         searchFor { Search.similar(this, id) }
         return true
+    }
+
+    /** A titled, sideways-scrolling row (People, Places); hidden until it has something in it. */
+    private fun section(title: String, row: LinearLayout) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        visibility = View.GONE
+        addView(label(title, look, 13f, bold = true, dim = true))
+        addView(HorizontalScrollView(this@MainActivity).apply { isHorizontalScrollBarEnabled = false; addView(row) },
+            LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
     }
 
     private fun chip(text: String, onClick: () -> Unit) = TextView(this).apply {
@@ -240,6 +278,14 @@ class MainActivity : Activity() {
     private fun show(r: Search.Result) {
         ids = r.ids
         note.text = r.note
+        // How the search was read: the person, the time, the place, the words matched by meaning.
+        queryRow.removeAllViews()
+        for (c in r.chips) queryRow.addView(label(c, look, 13f, bold = true).apply {
+            setTextColor(look.bg)
+            background = rounded(look.ink, dp(14).toFloat())
+            setPadding(dp(12), dp(6), dp(12), dp(6))
+        }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(8) })
+        queryRow.visibility = if (r.chips.isEmpty()) View.GONE else View.VISIBLE
         adapter.notifyDataSetChanged()
         grid.setSelection(0)
     }
@@ -252,73 +298,152 @@ class MainActivity : Activity() {
     // ---- Status, setup and people ----
 
     private fun refresh() {
-        buildSetup()
         showStatus()
         work.execute {
-            val people = Store.get(this).people()
-            main.post { showPeople(people) }
+            val store = Store.get(this)
+            val people = store.people()
+            val places = store.places()
+            main.post { showPeople(people); showPlaces(places) }
         }
     }
 
+    /** The counts line and the setup card, from the database (on the worker) and the index's progress. */
     private fun showStatus() {
-        val p = IndexService.progress
         work.execute {
             val c = Store.get(this).counts()
-            val text = buildString {
-                if (c.photos == 0) append("Not indexed yet")
-                else append("${c.photos} photos · ${c.embedded} searchable by meaning · ${c.faced} checked for ${c.faces} faces")
-                if (p.running) append("\nIndexing ${p.done} of ${p.total}")
-                if (p.done > 0) append("\n${p.timing()}")
-                if (p.note.isNotEmpty()) append("\n${p.note}")
-            }
-            main.post { status.text = text }
+            main.post { buildSetup(c) }
         }
     }
 
-    private fun buildSetup() {
-        setup.removeAllViews()
+    /**
+     * The first-run card from the design: three numbered steps (allow photos, add the search model, index), each ticked
+     * when done. It goes away once everything is indexed.
+     */
+    private fun buildSetup(c: Store.Counts) {
         val access = Library.access(this)
-        val running = IndexService.progress.running
-        fun line(text: String) = setup.addView(label(text, look, 14f).apply { setPadding(0, dp(4), 0, dp(8)) })
-        fun buttons(vararg b: View) = setup.addView(LinearLayout(this).apply {
-            b.forEach { addView(it, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(8) }) }
-        })
-        when (access) {
-            Library.Access.NONE -> {
-                line("gillphotos needs to see your photos. Everything it learns stays on this phone.")
-                buttons(pill("Allow photos", look, main = true) { requestPermissions(Library.permissions(), REQ_PHOTOS) })
-            }
-            Library.Access.SOME -> {
-                line("You've shared some of your photos. Search only covers those.")
-                buttons(pill("Choose more", look) { requestPermissions(Library.permissions(), REQ_PHOTOS) })
-            }
-            Library.Access.ALL -> Unit
+        val p = IndexService.progress
+        val model = Embedder.model.refresh(this)
+        val usable = (c.photos - c.failed).coerceAtLeast(0)
+        val indexed = minOf(if (model is PinnedModel.Status.Ready) c.embedded else c.faced, c.faced).coerceAtMost(usable)
+        val allIndexed = c.photos > 0 && indexed >= usable && model is PinnedModel.Status.Ready
+        status.text = if (c.photos == 0) "" else "${c.photos} photos · ${c.embedded} searchable · ${c.faces} faces · ${c.located} with a place"
+
+        setup.removeAllViews()
+        if (access == Library.Access.ALL && model is PinnedModel.Status.Ready && allIndexed && !p.running) {
+            setup.visibility = View.GONE
+            return
         }
-        when (val s = Embedder.model.refresh(this)) {
-            PinnedModel.Status.Ready -> Unit
-            is PinnedModel.Status.Adding -> line("Adding the search model: ${s.done * 100 / s.total}%")
-            else -> {
-                line(
-                    (if (s is PinnedModel.Status.Failed) "Couldn't add it: ${s.reason}. " else "") +
-                        "Searching by meaning needs the search model, EmbeddingGemma 2 (388 MB). gillphotos has no internet " +
-                        "access, so your browser downloads it; then add the file here. Faces work without it.",
-                )
-                buttons(
-                    pill("Download in browser", look) { Embedder.model.openDownload(this) },
-                    pill("Add the file", look, main = true) { startActivityForResult(Embedder.model.pickIntent(), REQ_SEARCH_MODEL) },
-                )
+        setup.visibility = View.VISIBLE
+        step(1, "Allow photos", access == Library.Access.ALL) {
+            when (access) {
+                Library.Access.NONE -> {
+                    it.addView(body("gillphotos needs to see your photos, and where they were taken. Everything it learns stays on this phone."))
+                    it.addView(buttons(pill("Allow photos", look, main = true) { requestPermissions(Library.permissions(), REQ_PHOTOS) }))
+                }
+                Library.Access.SOME -> {
+                    it.addView(body("You've shared some of your photos. Search only covers those."))
+                    it.addView(buttons(pill("Choose more", look) { requestPermissions(Library.permissions(), REQ_PHOTOS) }))
+                }
+                Library.Access.ALL -> if (!Library.canReadLocation(this)) {
+                    it.addView(body("Allow photo locations too, to search by place."))
+                    it.addView(buttons(pill("Allow locations", look) { requestPermissions(Library.permissions(), REQ_PHOTOS) }))
+                }
             }
         }
-        if (access != Library.Access.NONE) {
-            buttons(
-                if (running) pill("Stop indexing", look) { IndexService.stop(this); main.postDelayed(::refresh, 500) }
-                else pill("Index photos", look, main = true) { startIndex() },
-            )
+        step(2, "Add the search model", model is PinnedModel.Status.Ready) {
+            when (model) {
+                PinnedModel.Status.Ready -> Unit
+                is PinnedModel.Status.Adding -> it.addView(progressBar(model.done.toFloat() / model.total, "Checking and adding: ${model.done * 100 / model.total}%"))
+                else -> {
+                    it.addView(body(
+                        (if (model is PinnedModel.Status.Failed) "Couldn't add it: ${model.reason}. " else "") +
+                            "${Embedder.model.megabytes} MB. Your browser downloads it, then you add the file. gillphotos checks it's the exact file.",
+                    ))
+                    it.addView(buttons(
+                        pill("Download in browser", look) { Embedder.model.openDownload(this) },
+                        pill("Add the file", look, main = true) { startActivityForResult(Embedder.model.pickIntent(), REQ_SEARCH_MODEL) },
+                    ))
+                }
+            }
         }
-        setup.visibility = if (setup.childCount == 0) View.GONE else View.VISIBLE
-        val downloading = Embedder.model.refresh(this) is PinnedModel.Status.Adding
-        if (downloading && !setupShowsDownload) main.postDelayed(poll, 1000)
-        setupShowsDownload = downloading
+        if (access != Library.Access.NONE) step(3, "Index your photos", allIndexed && !p.running) {
+            it.addView(body("gillphotos looks at each photo once to learn what's in it, who's in it and where, so searches answer in a moment. Best while charging."))
+            if (c.photos > 0) {
+                val line = buildString {
+                    append("$indexed of $usable")
+                    if (p.running && p.done > 0) append(" · ${p.timing()}")
+                    if (p.note.isNotEmpty()) append("\n${p.note}")
+                }
+                it.addView(progressBar(if (usable == 0) 0f else indexed.toFloat() / usable, line))
+            }
+            it.addView(buttons(
+                if (p.running) pill("Stop indexing", look) { IndexService.stop(this); main.postDelayed(::refresh, 500) }
+                else pill(if (indexed > 0) "Carry on indexing" else "Index photos", look, main = true) { startIndex() },
+            ))
+        }
+        val adding = model is PinnedModel.Status.Adding
+        if (adding && !setupShowsDownload) main.postDelayed(poll, 1000)
+        setupShowsDownload = adding
+    }
+
+    /** One numbered step card: a night circle with the number, the title, a tick once done, and its content. */
+    private fun step(n: Int, title: String, done: Boolean, content: (LinearLayout) -> Unit) {
+        val body = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        val head = LinearLayout(this).apply {
+            gravity = Gravity.CENTER_VERTICAL
+            addView(label(n.toString(), look, 15f, bold = true).apply {
+                setTextColor(Look.LIME)
+                gravity = Gravity.CENTER
+                background = rounded(0xFF_111318.toInt(), dp(16).toFloat())
+            }, LinearLayout.LayoutParams(dp(32), dp(32)))
+            addView(label(title, look, 16f, bold = true).apply { setPadding(dp(12), 0, 0, 0) }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
+            if (done) addView(Icon(this@MainActivity, Icon.Kind.CHECK, look.accT, 3f), LinearLayout.LayoutParams(dp(22), dp(22)))
+        }
+        body.addView(head)
+        if (!done) {
+            val inner = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(dp(44), 0, 0, 0) }
+            content(inner)
+            body.addView(inner)
+        }
+        body.background = rounded(look.card, dp(20).toFloat())
+        body.setPadding(dp(16), dp(14), dp(16), dp(14))
+        setup.addView(body, LinearLayout.LayoutParams(MATCH_PARENT, WRAP_CONTENT).apply { topMargin = dp(8) })
+    }
+
+    private fun body(text: String) = label(text, look, 14f, dim = true).apply { setPadding(0, dp(6), 0, dp(4)) }
+
+    private fun buttons(vararg b: View) = LinearLayout(this).apply {
+        setPadding(0, dp(6), 0, 0)
+        b.forEach { addView(it, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(8) }) }
+    }
+
+    private fun progressBar(fraction: Float, text: String) = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(0, dp(8), 0, dp(4))
+        val track = android.widget.FrameLayout(this@MainActivity).apply { background = rounded(look.field, dp(4).toFloat()) }
+        track.addView(View(this@MainActivity).apply { background = rounded(look.accT, dp(4).toFloat()) },
+            android.widget.FrameLayout.LayoutParams(0, dp(8)))
+        track.post { track.getChildAt(0).layoutParams.width = (track.width * fraction.coerceIn(0f, 1f)).toInt(); track.getChildAt(0).requestLayout() }
+        addView(track, LinearLayout.LayoutParams(MATCH_PARENT, dp(8)))
+        addView(label(text, look, 13f, dim = true).apply { setPadding(0, dp(6), 0, 0) })
+    }
+
+    private fun showPlaces(places: List<Pair<String, Int>>) {
+        placesRow.removeAllViews()
+        for ((name, n) in places.take(30)) {
+            placesRow.addView(LinearLayout(this).apply {
+                gravity = Gravity.CENTER_VERTICAL
+                minimumHeight = dp(40)
+                setPadding(dp(12), 0, dp(14), 0)
+                background = rounded(look.card, dp(20).toFloat())
+                addView(Icon(this@MainActivity, Icon.Kind.PIN, look.ink2), LinearLayout.LayoutParams(dp(16), dp(16)))
+                addView(label("$name  ", look, 14f).apply { setPadding(dp(6), 0, 0, 0) })
+                addView(label(n.toString(), look, 13f, dim = true))
+                contentDescription = "$name, $n photos"
+                setOnClickListener { search.setText(""); searchFor { Search.place(this@MainActivity, name) } }
+            }, LinearLayout.LayoutParams(WRAP_CONTENT, dp(40)).apply { marginEnd = dp(8) })
+        }
+        placesScroll.visibility = if (places.isEmpty()) View.GONE else View.VISIBLE
     }
 
     private fun startIndex() {
@@ -379,14 +504,14 @@ class MainActivity : Activity() {
 
     private fun more() {
         val tokens = Embedder.tokens(this)
-        val gemma = Gemma.model.describe(this) + if (Gemma.model.isReady(this)) " (tap to delete)" else ""
+        val gemma = Gemma.model.describe(this) + if (Gemma.model.isReady(this)) " (tap to delete)" else " (tap to download, 2.6 GB)"
         val items = arrayOf(
             "Photo detail for search: ${if (tokens == 0) "model default" else "$tokens image tokens"}",
             "Gemma 4 E2B for questions about a photo: $gemma",
             "Group faces again",
             "Search model, EmbeddingGemma 2: ${Embedder.model.describe(this)}${if (Embedder.isReady(this)) " (tap to delete)" else ""}",
         )
-        AlertDialog.Builder(this).setTitle("gillphotos").setItems(items) { _, which ->
+        AlertDialog.Builder(this).setTitle("Settings").setItems(items) { _, which ->
             when (which) {
                 0 -> chooseTokens()
                 1 -> gemmaAction()

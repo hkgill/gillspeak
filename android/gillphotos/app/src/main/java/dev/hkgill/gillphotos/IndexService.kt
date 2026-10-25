@@ -32,10 +32,12 @@ class IndexService : Service() {
         val decodeMs: Long = 0,
         val embedMs: Long = 0,
         val faceMs: Long = 0,
+        val placeMs: Long = 0,
         val note: String = "",
     ) {
         fun timing() = if (done == 0) "" else
-            "${(decodeMs + embedMs + faceMs) / done} ms a photo (picture ${decodeMs / done}, meaning ${embedMs / done}, faces ${faceMs / done})"
+            "${(decodeMs + embedMs + faceMs + placeMs) / done} ms a photo (picture ${decodeMs / done}, meaning ${embedMs / done}, " +
+                "faces ${faceMs / done}, place ${placeMs / done})"
     }
 
     @Volatile private var stopping = false
@@ -65,9 +67,11 @@ class IndexService : Service() {
         try {
             store.sync(Library.all(this))
             var vectors = Embedder.isReady(this)
-            val todo = store.pending(vectors)
+            val locating = Library.canReadLocation(this)
+            val todo = store.pending(vectors, locating)
             p = p.copy(total = todo.size, note = "")
             val faces = FaceKit.get(this)
+            val places = if (locating) PlaceKit.get(this) else null
             val power = getSystemService(PowerManager::class.java)
             var embedFailures = 0
             var lastNote = 0L
@@ -77,8 +81,22 @@ class IndexService : Service() {
                     publish(p.copy(note = "Paused: the phone is hot"))
                     Thread.sleep(30_000)
                 }
-                val (needVector, needFaces) = store.needs(id)
+                val needs = store.needs(id)
+                val needVector = needs.vector
+                val needFaces = needs.faces
                 try {
+                    val tp = SystemClock.uptimeMillis()
+                    if (needs.place && places != null) {
+                        // EXIF only, no picture: where (nearest named place, offline) and which camera.
+                        val exif = runCatching { Library.exif(this, id) }.getOrNull()
+                        val near = if (exif?.lat != null && exif.lon != null) places.nearest(exif.lat, exif.lon) else null
+                        store.saveDetails(id, exif?.lat, exif?.lon, near?.name, near?.country, exif?.camera)
+                    }
+                    p = p.copy(placeMs = p.placeMs + SystemClock.uptimeMillis() - tp)
+                    if (!(needVector && vectors) && !needFaces) {
+                        p = p.copy(done = p.done + 1)
+                        continue
+                    }
                     val t0 = SystemClock.uptimeMillis()
                     val picture = Library.picture(this, id, YuNet.SIZE)
                     val t1 = SystemClock.uptimeMillis()
@@ -107,6 +125,12 @@ class IndexService : Service() {
                     store.fail(id)
                     p = p.copy(done = p.done + 1)
                 }
+                // People show up while indexing runs, not only at the end of hours of work.
+                if (p.done % GROUP_EVERY == 0) {
+                    p = p.copy(note = group(store))
+                    lastNote = 0
+                }
+                if (p.done % 100 == 0) Log.i(TAG, "index: ${p.done} of ${p.total}; ${p.timing()}; embedder on ${Embedder.backend}")
                 if (SystemClock.uptimeMillis() - lastNote > 1000) {
                     lastNote = SystemClock.uptimeMillis()
                     publish(p)
@@ -115,12 +139,8 @@ class IndexService : Service() {
             Log.i(TAG, "index: ${p.done} photos; ${p.timing()}; embedder on ${Embedder.backend}")
             if (!stopping) {
                 publish(p.copy(note = "Grouping faces…"))
-                val t0 = SystemClock.uptimeMillis()
-                val faceList = store.facesToGroup()
-                val grouping = People.group(faceList)
-                store.saveGrouping(grouping)
-                p = p.copy(note = "${faceList.size} faces in ${grouping.groups.size} groups (${SystemClock.uptimeMillis() - t0} ms)")
-                Log.i(TAG, "index: ${p.note}")
+                p = p.copy(note = group(store))
+                setWanted(this, false) // finished: nothing to pick up again
             }
         } catch (e: Exception) {
             Log.e(TAG, "index failed", e)
@@ -132,6 +152,15 @@ class IndexService : Service() {
             getSystemService(NotificationManager::class.java).cancel(NOTE)
             stopSelf()
         }
+    }
+
+    /** Groups every face found so far into people; returns a line for the status. */
+    private fun group(store: Store): String {
+        val t0 = SystemClock.uptimeMillis()
+        val faceList = store.facesToGroup()
+        val grouping = People.group(faceList)
+        store.saveGrouping(grouping)
+        return "${faceList.size} faces in ${grouping.groups.size} groups (${SystemClock.uptimeMillis() - t0} ms)".also { Log.i(TAG, "index: $it") }
     }
 
     private fun publish(p: Progress) {
@@ -164,12 +193,22 @@ class IndexService : Service() {
         /** Called on the indexing thread when [progress] changes. */
         val listeners = CopyOnWriteArraySet<() -> Unit>()
 
+        private const val GROUP_EVERY = 300
+
         fun start(context: Context) {
+            setWanted(context, true)
             context.startForegroundService(Intent(context, IndexService::class.java))
         }
 
+        /** The user's Stop: unlike an app update or Android's time limit, this one isn't picked up again. */
         fun stop(context: Context) {
+            setWanted(context, false)
             context.stopService(Intent(context, IndexService::class.java))
         }
+
+        /** Indexing that was cut short (an app update, Android's limit) and should carry on when the app opens. */
+        fun wanted(context: Context) = prefs(context).getBoolean("wanted", false)
+        private fun setWanted(context: Context, on: Boolean) = prefs(context).edit().putBoolean("wanted", on).apply()
+        private fun prefs(context: Context) = context.getSharedPreferences("index", Context.MODE_PRIVATE)
     }
 }

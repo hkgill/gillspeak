@@ -5,8 +5,11 @@ import java.time.LocalDate
 import java.time.ZoneId
 import java.time.temporal.TemporalAdjusters
 
-/** What a search asks for: [text] to match by meaning, named [people], and a time range [from, until) in epoch ms. */
-data class Query(val text: String, val people: List<Long>, val from: Long?, val until: Long?)
+/**
+ * What a search asks for: [text] to match by meaning, named [people], a time range [from, until) in epoch ms, and
+ * [places] the photos were taken in.
+ */
+data class Query(val text: String, val people: List<Long>, val from: Long?, val until: Long?, val places: List<String> = emptyList())
 
 /**
  * Reads a search like "Sam at the beach last summer" with rules: the people the user has named, one time
@@ -41,24 +44,19 @@ object Queries {
 
     private class Span(val length: Int, val start: LocalDate, val end: LocalDate)
 
-    /** [people] maps each named person's lower-case name to their id. */
-    fun parse(input: String, people: Map<String, Long>, today: LocalDate, zone: ZoneId, southern: Boolean): Query {
+    /**
+     * [people] maps each named person's lower-case name to their id; [places] each lower-case place name in the
+     * library to the name as stored.
+     */
+    fun parse(
+        input: String, people: Map<String, Long>, today: LocalDate, zone: ZoneId, southern: Boolean,
+        places: Map<String, String> = emptyMap(),
+    ): Query {
         val words = input.split(Regex("\\s+")).map { it.trim(',', '.', '!', '?', ';', ':', '"', '(', ')') }
             .filter { it.isNotEmpty() }.map(::Word)
 
-        val found = LinkedHashSet<Long>()
-        val names = people.entries.map { (name, id) -> name.split(' ').filter { it.isNotEmpty() } to id }
-            .sortedByDescending { it.first.size }
-        var i = 0
-        while (i < words.size) {
-            val match = names.firstOrNull { (parts, _) ->
-                i + parts.size <= words.size && parts.indices.all { words[i + it].key == parts[it] }
-            }
-            if (match == null) { i++; continue }
-            found += match.second
-            take(words, i, match.first.size)
-            i += match.first.size
-        }
+        val found = match(words, people)
+        val foundPlaces = match(words, places)
 
         var span: Span? = null
         for (j in words.indices) {
@@ -76,7 +74,27 @@ object Queries {
             found.toList(),
             span?.start?.atStartOfDay(zone)?.toInstant()?.toEpochMilli(),
             span?.end?.atStartOfDay(zone)?.toInstant()?.toEpochMilli(),
+            foundPlaces.toList(),
         )
+    }
+
+    /** Finds [names] (lower case, any number of words; longest first) among the unread words, and marks them read. */
+    private fun <T> match(words: List<Word>, names: Map<String, T>): LinkedHashSet<T> {
+        val found = LinkedHashSet<T>()
+        val split = names.entries.map { (name, v) -> name.split(' ').filter { it.isNotEmpty() } to v }
+            .filter { it.first.isNotEmpty() }
+            .sortedByDescending { it.first.size }
+        var i = 0
+        while (i < words.size) {
+            val hit = split.firstOrNull { (parts, _) ->
+                i + parts.size <= words.size && parts.indices.all { !words[i + it].used && words[i + it].key == parts[it] }
+            }
+            if (hit == null) { i++; continue }
+            found += hit.second
+            take(words, i, hit.first.size)
+            i += hit.first.size
+        }
+        return found
     }
 
     /** Marks [length] words from [at] as read, with the little words that led into them ("with", "from"). */

@@ -93,5 +93,17 @@ class QueriesTest {
         assertEquals("beach", q.text)
     }
 
+    @Test fun placesInTheLibrary() {
+        val places = mapOf("bondi beach" to "Bondi Beach", "sydney" to "Sydney")
+        val q = Queries.parse("Sam at Bondi Beach last summer", people, today, zone, true, places)
+        assertEquals(listOf("Bondi Beach"), q.places)
+        assertEquals(listOf(1L), q.people)
+        assertEquals("", q.text)
+        val r = Queries.parse("sunsets in Sydney 2024", people, today, zone, true, places)
+        assertEquals(listOf("Sydney"), r.places)
+        assertEquals("sunsets", r.text)
+        assertRange(r, LocalDate.of(2024, 1, 1), LocalDate.of(2025, 1, 1))
+    }
+
     @Test fun theLeadIntoATimeGoesWithIt() = assertEquals("dog on the beach", parse("dog from yesterday on the beach").text)
 }

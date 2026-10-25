@@ -19,8 +19,10 @@ import com.google.ai.edge.litertlm.InputData
 import com.google.ai.edge.litertlm.SamplerConfig
 import com.google.ai.edge.litertlm.ThinkingConfig
 import dev.hkgill.gillphotos.core.FaceModels
+import dev.hkgill.gillphotos.core.Places
 import java.io.File
 import java.security.MessageDigest
+import java.util.zip.GZIPInputStream
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledFuture
 import java.util.concurrent.TimeUnit
@@ -225,6 +227,16 @@ object Embedder {
     private fun scheduleRelease() = synchronized(lock) {
         releaseTask?.cancel(false)
         releaseTask = background.schedule(Runnable { release(); Log.i(TAG, "embedder released") }, IDLE_RELEASE_MS, TimeUnit.MILLISECONDS)
+    }
+}
+
+/** The offline place list (GeoNames, CC BY 4.0) from the APK's assets, loaded once: about a second, ~20 MB. */
+object PlaceKit {
+    @Volatile private var places: Places? = null
+
+    fun get(context: Context): Places = places ?: synchronized(this) {
+        places ?: GZIPInputStream(context.assets.open("places.tsv.gz")).bufferedReader().useLines { Places(it) }
+            .also { places = it }
     }
 }
 

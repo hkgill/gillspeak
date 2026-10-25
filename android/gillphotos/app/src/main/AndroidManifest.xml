@@ -8,6 +8,8 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
+    <!-- Where each photo was taken: Android hides GPS in photos without this. Read on the phone, never sent. -->
+    <uses-permission android:name="android.permission.ACCESS_MEDIA_LOCATION" />
     <!-- No internet permission, on purpose: Android then blocks this app from the network entirely, whatever any
          library inside it tries (ONNX Runtime's library asks for it; it is removed). Models are downloaded by the browser and added with the file picker. ONNX Runtime's
          library asks for network state for its telemetry; that is removed too (see its provider below). -->

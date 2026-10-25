@@ -46,15 +46,28 @@ class PhotoActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        look = Look.of(this)
+        look = Look.DARK // photos look best on night, in light mode too
         thumbs = Thumbs(this)
         id = intent.getLongExtra(ID, -1L)
 
-        val date = label("", look, 14f, dim = true).apply { layoutParams = LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f) }
+        val date = label("", look, 16f, bold = true)
+        val where = label("", look, 13f, dim = true)
+        val back = android.widget.FrameLayout(this).apply {
+            background = rounded(look.card, dp(22).toFloat())
+            contentDescription = "Back"
+            isClickable = true
+            setOnClickListener { finish() }
+            addView(Icon(this@PhotoActivity, Icon.Kind.BACK, look.ink, 2.5f), android.widget.FrameLayout.LayoutParams(dp(22), dp(22), Gravity.CENTER))
+        }
         val bar = LinearLayout(this).apply {
             gravity = Gravity.CENTER_VERTICAL
-            addView(pill("Back", look) { finish() })
-            addView(date.apply { setPadding(dp(12), 0, 0, 0) })
+            addView(back, LinearLayout.LayoutParams(dp(44), dp(44)))
+            addView(LinearLayout(this@PhotoActivity).apply {
+                orientation = LinearLayout.VERTICAL
+                setPadding(dp(12), 0, 0, 0)
+                addView(date)
+                addView(where)
+            }, LinearLayout.LayoutParams(0, WRAP_CONTENT, 1f))
         }
         val image = ImageView(this).apply {
             adjustViewBounds = true
@@ -99,10 +112,19 @@ class PhotoActivity : Activity() {
         val side = maxOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels).coerceAtMost(2048)
         work.execute {
             val picture = runCatching { Library.picture(this, id, side) }.getOrNull()
-            val taken = Store.get(this).taken(id)
+            val d = Store.get(this).details(id)
             main.post {
                 image.setImageBitmap(picture)
-                taken?.let { date.text = DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it)) }
+                if (d != null) {
+                    // What the photo itself says: when, where (nearest place, worked out on the phone) and which camera.
+                    date.text = DateFormat.getDateInstance(DateFormat.FULL).format(Date(d.taken))
+                    val country = d.country?.let { java.util.Locale("", it).displayCountry }
+                    where.text = listOfNotNull(
+                        DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(d.taken)),
+                        d.place?.let { place -> listOfNotNull(place, country).joinToString(", ") },
+                        d.camera,
+                    ).joinToString(" · ")
+                }
             }
         }
         showFaces()

@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.ImageDecoder
+import android.media.ExifInterface
 import android.net.Uri
 import android.os.Build
 import android.provider.MediaStore
@@ -23,11 +24,33 @@ object Library {
 
     fun uri(id: Long): Uri = ContentUris.withAppendedId(COLLECTION, id)
 
+    /** The photos, and their GPS: Android hides where a photo was taken unless the app also holds media location. */
     fun permissions(): Array<String> = when {
-        Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED)
-        Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES)
-        else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+        Build.VERSION.SDK_INT >= 34 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED, Manifest.permission.ACCESS_MEDIA_LOCATION)
+        Build.VERSION.SDK_INT >= 33 -> arrayOf(Manifest.permission.READ_MEDIA_IMAGES, Manifest.permission.ACCESS_MEDIA_LOCATION)
+        else -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.ACCESS_MEDIA_LOCATION)
     }
+
+    fun canReadLocation(context: Context) =
+        context.checkSelfPermission(Manifest.permission.ACCESS_MEDIA_LOCATION) == PackageManager.PERMISSION_GRANTED
+
+    /** What the photo's own EXIF says: GPS (null when there is none) and the camera. */
+    class Exif(val lat: Double?, val lon: Double?, val camera: String?)
+
+    fun exif(context: Context, id: Long): Exif =
+        context.contentResolver.openInputStream(MediaStore.setRequireOriginal(uri(id)))!!.use { input ->
+            val e = ExifInterface(input)
+            val ll = FloatArray(2).takeIf { e.getLatLong(it) && (it[0] != 0f || it[1] != 0f) }
+                ?.let { doubleArrayOf(it[0].toDouble(), it[1].toDouble()) }
+            val make = e.getAttribute(ExifInterface.TAG_MAKE)?.trim().orEmpty()
+            val model = e.getAttribute(ExifInterface.TAG_MODEL)?.trim().orEmpty()
+            val camera = when {
+                model.isEmpty() -> make.ifEmpty { null }
+                make.isEmpty() || model.startsWith(make, ignoreCase = true) -> model
+                else -> "$make $model"
+            }
+            Exif(ll?.get(0), ll?.get(1), camera)
+        }
 
     /** All photos, some (Android 14+ "Select photos"), or none. */
     fun access(context: Context): Access {

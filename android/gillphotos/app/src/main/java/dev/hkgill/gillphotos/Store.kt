@@ -13,7 +13,7 @@ import java.nio.ByteOrder
  * Photos are MediaStore ids. A photo is indexed in two halves that can happen at different times: its EmbeddingGemma
  * vector (once that model is imported) and its faces (the face models are in the APK).
  */
-class Store private constructor(context: Context) : SQLiteOpenHelper(context, "gillphotos.db", null, 1) {
+class Store private constructor(context: Context) : SQLiteOpenHelper(context, "gillphotos.db", null, 2) {
     init {
         setWriteAheadLoggingEnabled(true) // searches read while the index service writes
     }
@@ -23,7 +23,10 @@ class Store private constructor(context: Context) : SQLiteOpenHelper(context, "g
 
     class Person(val id: Long, val name: String?, val faces: Int, val cover: FaceRow)
 
-    class Counts(val photos: Int, val embedded: Int, val faced: Int, val failed: Int, val faces: Int)
+    class Counts(val photos: Int, val embedded: Int, val faced: Int, val failed: Int, val faces: Int, val located: Int)
+
+    /** What the photo itself says: when, where (GPS and the nearest place), and which camera. */
+    class Details(val taken: Long, val lat: Double?, val lon: Double?, val place: String?, val country: String?, val camera: String?)
 
     override fun onCreate(db: SQLiteDatabase) {
         db.execSQL(
@@ -37,9 +40,18 @@ class Store private constructor(context: Context) : SQLiteOpenHelper(context, "g
         db.execSQL("CREATE INDEX faces_photo ON faces(photo)")
         db.execSQL("CREATE INDEX faces_person ON faces(person)")
         db.execSQL("CREATE TABLE people (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT)")
+        onUpgrade(db, 1, 2)
     }
 
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
+        if (oldVersion < 2) {
+            // Version 2: where each photo was taken and with what. located = 1 once its EXIF has been read.
+            for (c in listOf("lat REAL", "lon REAL", "place TEXT", "country TEXT", "camera TEXT", "located INTEGER NOT NULL DEFAULT 0")) {
+                db.execSQL("ALTER TABLE photos ADD COLUMN $c")
+            }
+            db.execSQL("CREATE INDEX photos_place ON photos(place)")
+        }
+    }
 
     private inline fun <T> tx(block: SQLiteDatabase.() -> T): T {
         val db = writableDatabase
@@ -69,18 +81,51 @@ class Store private constructor(context: Context) : SQLiteOpenHelper(context, "g
         }
     }
 
-    /** Photos still to index, newest first: missing faces, or a vector when [vectors] is on. */
-    fun pending(vectors: Boolean): List<Long> {
-        val where = if (vectors) "failed = 0 AND (faced = 0 OR vector IS NULL)" else "failed = 0 AND faced = 0"
+    /** Photos still to index, newest first: missing faces, a vector when [vectors] is on, a place when [places] is. */
+    fun pending(vectors: Boolean, places: Boolean): List<Long> {
+        val needs = listOfNotNull("faced = 0", "vector IS NULL".takeIf { vectors }, "located = 0".takeIf { places })
+        val where = "failed = 0 AND (${needs.joinToString(" OR ")})"
         return readableDatabase.rawQuery("SELECT id FROM photos WHERE $where ORDER BY taken DESC", null).use { c ->
             List(c.count) { c.moveToNext(); c.getLong(0) }
         }
     }
 
-    fun needs(id: Long): Pair<Boolean, Boolean> =
-        readableDatabase.rawQuery("SELECT vector IS NULL, faced = 0 FROM photos WHERE id = ?", arrayOf(id.toString())).use { c ->
-            if (c.moveToFirst()) (c.getInt(0) == 1) to (c.getInt(1) == 1) else false to false
+    class Needs(val vector: Boolean, val faces: Boolean, val place: Boolean)
+
+    fun needs(id: Long): Needs =
+        readableDatabase.rawQuery("SELECT vector IS NULL, faced = 0, located = 0 FROM photos WHERE id = ?", arrayOf(id.toString())).use { c ->
+            if (c.moveToFirst()) Needs(c.getInt(0) == 1, c.getInt(1) == 1, c.getInt(2) == 1) else Needs(false, false, false)
         }
+
+    fun saveDetails(id: Long, lat: Double?, lon: Double?, place: String?, country: String?, camera: String?) {
+        writableDatabase.update("photos", ContentValues().apply {
+            if (lat != null && lon != null) { put("lat", lat); put("lon", lon) }
+            put("place", place); put("country", country); put("camera", camera); put("located", 1)
+        }, "id = ?", arrayOf(id.toString()))
+    }
+
+    fun details(id: Long): Details? = readableDatabase.rawQuery(
+        "SELECT taken, lat, lon, place, country, camera FROM photos WHERE id = ?", arrayOf(id.toString()),
+    ).use { c ->
+        if (!c.moveToFirst()) null else Details(
+            c.getLong(0), if (c.isNull(1)) null else c.getDouble(1), if (c.isNull(2)) null else c.getDouble(2),
+            c.getString(3), c.getString(4), c.getString(5),
+        )
+    }
+
+    /** Places in the library with how many photos each, most first. */
+    fun places(): List<Pair<String, Int>> = readableDatabase.rawQuery(
+        "SELECT place, COUNT(*) FROM photos WHERE place IS NOT NULL GROUP BY place ORDER BY COUNT(*) DESC", null,
+    ).use { c -> List(c.count) { c.moveToNext(); c.getString(0) to c.getInt(1) } }
+
+    /** Photos taken in any of [places]. */
+    fun photosIn(places: List<String>): Set<Long> {
+        if (places.isEmpty()) return emptySet()
+        val marks = places.joinToString(",") { "?" }
+        return readableDatabase.rawQuery("SELECT id FROM photos WHERE place IN ($marks)", places.toTypedArray()).use { c ->
+            HashSet<Long>().apply { while (c.moveToNext()) add(c.getLong(0)) }
+        }
+    }
 
     fun saveVector(id: Long, bytes: ByteArray, scale: Float) {
         writableDatabase.update("photos", ContentValues().apply { put("vector", bytes); put("scale", scale) }, "id = ?", arrayOf(id.toString()))
@@ -108,8 +153,8 @@ class Store private constructor(context: Context) : SQLiteOpenHelper(context, "g
     }
 
     fun counts(): Counts = readableDatabase.rawQuery(
-        "SELECT COUNT(*), COUNT(vector), SUM(faced), SUM(failed), (SELECT COUNT(*) FROM faces) FROM photos", null,
-    ).use { c -> c.moveToFirst(); Counts(c.getInt(0), c.getInt(1), c.getInt(2), c.getInt(3), c.getInt(4)) }
+        "SELECT COUNT(*), COUNT(vector), SUM(faced), SUM(failed), (SELECT COUNT(*) FROM faces), COUNT(place) FROM photos", null,
+    ).use { c -> c.moveToFirst(); Counts(c.getInt(0), c.getInt(1), c.getInt(2), c.getInt(3), c.getInt(4), c.getInt(5)) }
 
     /** Every photo vector: id, bytes and scale. */
     fun vectors(each: (Long, ByteArray, Float) -> Unit) {

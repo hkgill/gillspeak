@@ -15,7 +15,8 @@ import java.util.Date
  * indexing. All calls are for a worker thread.
  */
 object Search {
-    class Result(val ids: List<Long>, val note: String)
+    /** What was found, [chips] for how the search was read (person, time, place, words), and a [note]. */
+    class Result(val ids: List<Long>, val note: String, val chips: List<String> = emptyList())
 
     /** Document kinds as searches by meaning. Screenshots are known from their folder instead. */
     val KINDS = listOf(
@@ -52,15 +53,18 @@ object Search {
     fun run(context: Context, input: String): Result {
         val t0 = SystemClock.uptimeMillis()
         val store = Store.get(context)
-        val q = Queries.parse(input, store.names(), LocalDate.now(), ZoneId.systemDefault(), southern())
-        // Everyone named must be in the photo.
+        val placeNames = store.places().associate { (name, _) -> name.lowercase() to name }
+        val q = Queries.parse(input, store.names(), LocalDate.now(), ZoneId.systemDefault(), southern(), placeNames)
+        // Everyone named must be in the photo, and it must be in one of the places.
         val withPeople = q.people.map { store.photosWith(listOf(it)) }.reduceOrNull { a, b -> a intersect b }
+        val inPlaces = if (q.places.isEmpty()) null else store.photosIn(q.places)
         val taken = store.photos()
         val takenAt = taken.toMap()
         val from = q.from
         val until = q.until
         fun allowed(id: Long): Boolean {
             if (withPeople != null && id !in withPeople) return false
+            if (inPlaces != null && id !in inPlaces) return false
             val t = takenAt[id] ?: return false
             return (from == null || t >= from) && (until == null || t < until)
         }
@@ -71,17 +75,17 @@ object Search {
             val f = DateFormat.getDateInstance(DateFormat.MEDIUM)
             parts += "${f.format(Date(from))} – ${f.format(Date(until - 1))}"
         }
+        parts += q.places
         if (q.text.isBlank()) {
             val ids = taken.map { it.first }.filter(::allowed)
-            return Result(ids, (parts + "${ids.size} photos").joinToString(" · "))
+            return Result(ids, "${ids.size} photos, newest first", parts)
         }
         if (!Embedder.isReady(context)) return Result(emptyList(), "Import the search model to search by meaning")
         val vectors = index(context) ?: return Result(emptyList(), "No photos indexed yet: tap Index photos")
         val v = Embedder.text(context, q.text)
         val hits = synchronized(lock) { vectors.search(v, MAX, ::allowed) }
         parts += "“${q.text}”"
-        parts += "${hits.size} closest of ${vectors.size} indexed · ${SystemClock.uptimeMillis() - t0} ms"
-        return Result(hits.map { it.id }, parts.joinToString(" · "))
+        return Result(hits.map { it.id }, "${hits.size} closest of ${vectors.size} indexed · ${SystemClock.uptimeMillis() - t0} ms", parts)
     }
 
     /** Photos that look like [id], closest first. */
@@ -97,6 +101,13 @@ object Search {
         val shots = store.screenshots()
         val ids = store.photos().map { it.first }.filter { it in shots }
         return Result(ids, "Screenshots · ${ids.size}")
+    }
+
+    fun place(context: Context, place: String): Result {
+        val store = Store.get(context)
+        val inside = store.photosIn(listOf(place))
+        val ids = store.photos().map { it.first }.filter { it in inside }
+        return Result(ids, "${ids.size} photos, newest first", listOf(place))
     }
 
     fun person(context: Context, person: Long): Result {
