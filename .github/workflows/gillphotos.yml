@@ -1,0 +1,47 @@
+name: gillphotos
+
+# The offline photo search prototype (android/gillphotos): a Gradle build of its own, with Kotlin 2.4 for
+# LiteRT-LM 0.18. Runs on any push or pull request that touches it, so every change has a debug APK to install.
+on:
+  push:
+    paths:
+      - "android/gillphotos/**"
+      - ".github/workflows/gillphotos.yml"
+  pull_request:
+    paths:
+      - "android/gillphotos/**"
+      - ".github/workflows/gillphotos.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gillphotos-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    # Core tests on the JVM, then the debug APK, kept as an artifact.
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: android
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test and build
+        run: ./gradlew --no-daemon -p gillphotos :core:test assembleDebug
+      - uses: actions/upload-artifact@v4
+        with:
+          name: gillphotos-debug-apk
+          path: android/gillphotos/app/build/outputs/apk/debug/*.apk
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: gillphotos-test-reports
+          path: android/gillphotos/core/build/reports/tests/

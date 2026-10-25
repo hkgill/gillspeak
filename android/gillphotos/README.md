@@ -16,7 +16,7 @@ Search the photos on your phone the way Google Photos does, with everything runn
 
 ## Try it
 
-1. Install the APK: download the `gillphotos-debug-apk` artifact from a CI run, or build it (below). Each CI build is signed with a different debug key, so uninstall the old one first.
+1. Install the APK: download the `gillphotos-debug-apk` artifact from the latest [gillphotos workflow run](https://github.com/hkgill/gillspeak/actions/workflows/gillphotos.yml), or build it (below). Each CI build is signed with a different debug key, so uninstall the old one first.
 2. Open gillphotos and tap **Allow photos**.
 3. **Get the search model.** Google's EmbeddingGemma 2 files on Hugging Face need a sign-in and accepting Google's terms, so the app can't download one itself. On the phone, tap **Get it**, sign in, and download the `.litertlm` file from [litert-community/embeddinggemma-2-text-vision-440m-litert-lm](https://huggingface.co/litert-community/embeddinggemma-2-text-vision-440m-litert-lm). The full 740M model also works. Then tap **Import file** and pick it. The app checks that it reads both text and pictures. It shows the file's SHA256, so a good file can be pinned later.
 4. Tap **Index photos**. It runs with a notification, newest photos first, and pauses if the phone gets hot. Faces work without the search model.
