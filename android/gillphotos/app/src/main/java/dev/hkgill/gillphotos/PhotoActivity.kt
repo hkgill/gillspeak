@@ -175,28 +175,36 @@ class PhotoActivity : Activity() {
     private fun buildAsk() {
         val status = Gemma.model.refresh(this)
         val key = when (status) {
-            is PinnedModel.Status.Downloading -> "downloading ${status.done * 100 / status.total} ${status.waitingForWifi}"
+            is PinnedModel.Status.Adding -> "adding ${status.done * 100 / status.total}"
             else -> status.javaClass.simpleName
         }
         if (key == built) return
         built = key
         ask.removeAllViews()
         ask.addView(label("Ask Gemma about this photo", look, 16f, bold = true))
+        fun steps() = ask.addView(LinearLayout(this).apply {
+            addView(pill("Download in browser", look) { Gemma.model.openDownload(this@PhotoActivity) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { marginEnd = dp(8) })
+            addView(pill("Add the file", look, main = true) { startActivityForResult(Gemma.model.pickIntent(), REQ_GEMMA) })
+        }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(10) })
         when (status) {
             PinnedModel.Status.Ready -> askForm()
             PinnedModel.Status.Missing -> {
-                ask.addView(label("Gemma 4 E2B runs on this phone and can describe the photo or read its text. It's a 2.6 GB download over Wi-Fi.", look, 14f, dim = true))
-                ask.addView(pill("Download Gemma", look, main = true) { Gemma.model.download(this) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(10) })
+                ask.addView(label("Gemma 4 E2B runs on this phone and can describe the photo or read its text. It's 2.6 GB: gillphotos has no internet access, so your browser downloads it, then you add the file here.", look, 14f, dim = true))
+                steps()
             }
-            is PinnedModel.Status.Downloading -> ask.addView(label(
-                "Downloading: ${status.done * 100 / status.total}%" + if (status.waitingForWifi) ", waiting for Wi-Fi" else "", look, 14f, dim = true,
-            ))
-            PinnedModel.Status.Installing -> ask.addView(label("Checking the download…", look, 14f, dim = true))
+            is PinnedModel.Status.Adding -> ask.addView(label("Adding Gemma: ${status.done * 100 / status.total}%", look, 14f, dim = true))
             is PinnedModel.Status.Failed -> {
-                ask.addView(label("The download failed: ${status.reason}", look, 14f, dim = true))
-                ask.addView(pill("Try again", look) { Gemma.model.download(this) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(10) })
+                ask.addView(label("Couldn't add it: ${status.reason}", look, 14f, dim = true))
+                steps()
             }
         }
+    }
+
+    @Deprecated("Activity results without AndroidX")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data ?: return
+        if (requestCode == REQ_GEMMA && resultCode == RESULT_OK) Gemma.model.add(this, uri) {}
     }
 
     private fun askForm() {
@@ -247,5 +255,6 @@ class PhotoActivity : Activity() {
 
     companion object {
         const val ID = "id"
+        private const val REQ_GEMMA = 1
     }
 }

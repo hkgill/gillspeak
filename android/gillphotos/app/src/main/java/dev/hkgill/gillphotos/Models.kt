@@ -1,9 +1,10 @@
 package dev.hkgill.gillphotos
 
-import android.app.DownloadManager
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.os.SystemClock
+import android.provider.OpenableColumns
 import android.util.Log
 import com.google.ai.edge.litertlm.Backend
 import com.google.ai.edge.litertlm.Content
@@ -31,100 +32,73 @@ private val background = Executors.newSingleThreadScheduledExecutor()
 private fun hex(md: MessageDigest) = md.digest().joinToString("") { "%02x".format(it) }
 
 /**
- * One model file from Hugging Face, pinned to a revision and checked against its SHA256: downloaded by Android's
- * DownloadManager (Wi-Fi only, resumable, with a progress notification), then copied into private storage with the
- * checksum checked on the way, as gillspeak does for Gemma.
+ * One model file from Hugging Face, pinned to a revision and checked against its SHA256. gillphotos has no internet
+ * permission, so Android blocks it from the network outright: the browser downloads the file, the user adds it with
+ * the system file picker, and the app copies it into private storage, checking its size and SHA256 on the way. A
+ * wrong or altered file is refused.
  */
 class PinnedModel(
-    private val name: String,
+    val name: String,
     private val file: String,
     val size: Long,
     private val sha256: String,
-    private val url: String,
+    val url: String,
 ) {
     sealed class Status {
         object Missing : Status()
-        class Downloading(val done: Long, val total: Long, val waitingForWifi: Boolean) : Status()
-        object Installing : Status()
+        class Adding(val done: Long, val total: Long) : Status()
         object Ready : Status()
         class Failed(val reason: String) : Status()
     }
 
-    @Volatile private var installing = false
+    @Volatile private var adding = -1L // bytes copied so far, or -1 when not adding
     @Volatile private var failure: String? = null
-    private val dir = "download-" + file.substringBefore('.')
 
     fun file(context: Context) = File(context.filesDir, "models/$file")
     fun isReady(context: Context) = file(context).length() == size
-    private fun dm(context: Context) = context.getSystemService(DownloadManager::class.java)
-    private fun prefs(context: Context) = context.getSharedPreferences("download_$file", Context.MODE_PRIVATE)
-    private fun pendingId(context: Context) = prefs(context).getLong("id", -1).takeIf { it >= 0 }
-    private fun setPending(context: Context, id: Long?) =
-        prefs(context).edit().apply { if (id == null) remove("id") else putLong("id", id) }.apply()
-    private fun downloaded(context: Context) = File(context.getExternalFilesDir(dir), file)
+    val megabytes get() = size / 1_000_000
 
-    /** Where the model stands; a finished download starts installing. */
-    fun refresh(context: Context): Status {
-        if (installing) return Status.Installing
-        if (isReady(context)) return Status.Ready
-        failure?.let { return Status.Failed(it) }
-        val id = pendingId(context) ?: return Status.Missing
-        dm(context).query(DownloadManager.Query().setFilterById(id)).use { c ->
-            if (!c.moveToFirst()) return fail(context, "the download was cancelled")
-            val reason = c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_REASON))
-            return when (c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS))) {
-                DownloadManager.STATUS_SUCCESSFUL -> { install(context); Status.Installing }
-                DownloadManager.STATUS_FAILED -> fail(context, "the download failed (error $reason)")
-                else -> Status.Downloading(
-                    c.getLong(c.getColumnIndexOrThrow(DownloadManager.COLUMN_BYTES_DOWNLOADED_SO_FAR)).coerceAtLeast(0), size,
-                    reason == DownloadManager.PAUSED_QUEUED_FOR_WIFI,
-                )
-            }
-        }
+    fun refresh(context: Context): Status = when {
+        adding >= 0 -> Status.Adding(adding, size)
+        isReady(context) -> Status.Ready
+        failure != null -> Status.Failed(failure!!)
+        else -> Status.Missing
     }
 
-    /** Short text for a status line: "downloading, 40%", "ready". */
+    /** Short text for a status line: "ready", "adding, 40%". */
     fun describe(context: Context): String = when (val s = refresh(context)) {
-        Status.Missing -> "not downloaded"
-        is Status.Downloading -> "downloading, ${s.done * 100 / s.total}%" + if (s.waitingForWifi) ", waiting for Wi-Fi" else ""
-        Status.Installing -> "checking the download"
+        Status.Missing -> "not added"
+        is Status.Adding -> "adding, ${s.done * 100 / s.total}%"
         Status.Ready -> "ready"
         is Status.Failed -> "failed: ${s.reason}"
     }
 
-    private fun fail(context: Context, reason: String): Status {
-        cancel(context)
-        failure = reason
-        return Status.Failed(reason)
-    }
-
-    fun download(context: Context) {
+    /** Opens the pinned download in the browser. */
+    fun openDownload(context: Context) {
         failure = null
-        if (isReady(context) || pendingId(context) != null) return
-        downloaded(context).delete() // DownloadManager won't overwrite a leftover
-        val request = DownloadManager.Request(Uri.parse(url))
-            .setTitle("gillphotos: $name")
-            .setDescription(file)
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE)
-            .setAllowedOverMetered(false)
-            .setAllowedOverRoaming(false)
-            .setDestinationInExternalFilesDir(context, dir, file)
-        setPending(context, dm(context).enqueue(request))
+        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    fun cancel(context: Context) {
-        pendingId(context)?.let { dm(context).remove(it) }
-        setPending(context, null)
-    }
+    /** The system file picker for the downloaded file; the result goes to [add]. */
+    fun pickIntent(): Intent = Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*")
 
-    private fun install(context: Context) {
-        if (installing) return
-        installing = true
+    /** Copies a picked file into private storage if it is exactly the pinned model; [onDone] runs when over. */
+    fun add(context: Context, uri: Uri, onDone: () -> Unit) {
+        if (adding >= 0) return
+        failure = null
+        adding = 0
         background.execute {
             val part = File(file(context).path + ".part").also { it.parentFile?.mkdirs() }
             try {
+                val picked = context.contentResolver.query(uri, arrayOf(OpenableColumns.SIZE), null, null, null)?.use { c ->
+                    if (c.moveToFirst() && !c.isNull(0)) c.getLong(0) else null
+                }
+                if (picked != null && picked != size) {
+                    failure = "that isn't the $name file (it should be $megabytes MB)"
+                    return@execute
+                }
                 val md = MessageDigest.getInstance("SHA-256")
-                downloaded(context).inputStream().use { input ->
+                context.contentResolver.openInputStream(uri)!!.use { input ->
                     part.outputStream().use { out ->
                         val buf = ByteArray(1 shl 20)
                         while (true) {
@@ -132,29 +106,29 @@ class PinnedModel(
                             if (n < 0) break
                             md.update(buf, 0, n)
                             out.write(buf, 0, n)
+                            adding += n
                         }
                     }
                 }
                 if (hex(md) != sha256) {
                     part.delete()
-                    fail(context, "the model failed its checksum")
+                    failure = "the file doesn't match the expected $name (checksum)"
                 } else {
                     part.renameTo(file(context))
-                    cancel(context) // also deletes the downloaded copy
-                    Log.i(TAG, "$name downloaded and verified")
+                    Log.i(TAG, "$name added and verified")
                 }
             } catch (e: Exception) {
-                Log.e(TAG, "$name install failed", e)
+                Log.e(TAG, "$name: adding failed", e)
                 part.delete() // a full disk can stop the copy part way: don't leave hundreds of megabytes behind
-                fail(context, e.message ?: e.javaClass.simpleName)
+                failure = e.message ?: e.javaClass.simpleName
             } finally {
-                installing = false
+                adding = -1
+                onDone()
             }
         }
     }
 
     fun delete(context: Context) {
-        cancel(context)
         file(context).delete()
         failure = null
     }
@@ -268,8 +242,8 @@ object FaceKit {
 
 /**
  * Gemma 4 E2B (optional, 2.6 GB) on the GPU: asked about one photo at a time ("what's the total on this receipt?").
- * The same pinned, SHA256-checked file as gillspeak's LocalLlm; Android keeps each app's files to itself, so
- * gillphotos downloads its own copy. Released after ten idle minutes.
+ * The same pinned, SHA256-checked file as gillspeak's LocalLlm, added through [PinnedModel]; Android keeps each
+ * app's files to itself, so gillphotos needs its own copy. Released after ten idle minutes.
  */
 object Gemma {
     private const val IDLE_RELEASE_MS = 10 * 60_000L

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <!-- The photos to index. Android 14+ also lets people share only some photos. -->
     <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
@@ -7,17 +8,21 @@
     <uses-permission
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
-    <!-- Only for the optional Gemma download, through Android's DownloadManager. Photos, faces and searches never
-         use the network. -->
-    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- No internet permission, on purpose: Android then blocks this app from the network entirely, whatever any
+         library inside it tries (ONNX Runtime's library asks for it; it is removed). Models are downloaded by the browser and added with the file picker. ONNX Runtime's
+         library asks for network state for its telemetry; that is removed too (see its provider below). -->
+    <uses-permission android:name="android.permission.INTERNET" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" tools:node="remove" />
     <!-- Indexing runs as a foreground service with a progress notification, so it carries on with the screen off. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
-    <!-- Face data stays on the phone: no backups. -->
+    <!-- Face data stays on the phone: no cloud backup, and no copying to a new phone (Android 12+). -->
     <application
         android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
@@ -42,6 +47,13 @@
             android:name=".PhotoActivity"
             android:exported="false"
             android:windowSoftInputMode="adjustResize" />
+
+        <!-- ONNX Runtime 1.31's Android library starts Microsoft telemetry at app launch through this provider. Not
+             here: removed from the merged manifest. -->
+        <provider
+            android:name="ai.onnxruntime.TelemetryInitializer"
+            android:authorities="${applicationId}.onnxruntime_telemetry_initializer"
+            tools:node="remove" />
 
         <service
             android:name=".IndexService"

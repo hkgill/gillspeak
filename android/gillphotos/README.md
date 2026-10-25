@@ -18,11 +18,11 @@ Search the photos on your phone the way Google Photos does, with everything runn
 
 1. Install the APK: download the `gillphotos-debug-apk` artifact from the latest [gillphotos workflow run](https://github.com/hkgill/gillspeak/actions/workflows/gillphotos.yml), or build it (below). Each CI build is signed with a different debug key, so uninstall the old one first.
 2. Open gillphotos and tap **Allow photos**.
-3. Tap **Download search model**: EmbeddingGemma 2, text + vision, 388 MB over Wi-Fi. It comes from Google's [litert-community](https://huggingface.co/litert-community/embeddinggemma-2-text-vision-440m-litert-lm) on Hugging Face, pinned to one revision and checked against its SHA256.
+3. Get the search model: EmbeddingGemma 2, text + vision, 388 MB. gillphotos has no internet access, so tap **Download in browser**, which opens the pinned file from Google's [litert-community](https://huggingface.co/litert-community/embeddinggemma-2-text-vision-440m-litert-lm) on Hugging Face. When it has downloaded, tap **Add the file** and pick it. The app checks its size and SHA256 and refuses anything else.
 4. Tap **Index photos**. It runs with a notification, newest photos first, and pauses if the phone gets hot. Faces work without the search model.
 5. Search, name people (long-press a face), and open a photo for **More like this** and **Ask Gemma**.
 
-The **⋯** menu changes how much detail EmbeddingGemma sees per photo (70 or 140 image tokens, the two this build has). It also downloads or deletes Gemma, groups faces again, and removes the search model.
+The **⋯** menu changes how much detail EmbeddingGemma sees per photo (70 or 140 image tokens, the two this build has). It also adds or deletes Gemma (the same browser-then-add steps), groups faces again, and removes the search model.
 
 ### Worth measuring
 
@@ -33,9 +33,13 @@ The **⋯** menu changes how much detail EmbeddingGemma sees per photo (70 or 14
 
 ## Privacy
 
-- Photos, vectors, faces and names stay in the app's private storage. Android backups are off.
-- The network is used only to download the two models (the search model and the optional Gemma). The face models are inside the APK.
-- Face vectors are biometric data. Removing the app removes them.
+**Nothing leaves the phone, and Android enforces it:**
+
+- **No internet permission.** Without it, Android blocks the app from the network entirely, so nothing inside it can send data: not our code, and not a library. You can check under Settings → Apps → gillphotos → Permissions.
+- **ONNX Runtime's telemetry is removed.** Its Android library (1.31) starts a Microsoft telemetry client when an app launches, through a content provider. The manifest strips that provider and the network-state permission it asks for.
+- **No backups and no device transfer.** Cloud backup and copying the app's data to a new phone (Android 12+) are both off.
+- **Downloads go through your browser.** The models come from Hugging Face; gillphotos only checks and copies the file you add. The face models are inside the APK.
+- Photos, vectors, faces and names stay in the app's private storage. Face vectors are biometric data. Removing the app removes them all.
 
 ## Models
 
@@ -43,8 +47,8 @@ The **⋯** menu changes how much detail EmbeddingGemma sees per photo (70 or 14
 | --- | --- | --- | --- |
 | [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) (2023mar) | Finds faces | MIT | Downloaded at build time, pinned by commit and SHA256, packed into the APK |
 | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) (int8) | Tells people apart | Apache 2.0 | Same |
-| EmbeddingGemma 2, text + vision 440M | Search by meaning | Apache 2.0 | In-app download (388 MB), pinned by revision and SHA256 |
-| Gemma 4 E2B | Questions about a photo | Apache 2.0 | Optional in-app download, pinned like gillspeak's |
+| EmbeddingGemma 2, text + vision 440M | Search by meaning | Apache 2.0 | Downloaded in the browser (388 MB), then added; pinned by revision and SHA256 |
+| Gemma 4 E2B | Questions about a photo | Apache 2.0 | Optional, added the same way (2.6 GB), pinned like gillspeak's |
 
 ## Build
 

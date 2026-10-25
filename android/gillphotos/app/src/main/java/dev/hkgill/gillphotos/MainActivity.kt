@@ -178,8 +178,7 @@ class MainActivity : Activity() {
 
     private val poll = object : Runnable {
         override fun run() {
-            val s = Embedder.model.refresh(this@MainActivity)
-            if (s !is PinnedModel.Status.Missing && s !is PinnedModel.Status.Ready && s !is PinnedModel.Status.Failed) {
+            if (Embedder.model.refresh(this@MainActivity) is PinnedModel.Status.Adding) {
                 buildSetup()
                 main.postDelayed(this, 1000)
             } else if (setupShowsDownload) {
@@ -297,14 +296,18 @@ class MainActivity : Activity() {
         }
         when (val s = Embedder.model.refresh(this)) {
             PinnedModel.Status.Ready -> Unit
-            PinnedModel.Status.Missing, is PinnedModel.Status.Failed -> {
+            is PinnedModel.Status.Adding -> line("Adding the search model: ${s.done * 100 / s.total}%")
+            else -> {
                 line(
-                    (if (s is PinnedModel.Status.Failed) "The download failed: ${s.reason}. " else "") +
-                        "Searching by meaning needs the search model, EmbeddingGemma 2 (388 MB, over Wi-Fi). Faces work without it.",
+                    (if (s is PinnedModel.Status.Failed) "Couldn't add it: ${s.reason}. " else "") +
+                        "Searching by meaning needs the search model, EmbeddingGemma 2 (388 MB). gillphotos has no internet " +
+                        "access, so your browser downloads it; then add the file here. Faces work without it.",
                 )
-                buttons(pill("Download search model", look, main = true) { Embedder.model.download(this); refresh() })
+                buttons(
+                    pill("Download in browser", look) { Embedder.model.openDownload(this) },
+                    pill("Add the file", look, main = true) { startActivityForResult(Embedder.model.pickIntent(), REQ_SEARCH_MODEL) },
+                )
             }
-            else -> line("Search model: ${Embedder.model.describe(this)}")
         }
         if (access != Library.Access.NONE) {
             buttons(
@@ -313,7 +316,7 @@ class MainActivity : Activity() {
             )
         }
         setup.visibility = if (setup.childCount == 0) View.GONE else View.VISIBLE
-        val downloading = Embedder.model.refresh(this).let { it is PinnedModel.Status.Downloading || it is PinnedModel.Status.Installing }
+        val downloading = Embedder.model.refresh(this) is PinnedModel.Status.Adding
         if (downloading && !setupShowsDownload) main.postDelayed(poll, 1000)
         setupShowsDownload = downloading
     }
@@ -376,13 +379,7 @@ class MainActivity : Activity() {
 
     private fun more() {
         val tokens = Embedder.tokens(this)
-        val gemma = when (val s = Gemma.model.refresh(this)) {
-            PinnedModel.Status.Missing -> "Download (2.6 GB, Wi-Fi)"
-            is PinnedModel.Status.Downloading -> "downloading, ${s.done * 100 / s.total}%${if (s.waitingForWifi) ", waiting for Wi-Fi" else ""}"
-            PinnedModel.Status.Installing -> "checking the download"
-            PinnedModel.Status.Ready -> "ready (tap to delete)"
-            is PinnedModel.Status.Failed -> "failed: ${s.reason} (tap to retry)"
-        }
+        val gemma = Gemma.model.describe(this) + if (Gemma.model.isReady(this)) " (tap to delete)" else ""
         val items = arrayOf(
             "Photo detail for search: ${if (tokens == 0) "model default" else "$tokens image tokens"}",
             "Gemma 4 E2B for questions about a photo: $gemma",
@@ -414,11 +411,17 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun gemmaAction() = when (Gemma.model.refresh(this)) {
+    private fun gemmaAction() {
+        when (Gemma.model.refresh(this)) {
         PinnedModel.Status.Ready -> confirm("Delete Gemma 4 E2B (2.6 GB)?") { work.execute { Gemma.delete(this) } }
-        is PinnedModel.Status.Downloading -> confirm("Stop the Gemma download?") { Gemma.model.cancel(this) }
-        PinnedModel.Status.Installing -> Unit
-        else -> { Gemma.model.download(this); Toast.makeText(this, "Downloading Gemma 4 E2B over Wi-Fi", Toast.LENGTH_SHORT).show() }
+        is PinnedModel.Status.Adding -> Unit
+        else -> AlertDialog.Builder(this)
+            .setTitle("Gemma 4 E2B")
+            .setMessage("2.6 GB, for questions about a photo. gillphotos has no internet access, so your browser downloads it; then add the file here.")
+            .setPositiveButton("Add the file") { _, _ -> startActivityForResult(Gemma.model.pickIntent(), REQ_GEMMA) }
+            .setNeutralButton("Download in browser") { _, _ -> Gemma.model.openDownload(this) }
+            .show()
+        }
     }
 
     private fun regroup() {
@@ -437,6 +440,18 @@ class MainActivity : Activity() {
 
     // ---- Results from the system ----
 
+    @Deprecated("Activity results without AndroidX")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data ?: return
+        if (resultCode != RESULT_OK) return
+        when (requestCode) {
+            REQ_SEARCH_MODEL -> Embedder.model.add(this, uri) { Search.reset(); main.post(::refresh) }
+            REQ_GEMMA -> Gemma.model.add(this, uri) { main.post { Toast.makeText(this, "Gemma: ${Gemma.model.describe(this)}", Toast.LENGTH_LONG).show() } }
+        }
+        refresh()
+    }
+
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == REQ_PHOTOS) { refresh(); showAll() }
@@ -446,5 +461,7 @@ class MainActivity : Activity() {
         const val SIMILAR = "similar"
         private const val REQ_PHOTOS = 1
         private const val REQ_NOTIFY = 3
+        private const val REQ_SEARCH_MODEL = 4
+        private const val REQ_GEMMA = 5
     }
 }
