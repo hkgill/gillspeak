@@ -1,0 +1,2 @@
+# The face models, fetched and checked at build time (see app/build.gradle.kts)
+app/models/

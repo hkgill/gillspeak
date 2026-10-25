@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- gillphotos' mark: gillspeak's round g, with a lime photo frame and its sun in place of the sound bars, on the
+     120-unit grid scaled into the adaptive icon's 66 dp safe zone. The night background is
+     @color/ic_launcher_background. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.55"
+        android:scaleY="0.55"
+        android:translateX="21"
+        android:translateY="21">
+        <path
+            android:strokeColor="#E9EAEE"
+            android:strokeWidth="11"
+            android:pathData="M26,52 a28,28 0 1,0 56,0 a28,28 0 1,0 -56,0" />
+        <path
+            android:strokeColor="#E9EAEE"
+            android:strokeWidth="11"
+            android:strokeLineCap="round"
+            android:pathData="M82,26 V84 C82,102 68,108 56,108 C47,108 41,105 36,100" />
+        <path
+            android:strokeColor="#C8F25A"
+            android:strokeWidth="6"
+            android:strokeLineJoin="round"
+            android:pathData="M41,62 L50,50 L57,58 L61,54 L67,62 Z" />
+        <path
+            android:fillColor="#C8F25A"
+            android:pathData="M58,43 a4,4 0 1,0 8,0 a4,4 0 1,0 -8,0" />
+    </group>
+</vector>

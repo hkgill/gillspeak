@@ -1,6 +1,6 @@
 # gillphotos: an offline Google Photos for Android (research)
 
-Status: **research only** (October 2026). Nothing is built yet. This records what's possible, which models fit on a phone, and a proposed plan.
+Status: **research done; prototype in [`android/gillphotos`](../android/gillphotos/README.md)** (October 2026), not yet run on a phone. This records what's possible, which models fit on a phone, and a proposed plan.
 
 **The question:** can we make a gallery app, **gillphotos**, that searches your photos the way Google Photos does (*"passport"*, *"receipt from Bunnings"*, *"Sam at the beach"*, *"the whiteboard from Tuesday's meeting"*) with everything running on the phone? Can the Gemma that gillspeak already runs do it? And which other models on Hugging Face fit on a phone?
 
@@ -41,7 +41,7 @@ Each photo becomes a vector once, when it's indexed. A search's text becomes a v
 
 | Model | Size | Licence | Notes | Verdict |
 | --- | --- | --- | --- | --- |
-| **EmbeddingGemma 2**, text + vision (`litert-community/embeddinggemma-2-text-vision-440m-litert-lm`) | 440M parameters: a 270M text model + a 170M vision encoder | Apache 2.0 | Released 6 October 2026. Runs on **LiteRT-LM**, the runtime gillspeak already uses (`EmbeddingEngine`, from v0.18.0). 768-d vectors, which can be cut to 512, 256 or 128 (Matryoshka). 70 to 1,120 image tokens (default 280). Reported per image at 70 tokens: 119 ms on an S26 Ultra GPU, 175 ms on its CPU, 49 ms on a Pixel 11 Pro TPU; one community build measured ~148 ms on a **Galaxy S25 GPU**. ~125 MB of CPU memory with vision | **Pick.** Same family and runtime as gillspeak's Gemma |
+| **EmbeddingGemma 2**, text + vision (`litert-community/embeddinggemma-2-text-vision-440m-litert-lm`) | 440M parameters: a 270M text model + a 170M vision encoder | Apache 2.0 | Released 6 October 2026. Runs on **LiteRT-LM**, the runtime gillspeak already uses (`EmbeddingEngine` from v0.17.0, EmbeddingGemma 2 from v0.18.0). 768-d vectors, which can be cut to 512, 256 or 128 (Matryoshka). 70 to 1,120 image tokens (default 280). Reported per image at 70 tokens: 119 ms on an S26 Ultra GPU, 175 ms on its CPU, 49 ms on a Pixel 11 Pro TPU; one community build measured ~148 ms on a **Galaxy S25 GPU**. ~125 MB of CPU memory with vision | **Pick.** Same family and runtime as gillspeak's Gemma |
 | EmbeddingGemma 2, full (740M) | adds a 300M audio encoder | Apache 2.0 | Also embeds audio and video frames (29 images or 58 frames in its 8K context) | Later, for searching videos |
 | SigLIP 2 base patch16-224 (`litert-community/SigLIP2-base-patch16-224`) | ~185 MB FP16 | Apache 2.0 (Google's checkpoints) | LiteRT build runs as one graph on the GPU; 768-d. The text tower is separate and needs its own conversion | **Fallback** if EmbeddingGemma 2 disappoints |
 | Apple MobileCLIP / MobileCLIP2 (S0–S4) | small, fast | Apple's research licence (`apple-amlr`) | Used by Ente's search and the iOS app Queryable | Licence doesn't suit a public open-source app |
@@ -161,9 +161,9 @@ The rules that keep gillspeak's commands safe carry over:
 
 ## Where gillphotos would live
 
-- **A separate app** (`dev.hkgill.gillphotos`) in this repository as `android/photos`, next to `watch` and `watchface`. Model download, checksum and LiteRT-LM loading would move from `LocalLlm.kt` / `LocalAsr.kt` into a small shared module both apps use.
+- **A separate app** (`dev.hkgill.gillphotos`) in this repository as `android/gillphotos`. It is a Gradle build of its own rather than a module next to `watch` and `watchface`, because of the Kotlin version (below). The prototype copies the little download code it needs from `LocalLlm.kt`.
 - **One catch: a second Gemma download.** Android keeps each app's files private, so gillphotos can't use the 2.6 GB Gemma that gillspeak already downloaded. The options are: download it again; have gillspeak share it through a signature-protected ContentProvider that hands out a file descriptor (LiteRT-LM's `EmbeddingEngineConfig` takes a `modelFd`, and whether `EngineConfig` does too needs checking); or build photo search into gillspeak. The first version doesn't need Gemma at all, so this can wait.
-- **LiteRT-LM version:** `EmbeddingEngine` arrived in v0.18.0. gillspeak pins 0.16.1 because later releases need Kotlin 2.4 (see `android/app/build.gradle.kts`). gillphotos would start on 0.18+ with Kotlin 2.4, and gillspeak could follow.
+- **LiteRT-LM version:** `EmbeddingEngine` arrived in v0.17.0, and EmbeddingGemma 2 with v0.18.0. gillspeak pins 0.16.1 because later releases need Kotlin 2.4 (see `android/app/build.gradle.kts`). gillphotos uses 0.18.1 with Kotlin 2.4, and gillspeak could follow.
 
 ## Proposed plan
 
