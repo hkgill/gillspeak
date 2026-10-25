@@ -173,9 +173,9 @@ class PhotoActivity : Activity() {
 
     /** The ask card for Gemma's current state; rebuilt only when that changes, so typing isn't lost. */
     private fun buildAsk() {
-        val status = Gemma.refresh(this)
+        val status = Gemma.model.refresh(this)
         val key = when (status) {
-            is Gemma.Status.Downloading -> "downloading ${status.done * 100 / status.total} ${status.waitingForWifi}"
+            is PinnedModel.Status.Downloading -> "downloading ${status.done * 100 / status.total} ${status.waitingForWifi}"
             else -> status.javaClass.simpleName
         }
         if (key == built) return
@@ -183,18 +183,18 @@ class PhotoActivity : Activity() {
         ask.removeAllViews()
         ask.addView(label("Ask Gemma about this photo", look, 16f, bold = true))
         when (status) {
-            Gemma.Status.Ready -> askForm()
-            Gemma.Status.Missing -> {
+            PinnedModel.Status.Ready -> askForm()
+            PinnedModel.Status.Missing -> {
                 ask.addView(label("Gemma 4 E2B runs on this phone and can describe the photo or read its text. It's a 2.6 GB download over Wi-Fi.", look, 14f, dim = true))
-                ask.addView(pill("Download Gemma", look, main = true) { Gemma.download(this) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(10) })
+                ask.addView(pill("Download Gemma", look, main = true) { Gemma.model.download(this) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(10) })
             }
-            is Gemma.Status.Downloading -> ask.addView(label(
+            is PinnedModel.Status.Downloading -> ask.addView(label(
                 "Downloading: ${status.done * 100 / status.total}%" + if (status.waitingForWifi) ", waiting for Wi-Fi" else "", look, 14f, dim = true,
             ))
-            Gemma.Status.Installing -> ask.addView(label("Checking the download…", look, 14f, dim = true))
-            is Gemma.Status.Failed -> {
+            PinnedModel.Status.Installing -> ask.addView(label("Checking the download…", look, 14f, dim = true))
+            is PinnedModel.Status.Failed -> {
                 ask.addView(label("The download failed: ${status.reason}", look, 14f, dim = true))
-                ask.addView(pill("Try again", look) { Gemma.download(this) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(10) })
+                ask.addView(pill("Try again", look) { Gemma.model.download(this) }, LinearLayout.LayoutParams(WRAP_CONTENT, WRAP_CONTENT).apply { topMargin = dp(10) })
             }
         }
     }

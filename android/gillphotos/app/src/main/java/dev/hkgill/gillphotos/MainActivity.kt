@@ -6,12 +6,10 @@ import android.app.AlertDialog
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Typeface
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.provider.OpenableColumns
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -30,7 +28,6 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.Toast
 import java.util.concurrent.Executors
-import kotlin.concurrent.thread
 
 /**
  * The gallery: a search box, document kinds, the people found, and a grid of photos. Typing "Sam at the beach last
@@ -51,7 +48,6 @@ class MainActivity : Activity() {
     private lateinit var note: TextView
     private lateinit var grid: GridView
     private var ids: List<Long> = emptyList()
-    private var importing: String? = null
     private var wasRunning = false
 
     private val onProgress: () -> Unit = {
@@ -180,7 +176,22 @@ class MainActivity : Activity() {
         refresh()
     }
 
+    private val poll = object : Runnable {
+        override fun run() {
+            val s = Embedder.model.refresh(this@MainActivity)
+            if (s !is PinnedModel.Status.Missing && s !is PinnedModel.Status.Ready && s !is PinnedModel.Status.Failed) {
+                buildSetup()
+                main.postDelayed(this, 1000)
+            } else if (setupShowsDownload) {
+                refresh() // finished: drop the progress line
+            }
+        }
+    }
+    private var setupShowsDownload = false
+
     override fun onPause() {
+        main.removeCallbacks(poll)
+        setupShowsDownload = false
         IndexService.listeners -= onProgress
         super.onPause()
     }
@@ -251,7 +262,6 @@ class MainActivity : Activity() {
     }
 
     private fun showStatus() {
-        importing?.let { status.text = it; return }
         val p = IndexService.progress
         work.execute {
             val c = Store.get(this).counts()
@@ -262,7 +272,7 @@ class MainActivity : Activity() {
                 if (p.done > 0) append("\n${p.timing()}")
                 if (p.note.isNotEmpty()) append("\n${p.note}")
             }
-            main.post { if (importing == null) status.text = text }
+            main.post { status.text = text }
         }
     }
 
@@ -285,17 +295,16 @@ class MainActivity : Activity() {
             }
             Library.Access.ALL -> Unit
         }
-        if (!Embedder.isReady(this) && importing == null) {
-            line(
-                "Searching by meaning needs EmbeddingGemma 2 (text + vision, about 0.4 GB). Google's file needs a Hugging " +
-                    "Face sign-in, so download the .litertlm on this phone, then import it. Faces work without it.",
-            )
-            buttons(
-                pill("Get it", look) { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(MODEL_PAGE))) },
-                pill("Import file", look, main = true) {
-                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("*/*"), REQ_MODEL)
-                },
-            )
+        when (val s = Embedder.model.refresh(this)) {
+            PinnedModel.Status.Ready -> Unit
+            PinnedModel.Status.Missing, is PinnedModel.Status.Failed -> {
+                line(
+                    (if (s is PinnedModel.Status.Failed) "The download failed: ${s.reason}. " else "") +
+                        "Searching by meaning needs the search model, EmbeddingGemma 2 (388 MB, over Wi-Fi). Faces work without it.",
+                )
+                buttons(pill("Download search model", look, main = true) { Embedder.model.download(this); refresh() })
+            }
+            else -> line("Search model: ${Embedder.model.describe(this)}")
         }
         if (access != Library.Access.NONE) {
             buttons(
@@ -304,6 +313,9 @@ class MainActivity : Activity() {
             )
         }
         setup.visibility = if (setup.childCount == 0) View.GONE else View.VISIBLE
+        val downloading = Embedder.model.refresh(this).let { it is PinnedModel.Status.Downloading || it is PinnedModel.Status.Installing }
+        if (downloading && !setupShowsDownload) main.postDelayed(poll, 1000)
+        setupShowsDownload = downloading
     }
 
     private fun startIndex() {
@@ -364,18 +376,18 @@ class MainActivity : Activity() {
 
     private fun more() {
         val tokens = Embedder.tokens(this)
-        val gemma = when (val s = Gemma.refresh(this)) {
-            Gemma.Status.Missing -> "Download (2.6 GB, Wi-Fi)"
-            is Gemma.Status.Downloading -> "downloading, ${s.done * 100 / s.total}%${if (s.waitingForWifi) ", waiting for Wi-Fi" else ""}"
-            Gemma.Status.Installing -> "checking the download"
-            Gemma.Status.Ready -> "ready (tap to delete)"
-            is Gemma.Status.Failed -> "failed: ${s.reason} (tap to retry)"
+        val gemma = when (val s = Gemma.model.refresh(this)) {
+            PinnedModel.Status.Missing -> "Download (2.6 GB, Wi-Fi)"
+            is PinnedModel.Status.Downloading -> "downloading, ${s.done * 100 / s.total}%${if (s.waitingForWifi) ", waiting for Wi-Fi" else ""}"
+            PinnedModel.Status.Installing -> "checking the download"
+            PinnedModel.Status.Ready -> "ready (tap to delete)"
+            is PinnedModel.Status.Failed -> "failed: ${s.reason} (tap to retry)"
         }
         val items = arrayOf(
             "Photo detail for search: ${if (tokens == 0) "model default" else "$tokens image tokens"}",
             "Gemma 4 E2B for questions about a photo: $gemma",
             "Group faces again",
-            "Search model: ${Embedder.describe(this) ?: "not imported"}${if (Embedder.isReady(this)) " (tap to remove)" else ""}",
+            "Search model, EmbeddingGemma 2: ${Embedder.model.describe(this)}${if (Embedder.isReady(this)) " (tap to delete)" else ""}",
         )
         AlertDialog.Builder(this).setTitle("gillphotos").setItems(items) { _, which ->
             when (which) {
@@ -390,8 +402,8 @@ class MainActivity : Activity() {
     }
 
     private fun chooseTokens() {
-        val options = intArrayOf(0, 70, 280, 560)
-        val names = arrayOf("Model default", "70 tokens: fastest", "280 tokens", "560 tokens: small text")
+        val options = intArrayOf(0, 70, 140)
+        val names = arrayOf("Model default", "70 tokens: fastest", "140 tokens: more detail")
         AlertDialog.Builder(this)
             .setTitle("Photo detail for search")
             .setSingleChoiceItems(names, options.indexOf(Embedder.tokens(this)).coerceAtLeast(0)) { d, which ->
@@ -402,11 +414,11 @@ class MainActivity : Activity() {
             .show()
     }
 
-    private fun gemmaAction() = when (Gemma.refresh(this)) {
-        Gemma.Status.Ready -> confirm("Delete Gemma 4 E2B (2.6 GB)?") { work.execute { Gemma.delete(this) } }
-        is Gemma.Status.Downloading -> confirm("Stop the Gemma download?") { Gemma.cancel(this) }
-        Gemma.Status.Installing -> Unit
-        else -> { Gemma.download(this); Toast.makeText(this, "Downloading Gemma 4 E2B over Wi-Fi", Toast.LENGTH_SHORT).show() }
+    private fun gemmaAction() = when (Gemma.model.refresh(this)) {
+        PinnedModel.Status.Ready -> confirm("Delete Gemma 4 E2B (2.6 GB)?") { work.execute { Gemma.delete(this) } }
+        is PinnedModel.Status.Downloading -> confirm("Stop the Gemma download?") { Gemma.model.cancel(this) }
+        PinnedModel.Status.Installing -> Unit
+        else -> { Gemma.model.download(this); Toast.makeText(this, "Downloading Gemma 4 E2B over Wi-Fi", Toast.LENGTH_SHORT).show() }
     }
 
     private fun regroup() {
@@ -430,55 +442,9 @@ class MainActivity : Activity() {
         if (requestCode == REQ_PHOTOS) { refresh(); showAll() }
     }
 
-    @Deprecated("Activity result API without AndroidX")
-    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-        super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == REQ_MODEL && resultCode == RESULT_OK) data?.data?.let(::importModel)
-    }
-
-    private fun importModel(uri: Uri) {
-        var name = "model"
-        var size = 0L
-        contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME, OpenableColumns.SIZE), null, null, null)?.use { c ->
-            if (c.moveToFirst()) { name = c.getString(0) ?: name; size = c.getLong(1) }
-        }
-        if (!name.endsWith(".litertlm")) {
-            Toast.makeText(this, "Pick the EmbeddingGemma 2 .litertlm file", Toast.LENGTH_LONG).show()
-            return
-        }
-        importing = "Importing $name…"
-        refresh()
-        var last = 0L
-        thread(name = "import") {
-            val result = runCatching {
-                Embedder.import(this, uri, name) { done ->
-                    if (done - last > 16 shl 20) {
-                        last = done
-                        val text = "Importing $name: ${done shr 20} of ${size shr 20} MB"
-                        main.post { importing = text; status.text = text }
-                    }
-                }
-                Store.get(this).clearVectors()
-                Search.reset()
-            }
-            main.post {
-                importing = null
-                refresh()
-                result.onSuccess {
-                    Toast.makeText(this, "Search model ready (${Embedder.backend}). Tap Index photos.", Toast.LENGTH_LONG).show()
-                }.onFailure {
-                    AlertDialog.Builder(this).setTitle("Couldn't use that model").setMessage(it.message ?: it.javaClass.simpleName)
-                        .setPositiveButton("OK", null).show()
-                }
-            }
-        }
-    }
-
     companion object {
         const val SIMILAR = "similar"
         private const val REQ_PHOTOS = 1
-        private const val REQ_MODEL = 2
         private const val REQ_NOTIFY = 3
-        private const val MODEL_PAGE = "https://huggingface.co/litert-community/embeddinggemma-2-text-vision-440m-litert-lm"
     }
 }

@@ -18,15 +18,15 @@ Search the photos on your phone the way Google Photos does, with everything runn
 
 1. Install the APK: download the `gillphotos-debug-apk` artifact from the latest [gillphotos workflow run](https://github.com/hkgill/gillspeak/actions/workflows/gillphotos.yml), or build it (below). Each CI build is signed with a different debug key, so uninstall the old one first.
 2. Open gillphotos and tap **Allow photos**.
-3. **Get the search model.** Google's EmbeddingGemma 2 files on Hugging Face need a sign-in and accepting Google's terms, so the app can't download one itself. On the phone, tap **Get it**, sign in, and download the `.litertlm` file from [litert-community/embeddinggemma-2-text-vision-440m-litert-lm](https://huggingface.co/litert-community/embeddinggemma-2-text-vision-440m-litert-lm). The full 740M model also works. Then tap **Import file** and pick it. The app checks that it reads both text and pictures. It shows the file's SHA256, so a good file can be pinned later.
+3. Tap **Download search model**: EmbeddingGemma 2, text + vision, 388 MB over Wi-Fi. It comes from Google's [litert-community](https://huggingface.co/litert-community/embeddinggemma-2-text-vision-440m-litert-lm) on Hugging Face, pinned to one revision and checked against its SHA256.
 4. Tap **Index photos**. It runs with a notification, newest photos first, and pauses if the phone gets hot. Faces work without the search model.
 5. Search, name people (long-press a face), and open a photo for **More like this** and **Ask Gemma**.
 
-The **⋯** menu changes how much detail EmbeddingGemma sees per photo (70 to 560 image tokens). It also downloads or deletes Gemma, groups faces again, and removes the search model.
+The **⋯** menu changes how much detail EmbeddingGemma sees per photo (70 or 140 image tokens, the two this build has). It also downloads or deletes Gemma, groups faces again, and removes the search model.
 
 ### Worth measuring
 
-- Milliseconds per photo on the status line, with 70 and with 280 tokens.
+- Milliseconds per photo on the status line, with 70 and with 140 tokens.
 - How good searches are on about 30 real queries, with and without the `task: search result | query:` prompt (`Embedder.QUERY`).
 - Whether face groups are clean, which tunes the thresholds in `core/People.kt` (join 0.45, merge 0.5).
 - Gemma's time per question with a photo.
@@ -34,7 +34,7 @@ The **⋯** menu changes how much detail EmbeddingGemma sees per photo (70 to 56
 ## Privacy
 
 - Photos, vectors, faces and names stay in the app's private storage. Android backups are off.
-- The network is used only for the optional Gemma download. The search model is imported from a file, and the face models are inside the APK.
+- The network is used only to download the two models (the search model and the optional Gemma). The face models are inside the APK.
 - Face vectors are biometric data. Removing the app removes them.
 
 ## Models
@@ -43,7 +43,7 @@ The **⋯** menu changes how much detail EmbeddingGemma sees per photo (70 to 56
 | --- | --- | --- | --- |
 | [YuNet](https://github.com/opencv/opencv_zoo/tree/main/models/face_detection_yunet) (2023mar) | Finds faces | MIT | Downloaded at build time, pinned by commit and SHA256, packed into the APK |
 | [SFace](https://github.com/opencv/opencv_zoo/tree/main/models/face_recognition_sface) (int8) | Tells people apart | Apache 2.0 | Same |
-| EmbeddingGemma 2 | Search by meaning | Apache 2.0 (gated download) | Imported by the user |
+| EmbeddingGemma 2, text + vision 440M | Search by meaning | Apache 2.0 | In-app download (388 MB), pinned by revision and SHA256 |
 | Gemma 4 E2B | Questions about a photo | Apache 2.0 | Optional in-app download, pinned like gillspeak's |
 
 ## Build
