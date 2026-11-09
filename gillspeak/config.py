@@ -85,7 +85,20 @@ enabled = true
 [notify]
 enabled = true
 
-[pricing]                                 # USD per million tokens, for `gillspeak stats`
+[osd]
+enabled = true                            # publish live mic levels for an on-screen animation (see gillspeak/levels.py)
+
+[media]
+pause_while_recording = true              # pause music and videos while you dictate, then resume them
+
+# Optional: run the finished text through your own command, such as a local AI model. The text goes to its
+# stdin and its stdout is what gets pasted. If it fails, times out or prints nothing, the text is pasted without it.
+# Dictations with --raw skip it.
+[postprocess]
+command = ""
+timeout_s = 30
+
+[pricing]                                # USD per million tokens, for `gillspeak stats`
 input_per_m = 0.10
 output_per_m = 0.40
 
@@ -197,6 +210,22 @@ class NotifyConfig:
 
 
 @dataclass
+class OsdConfig:
+    enabled: bool = True
+
+
+@dataclass
+class MediaConfig:
+    pause_while_recording: bool = True
+
+
+@dataclass
+class PostProcessConfig:
+    command: str = ""
+    timeout_s: float = 30.0
+
+
+@dataclass
 class PricingConfig:
     input_per_m: float = 0.10
     output_per_m: float = 0.40
@@ -230,6 +259,9 @@ class Config:
     history: HistoryConfig = field(default_factory=HistoryConfig)
     sounds: SoundsConfig = field(default_factory=SoundsConfig)
     notify: NotifyConfig = field(default_factory=NotifyConfig)
+    osd: OsdConfig = field(default_factory=OsdConfig)
+    media: MediaConfig = field(default_factory=MediaConfig)
+    postprocess: PostProcessConfig = field(default_factory=PostProcessConfig)
     pricing: PricingConfig = field(default_factory=PricingConfig)
     debug: DebugConfig = field(default_factory=DebugConfig)
 
@@ -244,6 +276,8 @@ class Config:
             raise ConfigError(f"inject.paste_chord must be ctrl+v or ctrl+shift+v (got {self.inject.paste_chord!r})")
         if self.vad.engine not in ("silero", "energy"):
             raise ConfigError(f"vad.engine must be silero or energy (got {self.vad.engine!r})")
+        if self.postprocess.timeout_s <= 0:
+            raise ConfigError(f"postprocess.timeout_s must be above 0 (got {self.postprocess.timeout_s!r})")
         if "default" not in self.modes:
             raise ConfigError("[modes] must define 'default'")
         self.llm.extra_generation_dict()

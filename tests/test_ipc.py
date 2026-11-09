@@ -13,6 +13,7 @@ from gillspeak.config import Config, Dictionary
 from gillspeak.daemon import Daemon
 from gillspeak.history import History
 from gillspeak.inject import InjectError
+from gillspeak.levels import FRAME
 
 LONG_RAW = "um so the the meeting with super base folks moved to thursday sorry friday so can you send the deck before then"
 
@@ -93,6 +94,19 @@ class FakeNotifier:
         return record
 
 
+class FakeMedia:
+    enabled = True
+
+    def __init__(self):
+        self.calls = []
+
+    async def pause(self):
+        self.calls.append("pause")
+
+    async def resume(self):
+        self.calls.append("resume")
+
+
 def cloud_config() -> Config:
     """These tests exercise the opt-in cloud clean-up path; the shipped default is local only."""
     cfg = Config()
@@ -115,6 +129,7 @@ def make_daemon(tmp_path):
             injector=injector or FakeInjector(),
             history=History(tmp_path / "h.db"),
             notifier=FakeNotifier(),
+            media=FakeMedia(),
         )
         d.ready.set()
         created.append(d)
@@ -130,6 +145,117 @@ async def dictate(d, **req):
     await d.process(d.queue.get_nowait())
     d.inflight -= 1
     return d.history.recent(1)[0] if d.history.recent(1) else None
+
+
+async def test_levels_socket_sits_next_to_the_control_socket(make_daemon, tmp_path):
+    d = make_daemon()
+    await d.serve(tmp_path / "s.sock")
+    levels = tmp_path / "gillspeak-levels.sock"
+    assert stat.S_IMODE(os.stat(levels).st_mode) == 0o600
+    await d.close()
+    assert not levels.exists()
+
+
+async def test_levels_socket_off_when_disabled(make_daemon, tmp_path):
+    cfg = cloud_config()
+    cfg.osd.enabled = False
+    d = make_daemon(cfg=cfg)
+    await d.serve(tmp_path / "s.sock")
+    assert d.levels is None and not (tmp_path / "gillspeak-levels.sock").exists()
+    await d.close()
+
+
+async def test_recorded_audio_reaches_a_levels_client(make_daemon, tmp_path):
+    d = make_daemon()
+    await d.serve(tmp_path / "s.sock")
+    reader, writer = await asyncio.open_unix_connection(str(tmp_path / "gillspeak-levels.sock"))
+    try:
+        while not d.levels._clients:
+            await asyncio.sleep(0)
+        before = d.levels._seq
+        await d.handle({"cmd": "toggle"})
+        assert d.levels._seq == before + 1  # each recording starts a fresh waveform
+        d._on_block(np.full(160, 0.5, dtype=np.float32))
+        frame = await asyncio.wait_for(reader.readexactly(FRAME.size), 2)
+        assert FRAME.unpack(frame)[2] == pytest.approx(0.5)
+    finally:
+        writer.close()
+        await d.close()
+
+
+def local_config(command="") -> Config:
+    cfg = Config()
+    cfg.postprocess.command = command
+    return cfg
+
+
+async def test_media_pauses_for_the_recording_only(make_daemon):
+    d = make_daemon()
+    await d.handle({"cmd": "toggle"})
+    await asyncio.sleep(0.01)
+    assert d.media.calls == ["pause"]
+    await d.handle({"cmd": "toggle"})
+    await asyncio.sleep(0.01)
+    assert d.media.calls == ["pause", "resume"]
+
+
+async def test_media_resumes_after_cancel(make_daemon):
+    d = make_daemon()
+    await d.handle({"cmd": "toggle"})
+    await d.handle({"cmd": "cancel"})
+    await asyncio.sleep(0.01)
+    assert d.media.calls == ["pause", "resume"]
+
+
+async def test_postprocess_output_is_what_gets_pasted(make_daemon):
+    d = make_daemon(cfg=local_config("tr a-z A-Z"))
+    await dictate(d)
+    text = d.injector.inserted[-1][0]
+    assert text and text == text.upper()
+
+
+async def test_postprocess_failure_still_pastes_the_text(make_daemon):
+    d = make_daemon(cfg=local_config("exit 3"))
+    await dictate(d)
+    text = d.injector.inserted[-1][0]
+    assert text and text != text.upper()
+    assert any(name == "info" and "post-process" in args[0] for name, args in d.notifier.events)
+
+
+async def test_raw_dictation_skips_postprocess(make_daemon):
+    d = make_daemon(cfg=local_config("tr a-z A-Z"))
+    await dictate(d, raw=True)
+    text = d.injector.inserted[-1][0]
+    assert text != text.upper()
+
+
+async def test_no_postprocess_by_default(make_daemon):
+    d = make_daemon(cfg=local_config())
+    await dictate(d)
+    assert not any(name == "info" for name, _ in d.notifier.events)
+
+
+async def test_state_file_follows_the_daemon(make_daemon, tmp_path):
+    d = make_daemon()
+    await d.serve(tmp_path / "s.sock")
+    state = tmp_path / "gillspeak-state"
+    try:
+        assert state.read_text() == "idle"
+        assert stat.S_IMODE(os.stat(state).st_mode) == 0o600
+        await d.handle({"cmd": "toggle"})
+        assert state.read_text() == "recording"
+        await d.handle({"cmd": "cancel"})
+        assert state.read_text() == "idle"
+        await d.handle({"cmd": "toggle"})
+        await d.handle({"cmd": "toggle"})
+        for _ in range(200):
+            if state.read_text() == "idle":
+                break
+            await asyncio.sleep(0.01)
+        assert state.read_text() == "idle" and d.state == "idle"
+    finally:
+        await d.close()
+    assert not state.exists()
 
 
 async def test_llm_path(make_daemon):

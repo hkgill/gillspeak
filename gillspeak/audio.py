@@ -52,8 +52,10 @@ class Recorder:
         keep_open: bool = True,
         max_seconds: float = 300.0,
         on_max: Callable[[], None] | None = None,
+        on_block: Callable[[np.ndarray], None] | None = None,
         stream_factory: Callable[..., Any] | None = None,
     ):
+        self.on_block = on_block  # called from the audio thread with each block recorded (not the pre-roll)
         self.device = device
         self.keep_open = keep_open
         self.max_samples = int(max_seconds * SAMPLE_RATE)
@@ -148,13 +150,16 @@ class Recorder:
         block = np.array(indata[:, 0] if indata.ndim == 2 else indata, dtype=np.float32, copy=True)
         fire = False
         with self._lock:
-            if self._recording:
+            recording = self._recording
+            if recording:
                 self._chunks.append(block)
                 self._n += len(block)
                 if self._n >= self.max_samples and not self._max_fired:
                     self._max_fired = fire = True
             else:
                 self._preroll.append(block)
+        if recording and self.on_block:
+            self.on_block(block)
         if fire and self.on_max:
             self.on_max()
 

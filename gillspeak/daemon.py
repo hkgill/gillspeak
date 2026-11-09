@@ -24,7 +24,10 @@ from .cleaner import PROMPT_VERSION, CleanerError, make_cleaner
 from .config import Config, Dictionary
 from .history import History, Record
 from .inject import InjectError, make_injector
+from .levels import LevelServer
+from .media import MediaPauser
 from .notify import Notifier
+from .postprocess import PostProcessError, run_command
 from .rules import RulesEngine
 from .vad import make_vad, split_long, trim
 
@@ -65,6 +68,7 @@ class Daemon:
         injector: Any = None,
         history: Any = None,
         notifier: Any = None,
+        media: Any = None,
     ):
         self.cfg = cfg
         self.dictionary = dictionary
@@ -76,6 +80,10 @@ class Daemon:
         self.injector = injector or make_injector(cfg.inject)
         self.history = history
         self.notifier = notifier or Notifier(cfg.notify.enabled, cfg.sounds.enabled)
+        self.levels: LevelServer | None = None
+        self.media = media or MediaPauser(cfg.media.pause_while_recording)
+        self._state_file: Path | None = None  # read by desktop indicators
+        self._published_state: str | None = None
         self.executor = ThreadPoolExecutor(max_workers=1, thread_name_prefix="asr")
         self.queue: asyncio.Queue[Job] = asyncio.Queue()
         self.inflight = 0
@@ -126,7 +134,11 @@ class Daemon:
                 log.info("ASR %s loaded in %.1fs", cfg.asr.engine, time.monotonic() - t0)
             if self.recorder is None:
                 self.recorder = Recorder(
-                    cfg.audio.device, keep_open=cfg.audio.keep_mic_open, max_seconds=cfg.audio.max_seconds, on_max=self._on_max
+                    cfg.audio.device,
+                    keep_open=cfg.audio.keep_mic_open,
+                    max_seconds=cfg.audio.max_seconds,
+                    on_max=self._on_max,
+                    on_block=self._on_block,
                 )
                 try:
                     self.recorder.start_idle()
@@ -167,8 +179,26 @@ class Daemon:
         os.chmod(sock, 0o600)
         self._worker = asyncio.create_task(self._work())
         log.info("listening on %s", sock)
+        self._state_file = sock.with_name("gillspeak-state")
+        self._publish_state()
+        if self.cfg.osd.enabled:
+            await self._start_levels(sock.with_name("gillspeak-levels.sock"))
+
+    async def _start_levels(self, path: Path) -> None:
+        levels = LevelServer(path)
+        try:
+            await levels.start()
+        except OSError as e:  # only the animation depends on this, so dictation carries on
+            log.warning("on-screen animation unavailable: %s", e)
+            return
+        self.levels = levels
 
     async def close(self) -> None:
+        await self.media.resume()  # don't leave music paused if the daemon stops mid-dictation
+        if self._state_file is not None:
+            self._state_file.unlink(missing_ok=True)
+        if self.levels:
+            self.levels.close()
         if self._server:
             self._server.close()
             await self._server.wait_closed()
@@ -206,6 +236,17 @@ class Daemon:
         if self.recorder is not None and self.recorder.is_recording:
             return "recording"
         return "processing" if self.inflight else "idle"
+
+    def _publish_state(self) -> None:
+        state = self.state
+        if self._state_file is None or state == self._published_state:
+            return
+        try:
+            self._state_file.touch(mode=0o600)
+            self._state_file.write_text(state, encoding="utf-8")
+            self._published_state = state
+        except OSError as e:  # only the indicator depends on this, so dictation carries on
+            log.debug("cannot write %s: %s", self._state_file, e)
 
     def _resp(self, ok: bool = True, msg: str = "") -> dict[str, Any]:
         return {"ok": ok, "state": self.state, "msg": msg}
@@ -245,7 +286,11 @@ class Daemon:
         except RecorderError as e:
             await self.notifier.error("No microphone", f"{e}. Check Settings → Sound → Input")
             return self._resp(False, str(e))
-        self.opts = JobOptions(mode=mode, raw=bool(req.get("raw")), chord=chord)
+        if self.levels:
+            self.levels.new_recording()
+        self._publish_state()
+        self._spawn(self.media.pause())
+        self.opts =JobOptions(mode=mode, raw=bool(req.get("raw")), chord=chord)
         self._spawn(self.notifier.listening(mode, self.opts.raw))
         if self.cleaner is not None and not self.opts.raw and getattr(self.cleaner, "needs_warm", lambda: False)():
             self._spawn(self.cleaner.warm())  # re-open the TLS connection while the user talks
@@ -256,6 +301,8 @@ class Daemon:
         audio = self.recorder.stop()
         self.inflight += 1
         self.queue.put_nowait(Job(audio, self.opts, time.monotonic()))
+        self._publish_state()
+        self._spawn(self.media.resume())
         self._spawn(self.notifier.processing())
         return self._resp(True, "processing")
 
@@ -263,6 +310,11 @@ class Daemon:
         """Called from the audio thread when audio.max_seconds is reached."""
         if self._loop is not None:
             self._loop.call_soon_threadsafe(self._auto_stop)
+
+    def _on_block(self, block: np.ndarray) -> None:
+        """Called from the audio thread for each recorded block."""
+        if self._loop is not None and self.levels is not None:
+            self._loop.call_soon_threadsafe(self.levels.publish, block)
 
     def _auto_stop(self) -> None:
         if self.recorder is not None and self.recorder.is_recording:
@@ -273,6 +325,8 @@ class Daemon:
         self.holding = False
         if self.recorder is not None and self.recorder.is_recording:
             self.recorder.cancel()
+            self._publish_state()
+            self._spawn(self.media.resume())
             await self.notifier.clear()
             return self._resp(True, "cancelled")
         return self._resp(True, "nothing to cancel")
@@ -380,11 +434,14 @@ class Daemon:
             restart.append("ASR/VAD settings")
         if cfg.audio != self.cfg.audio:
             restart.append("[audio]")
+        if cfg.osd != self.cfg.osd:
+            restart.append("[osd]")
         self.cfg, self.dictionary = cfg, dictionary
         self.rules = RulesEngine(cfg.rules, dictionary)
         self.injector = make_injector(cfg.inject)
         self.notifier.notifications = cfg.notify.enabled
         self.notifier.sounds = cfg.sounds.enabled
+        self.media.enabled = cfg.media.pause_while_recording
         if self.history is not None:
             self.history.keep_days = cfg.history.keep_days
             await asyncio.to_thread(self.history.purge)  # a shorter retention applies now, not at the next purge
@@ -409,6 +466,7 @@ class Daemon:
                 await self.notifier.error("Dictation failed", "See `journalctl --user -u gillspeakd`")
             finally:
                 self.inflight -= 1
+                self._publish_state()
                 self.queue.task_done()
 
     async def _run(self, fn: Any, *args: Any) -> Any:
@@ -460,6 +518,9 @@ class Daemon:
         if use_llm:
             final, status, notice = await self._clean(text, opts, rec)
         rec.llm_status = status
+        if cfg.postprocess.command and not opts.raw:
+            final, failure = await self._postprocess(final)
+            notice = notice or failure
 
         inject_status = await self._insert(final, opts.chord)
         rec.inject_status = inject_status
@@ -511,6 +572,15 @@ class Daemon:
             log.debug("rejected LLM output: %r", res.text[:200])
             return text, f"rejected:{why}", None
         return self.rules.apply_dictionary(res.text), "ok", None
+
+    async def _postprocess(self, text: str) -> tuple[str, tuple[str, str] | None]:
+        """A failing command must never cost the dictation, so its input is the fallback."""
+        cfg = self.cfg.postprocess
+        try:
+            return await run_command(cfg.command, text, cfg.timeout_s), None
+        except PostProcessError as e:
+            log.warning("post-process command %s; pasting the text without it", e)
+            return text, ("Pasted without your post-process command", f"The command {e}.")
 
     async def _insert(self, text: str, chord: str | None) -> str:
         """Every transcript ends up pasted or, failing that, on the clipboard."""

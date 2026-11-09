@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "local.gillspeak",
+  "name": "gillspeak",
+  "version": "1.0.0",
+  "author": "gillspeak",
+  "description": "Dictation state, click to start or stop",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "gillspeak",
+    "description": "Dictation state, click to start or stop",
+    "category": "Audio",
+    "defaultSection": "right",
+    "allowMultiple": false
+  }
+}

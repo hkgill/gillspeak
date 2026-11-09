@@ -63,6 +63,21 @@ def test_closing_aborts_the_stream():
     assert not streams[0].active and streams[0].closed
 
 
+def test_on_block_sees_only_recorded_audio():
+    seen = []
+    rec, streams = make(on_block=seen.append)
+    rec.start_idle()
+    s = streams[0]
+    s.feed(0.1, blocks=2)  # idle pre-roll must not animate
+    assert not seen
+    rec.start()
+    s.feed(0.5, blocks=3)
+    assert len(seen) == 3
+    rec.stop()
+    s.feed(0.1)
+    assert len(seen) == 3
+
+
 def test_cancel_discards():
     rec, streams = make()
     rec.start_idle()
