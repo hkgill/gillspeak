@@ -182,6 +182,95 @@ def test_code_case_can_be_turned_off():
     assert clean("snake case user name", spoken_commands=False) == "Snake case user name"
 
 
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("Hello there. I want pizza, scratch that. I want pasta.", "Hello there. I want pasta."),
+        ("I want pizza, no, scratch that, I want pasta", "I want pasta"),
+        ("I want pizza. Scratch that. I want pasta.", "I want pasta."),
+        ("Hello there. I want pizza. Scratch that. I want pasta.", "Hello there. I want pasta."),
+        ("I want pizza scratch that", ""),
+        ("line one new line line two scratch that", "Line one\n"),
+        ("It costs 3.5 dollars, scratch that. It's free.", "It's free."),
+        ("One thing. Scratch that. Another. Scratch that. Done.", "Done."),
+    ],
+)
+def test_scratch_that(raw, expected):
+    assert clean(raw) == expected
+
+
+def test_scratch_that_as_ordinary_words_is_left_alone():
+    assert clean("Just scratch that itch") == "Just scratch that itch"
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("Meet at 2, actually 3.", "Meet at 3."),
+        ("Meet at 2... actually 3", "Meet at 3"),
+        ("Meet at 3 pm sorry 4 pm", "Meet at 4 pm"),
+        ("The meeting is on Thursday sorry Friday at 3", "The meeting is on Friday at 3"),
+        ("Order two, actually three, boxes", "Order three, boxes"),
+        ("twenty five actually thirty people", "Thirty people"),
+        ("It costs $2 actually $3", "It costs $3"),
+        ("It is 3.5, I mean 3.6", "It is 3.6"),
+        ("Back in March, or rather April", "Back in April"),
+    ],
+)
+def test_value_corrections(raw, expected):
+    assert clean(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "I actually went on Friday",
+        "It costs 5. Actually 6 people came.",
+        "Two, actually, is plenty",
+        "Monday, actually March",
+        "Sorry, 3 is fine",
+    ],
+)
+def test_ordinary_actually_is_left_alone(text):
+    assert clean(text) == text
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("Numbered list. First, buy milk. Second, call Sam. Third, send the report.", "1. Buy milk\n2. Call Sam\n3. Send the report"),
+        ("Today's plan numbered list first buy milk second call Sam", "Today's plan\n1. Buy milk\n2. Call Sam"),
+        ("numbered list buy milk next item call Sam next item send report", "1. Buy milk\n2. Call Sam\n3. Send report"),
+        ("numbered list number one buy milk number two call Sam", "1. Buy milk\n2. Call Sam"),
+        ("numbered list first buy milk and second call Sam", "1. Buy milk\n2. Call Sam"),
+        ("numbered list first a thing second b thing end list and that is all", "1. A thing\n2. B thing\nAnd that is all"),
+    ],
+)
+def test_numbered_list(raw, expected):
+    assert clean(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "text",
+    ["A numbered list is useful", "Numbered list first buy milk", "We came first and they came second"],
+)
+def test_no_list_without_the_trigger_and_two_items(text):
+    assert clean(text) == text
+
+
+@pytest.mark.parametrize(
+    "raw, name, expected",
+    [
+        ("Meet at 2, actually 3", "corrections", "Meet at 2, actually 3"),
+        ("I want pizza, scratch that", "scratch that", "I want pizza, scratch that"),
+        ("numbered list one next item two", "numbered list", "Numbered list one next item two"),
+    ],
+)
+def test_editing_commands_can_be_turned_off(raw, name, expected):
+    assert clean(raw, disabled_commands=[name]) == expected
+    assert clean(raw, spoken_commands=False) == expected
+
+
 def test_remove_fillers_keeps_words_containing_fillers():
     assert "humming" in remove_fillers("humming along")
     assert "ahead" in remove_fillers("go ahead")

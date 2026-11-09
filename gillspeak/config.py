@@ -41,7 +41,7 @@ hotwords = true             # bias ASR towards [bias] terms from dictionary.toml
 [rules]
 aggressive_fillers = false  # also strip "like" / "you know"
 spoken_commands = true
-disabled_commands = []      # e.g. ["period", "bullet point", "code case"]
+disabled_commands = []      # e.g. ["period", "bullet point", "code case", "scratch that", "corrections", "numbered list"]
 
 [gate]
 min_words = 12

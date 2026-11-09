@@ -1,6 +1,7 @@
 """Deterministic text clean-up applied before (and partly after) the LLM.
 
-Order: fillers -> stutters -> spoken commands -> snippets -> code case -> dictionary -> whitespace.
+Order: fillers -> stutters -> spoken commands -> backtrack -> numbered list -> snippets -> code case
+-> dictionary -> whitespace.
 """
 
 from __future__ import annotations
@@ -16,7 +17,10 @@ AGGRESSIVE_FILLERS = ["like", "you know"]
 # Doubled words that are usually intentional.
 STUTTER_ALLOWLIST = {"that", "had", "bye", "no", "very", "so", "ha", "knock", "tut", "ta"}
 
-COMMAND_NAMES = ["new paragraph", "new line", "bullet point", "question mark", "full stop", "period", "code case"]
+COMMAND_NAMES = [
+    "new paragraph", "new line", "bullet point", "question mark", "full stop", "period",
+    "code case", "scratch that", "corrections", "numbered list",
+]
 
 _PUNCT = r"[.,;:!?]"
 
@@ -120,6 +124,98 @@ def apply_dictionary(text: str, dictionary: Dictionary) -> str:
     return pattern.sub(lambda m: lookup[" ".join(m.group(0).lower().split())], text)
 
 
+# Only when punctuation or the end follows, so "scratch that itch" survives.
+_SCRATCH_RE = re.compile(r"(?:\b(?:no wait|wait no|no|sorry|wait),?\s+)?\bscratch\s+that\b(?=[ \t]*(?:[.,;:!?\n]|$))[.,;:!?]*", re.IGNORECASE)
+_SENTENCE_BOUNDARY_RE = re.compile(r"[.?!](?=\s)|\n")
+
+
+def apply_scratch_that(text: str) -> str:
+    """Drop the sentence being spoken, or the one before if "scratch that" got a sentence of its own."""
+    while m := _SCRATCH_RE.search(text):
+        boundaries = [b.end() for b in _SENTENCE_BOUNDARY_RE.finditer(text, 0, m.start())]
+        cut = boundaries[-1] if boundaries else 0
+        if boundaries and not text[cut : m.start()].strip():
+            cut = boundaries[-2] if len(boundaries) > 1 else 0
+        text = text[:cut] + text[m.end() :]
+    return text
+
+
+_NUMBER_WORD = (
+    "zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|"
+    "seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand"
+)
+_NUMBER = rf"\$?(?:\d[\d:.,]*\d|\d|(?:{_NUMBER_WORD})(?:[ -](?:{_NUMBER_WORD}))*)"
+_DAY = "monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow|yesterday"
+_MONTH = "january|february|march|april|may|june|july|august|september|october|november|december"
+_CORRECTION_CUE = r"(?:actually|sorry|no wait|wait no|i mean|or rather|make that)"
+_CORRECTION_GAP = r"(?:[ \t]*(?:,|\.{2,}|…|--?|—))?[ \t]*"
+_UNIT = r"(?:[ \t]*(?:am|pm|percent|o'clock)\b|[ \t]*%)?"
+
+
+def _correction_re(value: str) -> re.Pattern[str]:
+    return re.compile(
+        rf"(?<![\w.])(?:{value})(?!\w){_UNIT}{_CORRECTION_GAP}{_CORRECTION_CUE}[,:]?[ \t]+(?=(?:{value})(?!\w))",
+        re.IGNORECASE,
+    )
+
+
+_CORRECTIONS = [_correction_re(_NUMBER), _correction_re(_DAY), _correction_re(_MONTH)]
+
+
+def apply_value_corrections(text: str) -> str:
+    """ "at 2, actually 3" -> "at 3". Only between two values of the same kind, so ordinary "actually" is safe."""
+    for pattern in _CORRECTIONS:
+        text = pattern.sub("", text)
+    return text
+
+
+_LIST_START_RE = re.compile(r"\bnumbered\s+list\b[.,:;]?", re.IGNORECASE)
+_LIST_END_RE = re.compile(r"\bend\s+(?:of\s+)?list\b[.,:;]?", re.IGNORECASE)
+_NEXT_ITEM_RE = re.compile(r"\bnext\s+item\b[.,:;]?", re.IGNORECASE)
+_LIST_ITEM_TAIL_RE = re.compile(r"(?:[\s,;:.]*\band\b)?[\s,;:.]*$", re.IGNORECASE)
+_ORDINALS = ["first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth"]
+_CARDINALS = ["one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten"]
+_LIST_MARKERS = [
+    re.compile(rf"\b(?:{ordinal}(?:ly)?|number\s+(?:{i}|{cardinal}))\b[.,:;]?", re.IGNORECASE)
+    for i, (ordinal, cardinal) in enumerate(zip(_ORDINALS, _CARDINALS, strict=True), 1)
+]
+
+
+def _ordinal_items(body: str) -> list[str]:
+    first = _LIST_MARKERS[0].search(body)
+    if first is None or body[: first.start()].strip(" \t.,;:\n"):
+        return []
+    items, start = [], first.end()
+    for marker in _LIST_MARKERS[1:]:
+        following = marker.search(body, start)
+        if following is None:
+            break
+        items.append(body[start : following.start()])
+        start = following.end()
+    return [*items, body[start:]]
+
+
+def apply_numbered_list(text: str) -> str:
+    """ "numbered list first X second Y" or "numbered list X next item Y" -> a numbered list."""
+    start = _LIST_START_RE.search(text)
+    if start is None:
+        return text
+    rest = text[start.end() :]
+    end = _LIST_END_RE.search(rest)
+    body, after = (rest[: end.start()], rest[end.end() :]) if end else (rest, "")
+    raw_items = _ordinal_items(body) or _NEXT_ITEM_RE.split(body)
+    items = [_LIST_ITEM_TAIL_RE.sub("", item).strip(" \t\n,;:.") for item in raw_items]
+    if len(items) < 2 or not all(items):
+        return text
+    parts = [f"{i}. {item[0].upper()}{item[1:]}" for i, item in enumerate(items, 1)]
+    before = text[: start.start()].rstrip(" \t,;:")
+    if before:
+        parts.insert(0, before)
+    if after.strip():
+        parts.append(after.strip())
+    return "\n".join(parts)
+
+
 def hold_snippets(text: str, snippets: dict[str, str], held: _Held) -> str:
     key = tuple(sorted(snippets.items()))
     if key not in _dict_cache:
@@ -217,6 +313,12 @@ class RulesEngine:
         text = collapse_stutters(text)
         if self.cfg.spoken_commands:
             text = apply_spoken_commands(text, self.cfg.disabled_commands)
+        if self._enabled("scratch that"):
+            text = apply_scratch_that(text)
+        if self._enabled("corrections"):
+            text = apply_value_corrections(text)
+        if self._enabled("numbered list"):
+            text = apply_numbered_list(text)
         text = hold_snippets(text, self.dictionary.snippets, held)
         if self._enabled("code case"):
             text = apply_code_case(text, held)

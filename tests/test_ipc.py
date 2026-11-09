@@ -304,7 +304,7 @@ async def test_mode_and_chord_from_start_request(make_daemon):
 async def test_llm_failure_pastes_rules_text(make_daemon, kind):
     d = make_daemon(cleaner=FakeCleaner(error=CleanerError(kind)))
     row = await dictate(d)
-    assert d.injector.inserted[0][0].startswith("So the meeting with Supabase folks moved to thursday sorry friday")
+    assert d.injector.inserted[0][0].startswith("So the meeting with Supabase folks moved to friday")
     assert row["llm_status"] == kind
 
 
