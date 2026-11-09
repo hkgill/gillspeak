@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import fnmatch
+import json
 import logging
 import os
 from pathlib import Path
@@ -95,8 +97,11 @@ class _ClipboardInjector:
     async def _type(self, text: str) -> bool:
         return False
 
+    async def _app_chord(self) -> str | None:
+        return None
+
     async def insert(self, text: str, chord: str | None = None) -> None:
-        chord = chord or self.cfg.paste_chord
+        chord = chord or await self._app_chord() or self.cfg.paste_chord
         if chord not in CHORD_KEYS:
             raise ValueError(f"unknown chord {chord!r}")
         if self.cfg.method == "type" and is_typeable(text) and await self._type(text):
@@ -151,6 +156,22 @@ class WaylandInjector(_ClipboardInjector):
         msg = err.decode(errors="replace")
         if code != 0 or "failed to connect" in msg.lower():
             raise InjectError(f"ydotool: {msg.strip() or f'exit {code}'}", copied=True, kind="ydotool")
+
+    async def _app_chord(self) -> str | None:
+        """On Hyprland the focused app can have its own paste chord; terminals differ from everything else."""
+        if not self.cfg.app_chords or not os.environ.get("HYPRLAND_INSTANCE_SIGNATURE"):
+            return None
+        try:
+            code, out, _ = await run(["hyprctl", "activewindow", "-j"], timeout=0.5)
+            window = json.loads(out) if code == 0 else None
+        except (TimeoutError, OSError, ValueError) as e:
+            log.debug("cannot read the focused window: %s", e)
+            return None
+        app = str(window.get("class", "")).lower() if isinstance(window, dict) else ""
+        for pattern, app_chord in self.cfg.app_chords.items():
+            if app and fnmatch.fnmatchcase(app, pattern.lower()):
+                return app_chord
+        return None
 
     async def _paste(self, chord: str) -> None:
         await self._ydotool(["key", *CHORD_KEYS[chord]])

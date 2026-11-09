@@ -72,6 +72,19 @@ settle_ms = 60
 restore_clipboard = true
 restore_delay_ms = 400
 
+# Hyprland only: the paste chord for particular apps, by window class (* is a wildcard). Everything else uses
+# paste_chord. Setting this table replaces the whole list.
+[inject.app_chords]
+"foot" = "ctrl+shift+v"
+"footclient" = "ctrl+shift+v"
+"org.codeberg.dnkl.foot" = "ctrl+shift+v"
+"alacritty" = "ctrl+shift+v"
+"kitty" = "ctrl+shift+v"
+"com.mitchellh.ghostty" = "ctrl+shift+v"
+"*wezterm" = "ctrl+shift+v"
+"org.omarchy.*" = "ctrl+shift+v"
+"tui.*" = "ctrl+shift+v"
+
 [hotkey]
 hold_to_talk = true                       # hold Right Ctrl + Right Alt; needs gillspeak-keyd (scripts/install-keyd.sh)
 keyd_socket = "/run/gillspeak-keyd/socket"
@@ -183,6 +196,16 @@ class LlmConfig:
         return value
 
 
+PASTE_CHORDS = ("ctrl+v", "ctrl+shift+v")
+_TERMINAL_APPS = (
+    "foot", "footclient", "org.codeberg.dnkl.foot", "alacritty", "kitty", "com.mitchellh.ghostty", "*wezterm", "org.omarchy.*", "tui.*",
+)
+
+
+def _default_app_chords() -> dict[str, str]:
+    return dict.fromkeys(_TERMINAL_APPS, "ctrl+shift+v")
+
+
 @dataclass
 class InjectConfig:
     method: str = "paste"
@@ -190,6 +213,7 @@ class InjectConfig:
     settle_ms: int = 60
     restore_clipboard: bool = True
     restore_delay_ms: int = 400
+    app_chords: dict[str, str] = field(default_factory=_default_app_chords)
 
 
 @dataclass
@@ -276,8 +300,11 @@ class Config:
             raise ConfigError("llm.provider = 'proxy' requires llm.proxy_url")
         if self.inject.method not in ("paste", "type"):
             raise ConfigError(f"inject.method must be paste or type (got {self.inject.method!r})")
-        if self.inject.paste_chord not in ("ctrl+v", "ctrl+shift+v"):
+        if self.inject.paste_chord not in PASTE_CHORDS:
             raise ConfigError(f"inject.paste_chord must be ctrl+v or ctrl+shift+v (got {self.inject.paste_chord!r})")
+        for app, chord in self.inject.app_chords.items():
+            if chord not in PASTE_CHORDS:
+                raise ConfigError(f"inject.app_chords[{app!r}] must be ctrl+v or ctrl+shift+v (got {chord!r})")
         if self.vad.engine not in ("silero", "energy"):
             raise ConfigError(f"vad.engine must be silero or energy (got {self.vad.engine!r})")
         if self.postprocess.timeout_s <= 0:

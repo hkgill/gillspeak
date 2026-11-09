@@ -12,6 +12,7 @@ All notable changes to gillspeak (called Murmur up to 0.5.1). The format follows
 - **Local only by default: nothing leaves your computer or phone.** Desktop: `llm.provider` now defaults to `"none"` (speech recognition and rule clean-up are local; Gemini clean-up is opt-in, sends transcript text only, and the setup script asks before enabling it). `gillspeak eval --provider gemini` scores Gemini without turning it on. Android: the Local engine is the default and listed first; Gemini and Groq are labelled as optional cloud engines that send audio. Existing configs keep the provider they set.
 
 ### Added
+- **Desktop: paste chord per app on Hyprland.** gillspeak checks the focused window as it pastes, so terminals get Ctrl+Shift+V and everything else gets `paste_chord`. The list is `inject.app_chords`.
 - **Desktop: backtrack.** "Scratch that" drops the sentence being spoken, and a value corrected on the spot is replaced ("at 2, actually 3" becomes "at 3", "Thursday sorry Friday" becomes "Friday"). Corrections only apply between two numbers, days or months, so an ordinary "actually" is left alone. Turn them off with `"scratch that"` or `"corrections"` in `rules.disabled_commands`.
 - **Desktop: numbered lists.** Say "numbered list", then "first… second…" or "next item" between entries, and optionally "end list". Turn it off with `"numbered list"` in `rules.disabled_commands`.
 - **Desktop: snippets.** Add a cue under `[snippets]` in `dictionary.toml`, and saying it inserts the full text exactly as written, line breaks included.

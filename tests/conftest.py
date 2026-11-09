@@ -9,3 +9,4 @@ def isolated_xdg(tmp_path, monkeypatch):
     monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     monkeypatch.setenv("GILLSPEAK_SOCKET", str(tmp_path / "gillspeak.sock"))
     monkeypatch.delenv("GEMINI_API_KEY", raising=False)
+    monkeypatch.delenv("HYPRLAND_INSTANCE_SIGNATURE", raising=False)  # the injector would ask the real compositor
