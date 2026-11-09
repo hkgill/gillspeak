@@ -32,11 +32,12 @@ class ModelSpec:
 
 
 # SHA256 values pinned from the sherpa-onnx `asr-models` release on 2026-09-26.
+# Parakeet v3 re-pinned on 2026-11-09: upstream re-uploaded the archive on 2026-11-07.
 MODELS: dict[str, ModelSpec] = {
     "parakeet-tdt-0.6b-v3-int8": ModelSpec(
         "parakeet-tdt-0.6b-v3-int8",
         "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2",
-        "5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf",
+        "1495e91b59d7fc53ddca91f3431758ec99f8fa253fdb0e1e851be0f72b14b0f9",
         "sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
         {"encoder": "encoder.int8.onnx", "decoder": "decoder.int8.onnx", "joiner": "joiner.int8.onnx", "tokens": "tokens.txt"},
     ),
