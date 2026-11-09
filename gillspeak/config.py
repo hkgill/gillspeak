@@ -41,7 +41,7 @@ hotwords = true             # bias ASR towards [bias] terms from dictionary.toml
 [rules]
 aggressive_fillers = false  # also strip "like" / "you know"
 spoken_commands = true
-disabled_commands = []      # e.g. ["period", "bullet point"]
+disabled_commands = []      # e.g. ["period", "bullet point", "code case"]
 
 [gate]
 min_words = 12
@@ -113,6 +113,10 @@ DEFAULT_DICTIONARY_TOML = """\
 "super base" = "Supabase"
 "get hub" = "GitHub"
 "cube control" = "kubectl"
+
+# Say the cue and get the full text, exactly as written here. Line breaks are kept.
+[snippets]
+# "my scheduling link" = "https://cal.example.com/me"
 
 # Terms passed to ASR hotwords and to the LLM as preferred spellings.
 [bias]
@@ -352,6 +356,7 @@ def load(path: Path | None = None) -> Config:
 class Dictionary:
     replace: dict[str, str] = field(default_factory=dict)
     bias: list[str] = field(default_factory=list)
+    snippets: dict[str, str] = field(default_factory=dict)
 
 
 def load_dictionary(path: Path | None = None) -> Dictionary:
@@ -369,4 +374,7 @@ def load_dictionary(path: Path | None = None) -> Dictionary:
         raise ConfigError(f"{path}: [replace] must map strings to strings")
     if not isinstance(bias, list) or not all(isinstance(t, str) for t in bias):
         raise ConfigError(f"{path}: [bias] terms must be a list of strings")
-    return Dictionary(replace=dict(replace), bias=list(bias))
+    snippets = data.get("snippets", {})
+    if not isinstance(snippets, dict) or not all(isinstance(v, str) for v in snippets.values()):
+        raise ConfigError(f"{path}: [snippets] must map strings to strings")
+    return Dictionary(replace=dict(replace), bias=list(bias), snippets=dict(snippets))

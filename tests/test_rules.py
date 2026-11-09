@@ -113,6 +113,75 @@ def test_full_pipeline():
     assert clean(raw, dictionary=d) == "So the Supabase migration is, done.\n\nCan you check it?"
 
 
+SIGN_OFF = "Thanks,\n\nSam  Doe"
+
+
+def test_snippet_said_alone_comes_out_exactly():
+    d = Dictionary(snippets={"my sign off": SIGN_OFF})
+    assert clean("My sign off.", dictionary=d) == SIGN_OFF
+
+
+def test_snippet_inside_a_sentence():
+    d = Dictionary(snippets={"my link": "https://cal.example.com/me"})
+    assert clean("here is my link, ok", dictionary=d) == "Here is https://cal.example.com/me, ok"
+
+
+def test_snippet_whole_phrase_only():
+    d = Dictionary(snippets={"my link": "URL"})
+    assert clean("those are my links", dictionary=d) == "Those are my links"
+
+
+def test_dictionary_leaves_snippet_text_alone():
+    d = Dictionary(snippets={"my tool": "the super base tool"}, replace={"super base": "Supabase"})
+    assert clean("my tool", dictionary=d) == "the super base tool"
+
+
+def test_snippet_at_the_start_does_not_capitalise_the_next_word():
+    d = Dictionary(snippets={"my link": "URL"})
+    assert clean("my link is here", dictionary=d) == "URL is here"
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("snake case user name", "user_name"),
+        ("snake case User Name.", "user_name"),
+        ("kebab case main menu item", "main-menu-item"),
+        ("camel case user name", "userName"),
+        ("pascal case http client", "HttpClient"),
+        ("constant case max retry count", "MAX_RETRY_COUNT"),
+        ("Set camel case user name, then save.", "Set userName, then save."),
+        ("The snake case user name is required", "The user_name is required"),
+        ("call snake case get the value end case right now", "Call get_the_value right now"),
+        ("snake case first line new line second", "first_line\nSecond"),
+    ],
+)
+def test_code_case(raw, expected):
+    assert clean(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw, expected",
+    [
+        ("We prefer snake case.", "We prefer snake case."),
+        ("Use snake case for names", "Use snake case for names"),
+        ("camel case is fine", "Camel case is fine"),
+        ("camel case names are bad", "Camel case names are bad"),
+    ],
+)
+def test_talking_about_a_case_style_is_left_alone(raw, expected):
+    assert clean(raw) == expected
+
+
+def test_code_case_stops_after_the_word_limit():
+    assert clean("snake case a b c d e f g") == "a_b_c_d_e_f g"
+
+
+def test_code_case_can_be_turned_off():
+    assert clean("snake case user name", disabled_commands=["code case"]) == "Snake case user name"
+    assert clean("snake case user name", spoken_commands=False) == "Snake case user name"
+
+
 def test_remove_fillers_keeps_words_containing_fillers():
     assert "humming" in remove_fillers("humming along")
     assert "ahead" in remove_fillers("go ahead")
