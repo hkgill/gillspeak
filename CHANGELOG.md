@@ -22,6 +22,7 @@ All notable changes to gillspeak (called Murmur up to 0.5.1). The format follows
 - **Signed Android release APKs.** `assembleRelease` signs with a keystore configured in the git-ignored `local.properties`; APKs are attached to GitHub releases, never committed. See "Release a signed APK" in [android/README.md](android/README.md).
 
 ### Fixed
+- **Desktop: gillspeakd no longer freezes when a recording ends.** Stopping the microphone stream could hang forever on PipeWire's ALSA plugin, leaving the daemon unresponsive with the mic open. It now aborts the stream instead.
 - **Desktop: the Parakeet model downloads again.** Upstream re-uploaded the Parakeet v3 archive on 2026-11-07, so `gillspeak download-models` failed its SHA256 check. The pin now matches the new file.
 - **Android: "The microphone is busy in another app"** instead of "No speech heard" when another app holds the microphone (Android records zeros then).
 - **Android: opening an app by voice no longer waits ~6 s** while every installed app's name is read; the list is read ahead of time and kept.

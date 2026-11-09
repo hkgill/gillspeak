@@ -15,6 +15,9 @@ class FakeStream:
         self.active = True
 
     def stop(self):
+        raise AssertionError("stream.stop() can hang forever on PipeWire; use abort()")
+
+    def abort(self):
         self.active = False
 
     def close(self):
@@ -49,6 +52,15 @@ def test_preroll_included():
     assert np.allclose(audio[: 3 * BLOCK_SIZE], 0.1)
     assert np.allclose(audio[3 * BLOCK_SIZE :], 0.5)
     assert not rec.is_recording
+
+
+def test_closing_aborts_the_stream():
+    """stream.stop() hung forever on PipeWire's ALSA plugin, freezing gillspeakd with the mic open."""
+    rec, streams = make(keep_open=False)
+    rec.start()
+    streams[0].feed(0.5)
+    rec.stop()
+    assert not streams[0].active and streams[0].closed
 
 
 def test_cancel_discards():

@@ -108,7 +108,9 @@ class Recorder:
         stream, self._stream = self._stream, None
         if stream is not None:
             try:
-                stream.stop()
+                # abort, not stop: stop waits for the audio thread, and on PipeWire's ALSA plugin that wait
+                # can last forever. It would freeze the daemon with the mic open, and input has nothing to drain.
+                stream.abort()
                 stream.close()
             except Exception as e:
                 log.debug("closing stream: %s", e)
