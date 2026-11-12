@@ -12,7 +12,7 @@ class SpeechModelTest {
 
     @Test fun parakeetDownloadAndDirectoryStayCompatible() {
         assertEquals("parakeet-tdt-0.6b-v3-int8", SpeechModel.PARAKEET.id)
-        assertEquals(670_478_772L, SpeechModel.PARAKEET.totalBytes)
+        assertEquals(670_576_784L, SpeechModel.PARAKEET.totalBytes)
         assertEquals(listOf("encoder.int8.onnx", "decoder.int8.onnx", "joiner.int8.onnx", "tokens.txt"),
             SpeechModel.PARAKEET.files.map { it.name })
     }
