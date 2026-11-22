@@ -58,6 +58,23 @@
             </intent-filter>
         </activity>
 
+        <!-- "Share to gillspeak" for a call recording or voice memo: transcribed on the phone, shown with timestamps.
+             Its own task, so the app that shared the file stays as it was. -->
+        <activity
+            android:name=".TranscribeActivity"
+            android:exported="true"
+            android:label="@string/transcribe_label"
+            android:launchMode="singleTask"
+            android:taskAffinity="dev.hkgill.gillspeak.transcribe"
+            android:windowSoftInputMode="stateHidden">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="audio/*" />
+                <data android:mimeType="application/ogg" />
+            </intent-filter>
+        </activity>
+
         <service
             android:name=".GillspeakIme"
             android:exported="true"
